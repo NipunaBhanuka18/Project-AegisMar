@@ -38,7 +38,7 @@ Maritime domain awareness (MDA) relies heavily on global AIS transponder broadca
 ## 4. Research Objectives
 
 ### Primary Research Objective (RQ1)
-Investigate whether an **H3-accelerated Spatiotemporal DBSCAN (ST-DBSCAN)** engine can achieve orders-of-magnitude query speedups over a reference **Haversine BallTree** baseline while strictly preserving spatial neighborhood correctness ($\ge 99.9\%$ neighbor recall).
+Investigate the measured runtime, query latency, and memory performance of an **H3-accelerated Spatiotemporal DBSCAN (ST-DBSCAN)** candidate-generation engine compared against a reference **Haversine BallTree** baseline. The objective requires verifying whether discrete hexagonal partitioning achieves measurable indexing and query efficiency while guaranteeing 100% eligible-neighbor recall on defined correctness tests (acknowledging that this performance and full correctness guarantee have not yet been empirically achieved and remain subject to experimental validation).
 
 ### Secondary Research Objective (RQ2)
 Evaluate whether a **lightweight, trajectory-aware rule-based scoring engine** (augmented conditionally with Isolation Forest) can reliably surface kinematic anomalies (drift, loitering, speed discontinuities) with significantly lower false-positive rates than point-density outlier baselines.

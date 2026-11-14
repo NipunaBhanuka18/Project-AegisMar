@@ -14,8 +14,9 @@
 | Milestone ID | Week | Target Deliverable | Est. Hours | Status | Dependencies |
 |---|---|---|---|---|---|
 | **W1-01** | Week 1 | Repository Initialization & Documentation Foundation | 10 h | **Completed** | None |
-| **W1-02** | Week 1 | AIS Ingestion, Sentinel Handling & Parquet Storage | 15 h | Planned | W1-01 |
-| **W2-01** | Week 2 | Geodesic Metric Space & BallTree Baseline | 12 h | Planned | W1-02 |
+| **W1-02A** | Week 1 | NOAA AIS Dataset Selection & Schema Investigation | 5 h | **Completed** | W1-01 |
+| **W1-02B** | Week 1 | Production AIS Ingestion, Sentinel Handling & Parquet Storage | 10 h | Planned | W1-02A |
+| **W2-01** | Week 2 | Geodesic Metric Space & BallTree Baseline | 12 h | Planned | W1-02B |
 | **W2-02** | Week 2 | H3 Discrete Hex Grid Candidate Engine & Oracle | 13 h | Planned | W2-01 |
 | **W3-01** | Week 3 | Spatiotemporal ST-DBSCAN Clustering Core | 15 h | Planned | W2-02 |
 | **W3-02** | Week 3 | Clustering Correctness & Recall Evaluation | 10 h | Planned | W3-01 |
@@ -54,17 +55,35 @@
   - [x] Documentation index links resolve properly (15 relative links, 2 heading anchors)
   - [x] Dry-run staging audit confirms zero credentials, datasets, or caches tracked
 
-### Milestone W1-02: AIS Ingestion, Sentinel Handling & Parquet Storage
-- **Goal:** Build the raw AIS parser, explicit sentinel masker, coordinate/speed validator, and columnar Parquet storage writer.
-- **Estimated Hours:** 15 Hours
-- **Status:** Planned
+### Milestone W1-02A: NOAA AIS Dataset Selection & Schema Investigation
+- **Goal:** Investigate official NOAA 2025 AIS distribution, empirically compare candidate study regions (Los Angeles / Long Beach vs Delaware Bay), profile source schema and sentinels, and select primary research sector.
+- **Estimated Hours:** 5 Hours
+- **Status:** **Completed**
 - **Dependencies:** W1-01
+- **Deliverables:**
+  - Acquired authentic 2025 NOAA extract (`ais-2025-01-01.csv.zst`, 192.82 MB, preserved in `data/raw/`)
+  - Comparative profiling across LA/LB (143k pings) and Delaware Bay (42k pings)
+  - Formal selection of Los Angeles / Long Beach (San Pedro Bay) as primary research sector
+  - Detailed schema evolution findings (2025 snake_case, coordinate order, sentinel nullification)
+  - Anchorage and berth reference data feasibility framework
+  - Updated `datasets.md`, `srs.md`, `milestones.md`, and `development-log.md`
+- **Acceptance Checks:**
+  - [x] Official NOAA 2025 bulk source identified and verified
+  - [x] Download size within limits (<500 MB); raw bytes preserved in ignored directory
+  - [x] Real schema documented without speculation
+  - [x] Selection of LA/LB supported by empirical data density and anchorage geometry
+
+### Milestone W1-02B: Production AIS Ingestion, Sentinel Handling & Parquet Storage
+- **Goal:** Build the production AIS parser, sentinel/null coercion engine, coordinate/speed validator, and columnar Parquet storage writer.
+- **Estimated Hours:** 10 Hours
+- **Status:** Planned
+- **Dependencies:** W1-02A
 - **Planned Deliverables:**
   - `src/aegismar/common/constants.py` & `types.py`
   - `src/aegismar/ingestion/cleaner.py` & `storage.py`
   - Unit tests covering sentinel values, coordinate boundaries, and Parquet round-trips
 - **Acceptance Checks:**
-  - Sentinels (`SOG 102.3`, `HDG 511`, `Status 15`) are masked deterministically
+  - Sentinels (`SOG 102.3`, `HDG 511`, `Status 15`, nulls) are coerced deterministically
   - Teleportation pings ($v_{\text{implied}} > 50\text{ kt}$) are cleanly flagged
   - Parquet output preserves all valid records without data loss
 

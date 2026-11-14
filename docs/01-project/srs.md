@@ -60,15 +60,15 @@ flowchart LR
 
 ### 3.1 Data Ingestion & Sentinel Validation (FR-ING)
 
-- **FR-ING-01 (AIS Field Parsing)**: The system shall parse standard AIS fields: `MMSI` (int/str), `BaseDateTime` (ISO 8601 UTC timestamp), `LAT` (float), `LON` (float), `SOG` (float), `COG` (float), `Heading` (float), `VesselName` (str), `IMO` (str), `CallSign` (str), `VesselType` (int), `Status` (int), `Length` (float), `Width` (float), `Draft` (float).
-- **FR-ING-02 (Sentinel Masking)**: The system shall explicitly identify and mask international AIS sentinel values:
+- **FR-ING-01 (AIS Field Parsing & Schema Adaptability)**: The system shall parse standard AIS fields supporting both legacy NOAA headers (2018–2024 PascalCase: `MMSI`, `BaseDateTime`, `LAT`, `LON`, `SOG`, `COG`, `Heading`, `VesselType`, `Status`) and modernized NOAA headers (2025+ snake_case: `mmsi`, `base_date_time`, `longitude`, `latitude`, `sog`, `cog`, `heading`, `vessel_type`, `status`), standardizing both into canonical representations.
+- **FR-ING-02 (Sentinel Masking & Null Coercion)**: The system shall explicitly identify and mask international AIS sentinel values, whether presented as raw numeric sentinels (legacy) or pre-nullified values (2025+ format):
   - Latitude outside $[-90.0, 90.0]$ or Longitude outside $[-180.0, 180.0]$ $\to$ Drop record.
-  - Coordinate null island $(0.0, 0.0)$ $\to$ Drop record.
-  - `SOG == 102.3` (speed unavailable) $\to$ Set to `None / NaN`.
-  - `COG == 360.0` (course unavailable) $\to$ Set to `None / NaN`.
-  - `Heading == 511` (heading unavailable) $\to$ Set to `None / NaN`.
-  - `Status == 15` (navigational status undefined / default) $\to$ Flag as `STATUS_UNDEFINED`.
-  - `MMSI` not matching 9-digit format or equal to `0` $\to$ Quarantine record.
+  - Coordinate null island $(0.0, 0.0)$ $\to$ Drop record if accompanied by zero speed and invalid course.
+  - `SOG == 102.3` or null (speed unavailable) $\to$ Set to `None / NaN`.
+  - `COG == 360.0` or null (course unavailable) $\to$ Set to `None / NaN`.
+  - `Heading == 511` or null (heading unavailable) $\to$ Set to `None / NaN`.
+  - `Status == 15` or null (navigational status undefined / default) $\to$ Flag as `STATUS_UNDEFINED`.
+  - `MMSI` zero-padded to 9 digits; non-conforming or zero IDs $\to$ Quarantine record.
 - **FR-ING-03 (Implied Speed Validation)**: For consecutive pings of a vessel, the system shall compute geodesic distance $\Delta d$ (via Haversine) and elapsed time $\Delta t$. If implied speed $v_{\text{implied}} = \Delta d / \Delta t > 50\text{ knots}$, the ping shall be flagged with `IMPLIED_SPEED_VIOLATION`.
 - **FR-ING-04 (Parquet Partitioning)**: Cleaned records shall be written to partitioned Parquet files (`data/processed/`), preserving original raw files untouched.
 

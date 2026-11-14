@@ -171,4 +171,46 @@ This log documents chronological engineering actions, commands executed, test re
   - Pre-push gates: 100% passed.
   - Remote push: Successfully pushed `main` to `origin/main` with upstream tracking established.
 - **Next Action:**
-  - Deliver W1-01B completion report and await instructions for Milestone W1-02.
+  - Proceed with W1-02A (NOAA AIS Dataset Selection & Schema Investigation).
+
+---
+
+## Log Entry: 2026-11-14 — Task W1-02A
+
+- **Date:** 2026-11-14
+- **Task Identifier:** `W1-02A: NOAA AIS Dataset Selection & Schema Investigation`
+- **Summary of Changes:**
+  - Investigated authoritative NOAA Marine Cadastre AIS data products, inspecting NOAA InPort Item 77594 and July 2026 Data Dictionary.
+  - Identified major NOAA 2025 data schema updates: adoption of Zstandard (`.csv.zst`), snake_case column names, longitude reordered before latitude, and conversion of ITU sentinels (`102.3`, `511`, `360.0`, `15`) into explicit null values.
+  - Downloaded genuine 24-hour nationwide extract `ais-2025-01-01.csv.zst` (192.82 MB, SHA-256 `36c07f4abad24f86fdd2ae8722b5a1d9422f3a223efc3482a568665275bdde53`) to gitignored `data/raw/`.
+  - Profiled complete nationwide dataset (7,337,208 records in 10.54s) and extracted bounding-box slices for Candidate A (Los Angeles / Long Beach: Lat `[33.5, 33.9]`, Lon `[-118.4, -118.0]`) and Candidate B (Delaware Bay: Lat `[38.5, 39.5]`, Lon `[-75.6, -74.5]`).
+  - Observed empirical characteristics:
+    - LA/LB (San Pedro Bay): 143,156 records, 362 unique MMSIs, 8,569 at-anchor pings (6.0%), 19,716 moored pings (13.8%), 18 implied-speed violations ($>50\text{ kt}$), median interval 179.0s.
+    - Delaware Bay: 42,838 records, 95 unique MMSIs, 3,175 at-anchor pings (7.4%), 4,284 moored pings (10.0%), 0 speed violations, median interval 101.0s.
+  - Formally selected **Los Angeles / Long Beach (San Pedro Bay)** as the primary study region based on data density directly matching the 10k/50k/100k benchmark tiers, distinct outer anchorage basins versus inner container terminals, and authentic kinematic anomaly instances.
+  - Documented anchorage and berth reference data feasibility framework utilizing Port of Los Angeles (GeoPOLA) and Port of Long Beach (MapsLB) open GIS layers.
+  - Updated `README.md` to neutralize speculative performance claims (replacing orders-of-magnitude claims with objective empirical measurement and acknowledging 100% neighbor recall is a target requirement not yet achieved).
+  - Clarified schema adaptability requirements in `docs/01-project/srs.md` (FR-ING-01, FR-ING-02) and updated `docs/03-research/datasets.md`, `docs/04-development/milestones.md`, and `docs/04-development/development-log.md`.
+- **Files Changed:**
+  - `README.md`
+  - `docs/01-project/srs.md`
+  - `docs/03-research/datasets.md`
+  - `docs/04-development/milestones.md`
+  - `docs/04-development/development-log.md`
+- **Commands Executed:**
+  - `python check_noaa_urls.py`
+  - `python parse_noaa_2025_index.py`
+  - `python extract_inport_details.py`
+  - `python download_raw_sample.py`
+  - `python profile_candidate_data.py`
+  - `uv sync --locked`
+  - `uv run pytest -v`
+  - `uv run ruff check .`
+  - `uv run ruff format --check .`
+  - `uv run mypy src tests`
+  - `git status --short`
+- **Observed Results:**
+  - Raw 2025 data downloaded and profiled successfully.
+  - Quality gates: 100% passed.
+- **Next Action:**
+  - Complete verification, commit W1-02A changes, and push to GitHub.

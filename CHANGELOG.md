@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Milestone W1-02A (2026-11-14)
+- **NOAA 2025 Dataset Investigation**: Acquired genuine nationwide sample `ais-2025-01-01.csv.zst` (192.82 MB, preserved in `data/raw/`), identified NOAA 2025 schema evolution (snake_case, coordinate order swap, sentinel nullification).
+- **Study Region Selection**: Empirically profiled candidate regions and selected Los Angeles / Long Beach (San Pedro Bay) with 143,156 records across 362 vessels; documented anchorage/berth disambiguation framework in `docs/03-research/datasets.md`.
+- **Requirements & Documentation Alignment**: Clarified schema adaptability in `docs/01-project/srs.md` and neutralized speculative claims in `README.md`.
+
 ### Added - Milestone W1-01 (2026-11-14)
 - **Repository Setup**: Initialized Git repository structure with Python-first modular monolith layout (`src/aegismar`).
 - **Toolchain & Packaging**: Configured `pyproject.toml` using `hatchling` build backend and pinned CPython `3.11.9` with `uv` package manager.
