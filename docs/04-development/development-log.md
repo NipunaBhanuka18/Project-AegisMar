@@ -1,0 +1,174 @@
+# Engineering Development Log
+
+> **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
+
+This log documents chronological engineering actions, commands executed, test results observed, problems encountered, and architectural decisions made. Only verified actions are recorded here. Future work is never pre-filled.
+
+---
+
+## Log Entry: 2026-11-14 — Milestone W1-01
+
+- **Date:** 2026-11-14
+- **Task Identifier:** `W1-01: Repository Initialization & Documentation Foundation`
+- **Summary of Changes:**
+  - Inspected existing empty workspace at `D:\Project AegisMar`. Discovered initial Git repository (`.git`), empty directory structures (`src/aegismar`, `tests`), and a fresh virtual environment (`.venv` running CPython 3.11.9).
+  - Pinned runtime version via `.python-version` (3.11.9).
+  - Configured project metadata and toolchains in `pyproject.toml` with `hatchling` build backend, PEP 621 metadata, and tool sections for Ruff, Pytest, and Mypy.
+  - Implemented initial Python package skeleton `src/aegismar/__init__.py` exposing `__version__ = "0.1.0.dev1"`.
+  - Created smoke test suite in `tests/test_smoke.py` verifying package import, version exposure, and Python 3.11 runtime pinning.
+  - Configured comprehensive `.gitignore` rules shielding `data/raw/*`, `data/processed/*`, `experiments/outputs/*`, virtualenvs, caches, and credentials, while explicitly preserving `data/samples/` and `.gitkeep` directory anchors.
+  - Executed `uv sync` to generate `uv.lock` and install development dependencies (`pytest`, `ruff`, `mypy`, `pytest-cov`).
+  - Authored foundational documentation architecture:
+    - `docs/01-project/`: `vision.md`, `brs.md`, `srs.md`, `scope.md`, `roadmap.md`
+    - `docs/02-architecture/`: `system-architecture.md`, `decisions/ADR-001-modular-monolith.md`
+    - `docs/03-research/`: `research-plan.md`, `evaluation-protocol.md`, `datasets.md`
+    - `docs/04-development/`: `milestones.md`, `development-log.md`, `testing-strategy.md`
+    - `docs/05-guides/`: `installation.md`
+  - Created root `README.md` and `CHANGELOG.md` with complete documentation navigation links.
+- **Files Changed / Created:**
+  - `.python-version`
+  - `.gitignore`
+  - `pyproject.toml`
+  - `uv.lock`
+  - `README.md`
+  - `CHANGELOG.md`
+  - `data/raw/.gitkeep`, `data/processed/.gitkeep`, `data/samples/.gitkeep`
+  - `experiments/configs/.gitkeep`, `experiments/outputs/.gitkeep`
+  - `src/aegismar/__init__.py`
+  - `src/aegismar/py.typed`
+  - `tests/test_smoke.py`
+  - `docs/01-project/vision.md`
+  - `docs/01-project/brs.md`
+  - `docs/01-project/srs.md`
+  - `docs/01-project/scope.md`
+  - `docs/01-project/roadmap.md`
+  - `docs/02-architecture/system-architecture.md`
+  - `docs/02-architecture/decisions/ADR-001-modular-monolith.md`
+  - `docs/03-research/research-plan.md`
+  - `docs/03-research/evaluation-protocol.md`
+  - `docs/03-research/datasets.md`
+  - `docs/04-development/milestones.md`
+  - `docs/04-development/development-log.md`
+  - `docs/04-development/testing-strategy.md`
+  - `docs/05-guides/installation.md`
+- **Commands Executed:**
+  - `uv sync`
+  - `uv run python --version`
+  - `uv run python -c "import aegismar; print('Package import OK')"`
+  - `uv run pytest -v`
+  - `uv run ruff check .`
+  - `uv run ruff format --check .`
+  - `uv run mypy src tests`
+  - `git status --short`
+- **Observed Test Results:**
+  - `uv sync`: Successfully resolved 16 packages in 1.84s, built `aegismar 0.1.0.dev1`, installed `pytest 9.2.0`, `ruff 0.17.5`, `mypy 2.4.1`, and generated `uv.lock`.
+  - `uv run python --version`: Returned `Python 3.11.9`.
+  - `uv run python -c "import aegismar; print('Package import OK')"`: Returned `Package import OK`.
+  - `uv run pytest -v`: 2 passed in 0.03s (`test_package_import` and `test_python_runtime_version`).
+  - `uv run ruff check .`: `All checks passed!`.
+  - `uv run ruff format --check .`: `18 files already formatted`.
+  - `uv run mypy src tests`: `Success: no issues found in 2 source files`.
+  - `git status --short`: Verified untracked files without unexpected files or committed data.
+- **Problems Encountered:**
+  - During `uv sync`, a non-fatal warning occurred: `warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.` Root cause: cross-filesystem cache boundary on Windows. Resolution: Normal behavior on Windows drive configurations; full copy functions identically.
+  - Strict `mypy` initially reported missing library stubs for local package import. Resolution: Created standard PEP 561 marker `src/aegismar/py.typed`. All type checks now pass cleanly in strict mode.
+- **Decisions Made:**
+  - Pinned runtime to CPython 3.11.9 to ensure binary wheel stability for forthcoming scientific extensions (`h3`, `scikit-learn`, `duckdb`).
+  - Implemented modular monolith architecture (ADR-001) to eliminate distributed infrastructure overhead.
+  - License decision marked pending user selection; no LICENSE file created.
+  - No Git commit or push executed, as per strict instructions.
+- **Next Action:**
+  - Await review and authorization for GitHub readiness audit (W1-01A).
+
+---
+
+## Log Entry: 2026-11-14 — Task W1-01A
+
+- **Date:** 2026-11-14
+- **Task Identifier:** `W1-01A: Documentation, Repository Integrity & GitHub Readiness Audit`
+- **Summary of Changes:**
+  - Performed deep repository and documentation consistency audit.
+  - Re-verified locked dependencies with `uv sync --locked`.
+  - Resolved minor Ruff formatting discrepancies in `src/aegismar/__init__.py` and `tests/test_smoke.py`.
+  - Updated candidate coastal study regions in `docs/03-research/datasets.md`: explicitly established both Los Angeles / Long Beach and Delaware Bay as `Candidate — Not Selected` with documented selection criteria (coverage, anchorage behavior, berth polygons, computational size, open permissions); no region declared selected.
+  - Enhanced `docs/03-research/research-plan.md` with explicit enumeration of the 10 core scientific research principles (exact spatial/temporal filtering, deterministic ST-DBSCAN, boundary/pentagon H3 completeness, equivalent clustering semantics, indexing overhead inclusion, real dataset profiling, holdouts, synthetic perturbations, leakage prevention, zero fabricated results).
+  - Fixed heading anchors in `README.md` (`#2-current-status` and `#14-license-attribution`) and safe Mermaid diagram syntax in `docs/01-project/srs.md` and `docs/03-research/research-plan.md`.
+  - Verified 100% resolution of relative markdown links across all 16 repository markdown files.
+  - Conducted dry-run staging review (`git add --dry-run .`) confirming 28 safe files for the initial commit with zero raw datasets, credentials, virtualenvs, or caches.
+- **Files Changed / Created:**
+  - `README.md`
+  - `src/aegismar/__init__.py`
+  - `tests/test_smoke.py`
+  - `docs/01-project/scope.md`
+  - `docs/01-project/srs.md`
+  - `docs/03-research/datasets.md`
+  - `docs/03-research/research-plan.md`
+  - `docs/04-development/development-log.md`
+- **Commands Executed:**
+  - `uv sync --locked`
+  - `uv run pytest -v`
+  - `uv run ruff check .`
+  - `uv run ruff format .`
+  - `uv run ruff format --check .`
+  - `uv run mypy src tests`
+  - `git status --short`
+  - `git ls-files`
+  - `git remote -v`
+  - `git add --dry-run .`
+- **Observed Test Results:**
+  - `uv sync --locked`: Clean exit (0).
+  - `pytest -v`: 2 passed in 0.03s.
+  - `ruff check .`: All checks passed (0 errors, 0 warnings).
+  - `ruff format --check .`: 18 files already formatted.
+  - `mypy src tests`: Success: no issues found in 2 source files.
+  - `git status --short`: Clean list of untracked files.
+  - `git ls-files`: Empty (no files committed yet).
+  - `git remote -v`: Empty (no remote configured yet).
+- **Problems Encountered:**
+  - Minor trailing whitespace in Python files corrected via `uv run ruff format .`.
+  - Anchors in badges corrected to match GitHub cmark-gfm heading slug generation.
+- **Decisions Made:**
+  - Both Los Angeles / Long Beach and Delaware Bay marked `Candidate — Not Selected` pending empirical profiling in W1-02.
+  - No commit, remote creation, or push performed; git working tree preserved for user review.
+- **Next Action:**
+  - Proceed with W1-01B initial commit and publication to GitHub upon user authorization.
+
+---
+
+## Log Entry: 2026-11-14 — Task W1-01B
+
+- **Date:** 2026-11-14
+- **Task Identifier:** `W1-01B: Initial GitHub Commit & Publication`
+- **Summary of Changes:**
+  - Re-ran pre-push verification gates (`uv sync --locked`, `pytest`, `ruff check`, `ruff format --check`, `mypy`). All checks passed with exit code 0.
+  - Verified remote repository status via `git ls-remote`: confirmed `https://github.com/NipunaBhanuka18/Project-AegisMar.git` is online, accessible, and completely empty (no existing commits or branch conflicts).
+  - Renamed local default branch from `master` to `main`.
+  - Configured remote origin: `https://github.com/NipunaBhanuka18/Project-AegisMar.git`.
+  - Staged 28 approved project files, strictly excluding `.venv`, caches, raw/processed data, and experiment outputs.
+  - Inspected staged file list with `git diff --cached --name-only`.
+  - Created initial commit: `chore: initialize AegisMar research repository and documentation (W1-01)`.
+  - Published initial commit to GitHub via `git push -u origin main`.
+- **Files Included in Initial Commit:**
+  - Configuration & tooling: `.gitignore`, `.python-version`, `pyproject.toml`, `uv.lock`
+  - Documentation root: `README.md`, `CHANGELOG.md`
+  - Source package: `src/aegismar/__init__.py`, `src/aegismar/py.typed`
+  - Test suite: `tests/test_smoke.py`
+  - Directory anchors: `data/raw/.gitkeep`, `data/processed/.gitkeep`, `data/samples/.gitkeep`, `experiments/configs/.gitkeep`, `experiments/outputs/.gitkeep`
+  - Documentation architecture: `docs/01-project/` (vision, brs, srs, scope, roadmap), `docs/02-architecture/` (system-architecture, ADR-001), `docs/03-research/` (research-plan, evaluation-protocol, datasets), `docs/04-development/` (milestones, development-log, testing-strategy), `docs/05-guides/` (installation)
+- **Commands Executed:**
+  - `uv sync --locked`
+  - `uv run pytest -v`
+  - `uv run ruff check .`
+  - `uv run ruff format --check .`
+  - `uv run mypy src tests`
+  - `git branch -M main`
+  - `git remote add origin https://github.com/NipunaBhanuka18/Project-AegisMar.git`
+  - `git add .`
+  - `git diff --cached --name-only`
+  - `git commit -m "chore: initialize AegisMar research repository and documentation (W1-01)"`
+  - `git push -u origin main`
+- **Observed Results:**
+  - Pre-push gates: 100% passed.
+  - Remote push: Successfully pushed `main` to `origin/main` with upstream tracking established.
+- **Next Action:**
+  - Deliver W1-01B completion report and await instructions for Milestone W1-02.
