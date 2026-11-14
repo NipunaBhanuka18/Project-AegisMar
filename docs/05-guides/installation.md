@@ -57,8 +57,9 @@ uv run python --version
 uv run python -c "import aegismar; print('Package import OK:', aegismar.__version__)"
 # Expected: Package import OK: 0.1.0.dev1
 
-# 3. Run automated smoke tests
+# 3. Run automated unit tests and test coverage
 uv run pytest -v
+uv run pytest --cov=aegismar
 
 # 4. Run static linting checks
 uv run ruff check .
@@ -67,12 +68,30 @@ uv run ruff check .
 uv run ruff format --check .
 
 # 6. Run static type checking
-uv run mypy src
+uv run mypy src tests
 ```
 
 ---
 
-## 4. Troubleshooting Common Setup Issues
+## 4. AIS Data Ingestion CLI Usage
+
+After environment setup and verification, you can run the AegisMar command-line interface to ingest raw or regional AIS CSV data into canonical Parquet storage:
+
+```powershell
+# Display help and available options
+uv run python -m aegismar --help
+uv run python -m aegismar ingest --help
+
+# Ingest an AIS CSV sample
+uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
+
+# Ingest with custom implied speed threshold and overwrite enabled
+uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101 -s 50.0 --overwrite
+```
+
+---
+
+## 5. Troubleshooting Common Setup Issues
 
 ### Issue A: Windows Hardlink Fallback Warning during `uv sync`
 - **Symptom**: `warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.`

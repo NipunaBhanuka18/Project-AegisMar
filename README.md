@@ -120,8 +120,9 @@ The project is structured around an estimated 200 hours (25 h/week) across 8 mil
 
 | Milestone | Title | Target Week | Status |
 |---|---|---|---|
-| **W1-01** | Repository Initialization & Documentation Foundation | Week 1 | **In Progress (Active)** |
-| **W1-02** | AIS Schema Ingestion, Quality Masking & Parquet Storage | Week 1 | Planned |
+| **W1-01** | Repository Initialization & Documentation Foundation | Week 1 | **Completed** |
+| **W1-02A**| NOAA AIS Dataset Selection & Schema Investigation | Week 1 | **Completed** |
+| **W1-02B**| AIS Ingestion, Data Quality & Parquet Storage | Week 1 | **Completed** |
 | **W2-01** | Haversine Metric & BallTree Baseline Implementation | Week 2 | Planned |
 | **W2-02** | H3 Hexagonal Grid Candidate Generation Engine | Week 2 | Planned |
 | **W3-01** | ST-DBSCAN Core Engine & Spatial Oracle Verification | Week 3 | Planned |
@@ -133,7 +134,7 @@ The project is structured around an estimated 200 hours (25 h/week) across 8 mil
 
 ---
 
-## 10. Environment Setup & Verification
+## 10. Environment Setup & CLI Usage
 
 ### Prerequisites
 - Windows 10/11 (or Linux/macOS)
@@ -148,13 +149,23 @@ git clone https://github.com/NipunaBhanuka18/Project-AegisMar.git
 cd "Project-AegisMar"
 
 # Synchronize virtual environment with locked dependencies
-uv sync
+uv sync --locked
 
-# Run verification suite
+# Run test suite and static quality gates
 uv run pytest -v
+uv run pytest --cov=aegismar
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy src
+uv run mypy src tests
+```
+
+### AIS Data Ingestion CLI
+```powershell
+# Ingest raw/regional AIS CSV into canonical Parquet storage
+uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
+
+# Ingest with custom implied speed threshold (knots) and overwrite permission
+uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101 -s 50.0 --overwrite
 ```
 
 ---

@@ -213,4 +213,80 @@ This log documents chronological engineering actions, commands executed, test re
   - Raw 2025 data downloaded and profiled successfully.
   - Quality gates: 100% passed.
 - **Next Action:**
-  - Complete verification, commit W1-02A changes, and push to GitHub.
+  - Proceed with W1-02B (AIS Ingestion, Data Quality & Parquet Storage).
+
+---
+
+## Log Entry: 2026-11-14 — Task W1-02B
+
+- **Date:** 2026-11-14
+- **Task Identifier:** `W1-02B: AIS Ingestion, Data Quality & Parquet Storage`
+- **Summary of Changes:**
+  - Implemented domain constants, ITU sentinels, domain bounds, and analytical quality flags in `src/aegismar/common/constants.py`.
+  - Implemented typed dataclasses `CanonicalPing` and `IngestionManifest` in `src/aegismar/common/types.py`.
+  - Implemented haversine spherical geodesic distance metric functions in `src/aegismar/spatial/haversine.py`.
+  - Implemented schema adapter in `src/aegismar/ingestion/schema.py` supporting both NOAA 2025 (`snake_case`) and NOAA legacy 2018–2024 (`PascalCase`) CSV headers with ambiguity and missing field checks, and PyArrow canonical schema mapping.
+  - Implemented record validator, sentinel nullification, duplicate consolidation, conflict detection, and trajectory implied-speed calculator in `src/aegismar/ingestion/cleaner.py`.
+  - Implemented columnar storage layer in `src/aegismar/ingestion/storage.py` (PyArrow table conversion, Snappy Parquet writer, manifest manager, and metadata inspector).
+  - Implemented end-to-end ingestion pipeline runner in `src/aegismar/ingestion/pipeline.py` with source SHA-256 calculation and overwrite protection.
+  - Added `tzdata` dependency for Windows IANA timezone compatibility in standard `zoneinfo` and PyArrow scalar conversion.
+  - Implemented CLI and entrypoint in `src/aegismar/cli.py` and `__main__.py` (`python -m aegismar ingest ...`).
+  - Authored synthetic CSV fixtures and comprehensive unit test suite:
+    - `tests/unit/test_ingestion.py`: 16 unit tests covering dual-schema mapping, sentinel nullification, 9-digit MMSI padding, coordinate bounds, duplicate consolidation, conflict flagging, deterministic ordering, implied speed, zero elapsed time, and Parquet roundtrips.
+    - `tests/unit/test_cli.py`: 7 CLI tests covering help display, version output, default behavior, synthetic ingestion, missing input error handling, and overwrite protection.
+    - Total tests: 25 passed (0 failures). Total code coverage: 91% across `src/aegismar`.
+  - Executed production ingestion run against real Los Angeles / Long Beach sample (`data/raw/sample_lalb_20250101.csv`):
+    - Input records scanned: 143,156.
+    - Output records accepted: 143,124 (143,156 - 32 duplicate rows).
+    - Hard-invalid rows dropped: 0.
+    - Duplicates coerced: 32.
+    - Same-timestamp coordinate conflicts flagged: 8.
+    - Unique vessels (MMSI): 362.
+    - Implied speed violations flagged ($>50\text{ kt}$): 18.
+    - Temporal range: `2025-01-01T00:00:00+00:00` to `2025-01-01T23:59:57+00:00`.
+    - Processing runtime: 7.19 seconds (~19,900 records/sec).
+    - Output Parquet: `data/processed/lalb_20250101/cleaned_ais.parquet` (4.15 MB, 1 row group, 19 columns).
+    - Manifest: `data/processed/lalb_20250101/manifest.json`.
+  - Verified independent Parquet readback schema fidelity and metadata with Python script.
+- **Files Created/Modified:**
+  - `pyproject.toml`
+  - `uv.lock`
+  - `src/aegismar/__main__.py`
+  - `src/aegismar/cli.py`
+  - `src/aegismar/common/__init__.py`
+  - `src/aegismar/common/constants.py`
+  - `src/aegismar/common/types.py`
+  - `src/aegismar/spatial/__init__.py`
+  - `src/aegismar/spatial/haversine.py`
+  - `src/aegismar/ingestion/__init__.py`
+  - `src/aegismar/ingestion/schema.py`
+  - `src/aegismar/ingestion/cleaner.py`
+  - `src/aegismar/ingestion/storage.py`
+  - `src/aegismar/ingestion/pipeline.py`
+  - `tests/fixtures/synthetic_2025_sample.csv`
+  - `tests/fixtures/synthetic_legacy_sample.csv`
+  - `tests/unit/test_cli.py`
+  - `tests/unit/test_ingestion.py`
+  - `README.md`
+  - `docs/01-project/srs.md`
+  - `docs/03-research/datasets.md`
+  - `docs/04-development/milestones.md`
+  - `docs/04-development/development-log.md`
+  - `docs/05-guides/installation.md`
+  - `CHANGELOG.md`
+- **Commands Executed:**
+  - `uv add tzdata`
+  - `uv sync --locked`
+  - `uv run pytest -v`
+  - `uv run pytest --cov=aegismar --cov-report=term-missing`
+  - `uv run ruff check .`
+  - `uv run ruff format --check .`
+  - `uv run mypy src tests`
+  - `uv run python -m aegismar.cli ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101 --overwrite`
+- **Observed Results:**
+  - 25 tests passed in 0.68s.
+  - Coverage: 91% across `src/aegismar`.
+  - Quality gates: 100% passed (Ruff: 0 errors; Ruff format: clean; Mypy: 0 errors in 16 files).
+  - Real dataset ingested into Parquet with complete manifest audit trail.
+- **Next Action:**
+  - Stage, commit with message `feat: implement validated AIS ingestion and Parquet pipeline (W1-02B)`, push to `origin/main`, and report completion.

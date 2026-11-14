@@ -15,7 +15,7 @@
 |---|---|---|---|---|---|
 | **W1-01** | Week 1 | Repository Initialization & Documentation Foundation | 10 h | **Completed** | None |
 | **W1-02A** | Week 1 | NOAA AIS Dataset Selection & Schema Investigation | 5 h | **Completed** | W1-01 |
-| **W1-02B** | Week 1 | Production AIS Ingestion, Sentinel Handling & Parquet Storage | 10 h | Planned | W1-02A |
+| **W1-02B** | Week 1 | Production AIS Ingestion, Sentinel Handling & Parquet Storage | 10 h | **Completed** | W1-02A |
 | **W2-01** | Week 2 | Geodesic Metric Space & BallTree Baseline | 12 h | Planned | W1-02B |
 | **W2-02** | Week 2 | H3 Discrete Hex Grid Candidate Engine & Oracle | 13 h | Planned | W2-01 |
 | **W3-01** | Week 3 | Spatiotemporal ST-DBSCAN Clustering Core | 15 h | Planned | W2-02 |
@@ -76,16 +76,25 @@
 ### Milestone W1-02B: Production AIS Ingestion, Sentinel Handling & Parquet Storage
 - **Goal:** Build the production AIS parser, sentinel/null coercion engine, coordinate/speed validator, and columnar Parquet storage writer.
 - **Estimated Hours:** 10 Hours
-- **Status:** Planned
+- **Status:** **Completed**
 - **Dependencies:** W1-02A
-- **Planned Deliverables:**
-  - `src/aegismar/common/constants.py` & `types.py`
-  - `src/aegismar/ingestion/cleaner.py` & `storage.py`
-  - Unit tests covering sentinel values, coordinate boundaries, and Parquet round-trips
+- **Deliverables:**
+  - `src/aegismar/common/constants.py` & `types.py` (canonical types, sentinels, domain bounds, and quality flags)
+  - `src/aegismar/spatial/haversine.py` (spherical geodesic metric functions)
+  - `src/aegismar/ingestion/schema.py` (dual 2025/legacy schema adapter and Arrow canonical schema)
+  - `src/aegismar/ingestion/cleaner.py` (record validation, sentinel nullification, duplicate consolidation, conflict detection, implied speed calculation)
+  - `src/aegismar/ingestion/storage.py` (Arrow table conversion, Snappy Parquet writer, manifest manager, metadata inspector)
+  - `src/aegismar/ingestion/pipeline.py` (end-to-end ingestion pipeline runner with SHA-256 computation and overwrite protection)
+  - `src/aegismar/cli.py` & `__main__.py` (CLI entrypoints with `ingest` subcommand)
+  - Unit test suite (`tests/unit/test_ingestion.py`, `tests/unit/test_cli.py`, 25 total tests, 91% coverage)
+  - Production dataset ingestion: 143,156 input records parsed -> 143,124 output rows in `data/processed/lalb_20250101/cleaned_ais.parquet` (4.15 MB) + `manifest.json` in 7.19 s
 - **Acceptance Checks:**
-  - Sentinels (`SOG 102.3`, `HDG 511`, `Status 15`, nulls) are coerced deterministically
-  - Teleportation pings ($v_{\text{implied}} > 50\text{ kt}$) are cleanly flagged
-  - Parquet output preserves all valid records without data loss
+  - [x] Sentinels (`SOG 102.3`, `HDG 511`, `COG 360.0`, `Status 15`, and 2025 nulls) coerced deterministically
+  - [x] Teleportation pings ($v_{\text{implied}} > 50\text{ kt}$) cleanly flagged (`IMPLIED_SPEED_VIOLATION`, 18 occurrences)
+  - [x] Parquet output preserves all valid records without data loss with roundtrip schema fidelity
+  - [x] Leading zero MMSIs strictly preserved as 9-character strings
+  - [x] Duplicate observations consolidated and same-timestamp conflicts flagged
+  - [x] All 25 unit tests pass; test coverage $\ge 90\%$; ruff and mypy exit cleanly with 0 errors
 
 ### Milestone W2-01: Geodesic Metric Space & BallTree Baseline
 - **Goal:** Implement exact geodesic distance calculations and the reference BallTree spatial nearest-neighbor search.

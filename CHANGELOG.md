@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Milestone W1-02B (2026-11-14)
+- **AIS Ingestion & Cleaning Engine**:
+  - Implemented `src/aegismar/common/` domain constants, ITU sentinels, and typed dataclasses (`CanonicalPing`, `IngestionManifest`).
+  - Implemented spherical geodesic haversine metric module (`src/aegismar/spatial/haversine.py`).
+  - Implemented dual-format schema adapter (`src/aegismar/ingestion/schema.py`) supporting NOAA 2025 (`snake_case`) and legacy 2018–2024 (`PascalCase`) CSV headers.
+  - Implemented cleaning and validation engine (`src/aegismar/ingestion/cleaner.py`): ISO 8601 UTC timestamp parsing, 9-digit zero-padded MMSI preservation, sentinel nullification (`102.3`, `360.0`, `511`, `15`), duplicate consolidation, same-timestamp coordinate conflict flagging, deterministic trajectory sorting, and implied speed calculation ($>50\text{ kt}$).
+  - Implemented columnar storage writer (`src/aegismar/ingestion/storage.py`) writing Snappy-compressed Parquet files and cryptographic `manifest.json`.
+  - Implemented end-to-end pipeline runner (`src/aegismar/ingestion/pipeline.py`) with source SHA-256 computation and overwrite protection.
+  - Added `tzdata` dependency for cross-platform IANA timezone support.
+- **CLI Interface**:
+  - Added CLI entrypoint `aegismar ingest` (`src/aegismar/cli.py`, `src/aegismar/__main__.py`) supporting `--input`, `--output`, `--speed-threshold`, and `--overwrite`.
+- **Unit Testing & Test Fixtures**:
+  - Added synthetic CSV test fixtures (`tests/fixtures/synthetic_2025_sample.csv`, `synthetic_legacy_sample.csv`).
+  - Authored comprehensive test suites: 16 ingestion unit tests (`test_ingestion.py`) and 7 CLI tests (`test_cli.py`). Total 25 tests passing with 91% code coverage.
+- **Production Dataset Ingestion**:
+  - Ingested authentic Los Angeles / Long Beach sample (`sample_lalb_20250101.csv`): 143,156 input rows scanned, 143,124 output rows generated in 7.19s, 32 duplicates consolidated, 8 coordinate conflicts flagged, 18 implied speed violations flagged into `data/processed/lalb_20250101/cleaned_ais.parquet` (4.15 MB) and `manifest.json`.
+
 ### Added - Milestone W1-02A (2026-11-14)
 - **NOAA 2025 Dataset Investigation**: Acquired genuine nationwide sample `ais-2025-01-01.csv.zst` (192.82 MB, preserved in `data/raw/`), identified NOAA 2025 schema evolution (snake_case, coordinate order swap, sentinel nullification).
 - **Study Region Selection**: Empirically profiled candidate regions and selected Los Angeles / Long Beach (San Pedro Bay) with 143,156 records across 362 vessels; documented anchorage/berth disambiguation framework in `docs/03-research/datasets.md`.

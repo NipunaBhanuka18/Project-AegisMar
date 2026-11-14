@@ -18,7 +18,10 @@ classifiers = [
     "Topic :: Scientific/Engineering :: GIS",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
-dependencies = []
+dependencies = [
+    "pyarrow>=26.0.1",
+    "tzdata>=2026.6",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -74,4 +77,9 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 packages = ["aegismar"]
+
+[[tool.mypy.overrides]]
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
+
 
