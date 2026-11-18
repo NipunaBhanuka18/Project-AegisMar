@@ -110,12 +110,14 @@
   - `src/aegismar/spatial/oracle.py` (isolated $O(N^2)$ `BruteForceNeighborhoodOracle` with $N \le 5{,}000$ safety cap and `verify_provider_against_oracle`).
   - Test suites (`tests/unit/test_st_dbscan.py`, `tests/unit/test_oracle.py`, updated `test_ingestion.py` & `test_cli.py`): 52 passing tests, 95% total coverage ($\ge 95\%$ across clustering & oracle modules).
   - Exploratory LA/LB baseline (`experiments/outputs/w2_01_lalb_balltree/`): 143,116 analyzed rows (8 `TIMESTAMP_POSITION_CONFLICT` excluded), 241 clusters, 136,276 core, 934 border, 5,906 noise; 13.68 s uninstrumented wall time (38.01 s / 225.83 MB peak heap under `tracemalloc`); 100% oracle match on 1,000-row real subset; 100% deterministic across repeated runs.
+  - Public portfolio visualization (`W2-CLOSE`): Genuine screenshot of the recorded LA/LB exploratory BallTree ST-DBSCAN preview saved at `docs/assets/w2-balltree-clustering.png` and embedded in `README.md` with explicit exploratory/non-anchorage caveats.
 - **Acceptance Checks:**
   - [x] All 5 W1-02B ingestion corrections implemented with regression tests
   - [x] `BallTree` neighborhoods, core/border/noise roles, and cluster labels match brute-force oracle 100% across all synthetic, dateline, high-latitude, randomized, and real 1,000-row LA/LB fixtures
   - [x] Cluster accounting verified: `core + border + noise == analyzed`
   - [x] Full LA/LB baseline deterministic across repeated runs with artifacts exported to gitignored directory
   - [x] `uv sync --locked`, `pytest` (52 passed, 95% coverage), `ruff check`, `ruff format --check`, and `mypy src tests` exit cleanly with 0 errors
+  - [x] Week 2 closure (`W2-CLOSE`) verified: public visualization published, research baseline recorded prior to Week 3 H3 optimization
 
 ### Milestone W3-01: H3 Candidate Optimization & Completeness Verification
 - **Goal:** Install Uber H3 (4.x), implement `H3NeighborhoodProvider` plugging into the shared `run_st_dbscan` engine, and verify 100% eligible-neighbor completeness against the brute-force oracle and BallTree reference across cell boundaries, pentagons, dateline, and high latitudes. *(Not yet started.)*

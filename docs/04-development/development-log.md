@@ -327,4 +327,24 @@ This log documents chronological engineering actions, commands executed, test re
   - Detected 1-ULP IEEE-754 difference between `np.deg2rad(lat2) - np.deg2rad(lat1)` vs `np.deg2rad(lat2 - lat1)` on exact spatial boundary tests; aligned `_exact_haversine_to_candidates_m` to compute degree differences prior to radian conversion for bit-for-bit oracle parity.
   - Replaced initial Python scalar Union-Find loop (~89 s under `tracemalloc`) with vectorized NumPy BFS seeded in ascending canonical core-index order, cutting uninstrumented clustering time to 0.262 s (and `tracemalloc` clustering time to 6.583 s) with 100% identical labels.
 - **Next Action:**
-  - Run final pre-push quality gates, verify remote state, commit `feat: implement verified BallTree ST-DBSCAN baseline (W2-01)`, push to `origin/main`, and stop before Week 3 H3 work.
+  - Finalize Week 2 portfolio visualization and pre-Week 3 baseline documentation (`W2-CLOSE`).
+
+---
+
+## Log Entry: 2026-11-18 — Task W2-CLOSE
+
+- **Date:** 2026-11-18
+- **Task Identifier:** `W2-CLOSE: Week 2 Documentation and Portfolio Finalization`
+- **Scope:** Documentation and public portfolio visualization only; zero scientific or application code changes.
+- **Summary of Changes:**
+  - Verified clean Git working tree on `main` synced with `origin/main` at reference commit `3ece8593f16fb5191b9f94936e5713ea8fae5be4`.
+  - Verified presence and authenticity of all Week 2 experimental artifacts under gitignored `experiments/outputs/w2_01_lalb_balltree/` (`cluster_assignments.parquet`, `clustering_summary.json`, `clusters_preview.geojson`, `clusters_map.html`).
+  - Inspected `clusters_map.html` to confirm genuine W2-01 experiment data with zero vessel identifiers, local paths, credentials, or sensitive personal data.
+  - Captured a clean `960x780` PNG screenshot (`61,893` bytes) via local headless Chrome to `docs/assets/w2-balltree-clustering.png` and visually inspected the rendered output.
+  - Updated `README.md` with the embedded Week 2 visualization, required descriptive caption (Los Angeles / Long Beach, Jan 1 2025 AIS, BallTree ST-DBSCAN, 300 m / 900 s / MinPts 5, explicitly marked exploratory and not validated anchorage identification), and concise pre-Week 3 research baseline metrics.
+  - Updated `docs/04-development/milestones.md`, `docs/04-development/development-log.md`, and `CHANGELOG.md` to record Week 2 closure.
+- **Verification:**
+  - Confirmed zero changes under `src/` or `tests/`.
+  - Re-ran `uv sync --locked`, `uv run pytest -v`, `uv run ruff check .`, `uv run ruff format --check .`, and `uv run mypy src tests` (100% pass).
+- **Next Action:**
+  - Commit `docs: finalize Week 2 clustering milestone and visualization`, push to `origin/main`, and pause before Week 3 (`W3-01` H3 optimization).

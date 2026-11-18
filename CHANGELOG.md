@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation & Visualization - Milestone W2-CLOSE (2026-11-18)
+- **Public Clustering Visualization**: Captured genuine headless-browser PNG screenshot of the recorded Week 2 Los Angeles / Long Beach BallTree ST-DBSCAN spatial preview at `docs/assets/w2-balltree-clustering.png` (60.4 KB, no vessel identifiers or private paths) and embedded it in `README.md` with full exploratory methodology caveats.
+- **Week 2 Portfolio Finalization**: Recorded the pre-Week 3 BallTree reference baseline summary in `README.md` and finalized Week 2 closure records in `docs/04-development/milestones.md`, `docs/04-development/development-log.md`, and `CHANGELOG.md` (zero application or scientific code changes).
+
 ### Added & Fixed - Milestone W2-01 (2026-11-18)
 - **Ingestion Hardening & Audit Corrections**:
   - Updated `sanitize_mmsi` (`src/aegismar/ingestion/cleaner.py`) to strictly accept integer-format MMSIs and reject malformed decimal/float/boolean inputs rather than truncating.

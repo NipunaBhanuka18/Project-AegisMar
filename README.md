@@ -132,6 +132,22 @@ The project is structured around an estimated 200 hours (25 h/week) across 8 mil
 | **W7-01** | Geospatial Incident Dashboard & End-to-End Demo | Week 7 | Planned |
 | **W8-01** | Benchmark Execution, Reproducibility & Research Report | Week 8 | Planned |
 
+### Week 2 Reference Clustering Baseline & Exploratory Visualization
+
+![Week 2 BallTree ST-DBSCAN Exploratory Clustering — Los Angeles / Long Beach](docs/assets/w2-balltree-clustering.png)
+
+> **Figure 1 — Exploratory BallTree ST-DBSCAN Spatial Preview (Pre-Week 3 Research Baseline)**  
+> - **Region:** Los Angeles / Long Beach (San Pedro Bay, Lat `[33.5042, 33.8508]`, Lon `[-118.3996, -118.0029]`)  
+> - **Data:** Historical NOAA AIS observations from January 1, 2025 (`143,124` canonical pings; `8` `TIMESTAMP_POSITION_CONFLICT` rows excluded by policy -> `143,116` analyzed; `5,000` points rendered in preview)  
+> - **Method:** Reference Haversine `BallTree` ST-DBSCAN (`stdbscan-core-first-v1.0`, verified 100% against an independent brute-force oracle on synthetic fixtures and a 1,000-row real LA/LB subset)  
+> - **Parameters:** `300 m` spatial radius, `900 s` temporal window, `MinPts 5` (illustrative exploratory configuration)  
+> - **Status:** Exploratory clustering, not validated anchorage identification. The `241` discovered spatiotemporal density clusters (`136,276` core, `934` border, `5,906` noise) span berthed/moored vessels, inner harbor basins, offshore holding areas, and dense coastal traffic; formal stay-point extraction and berth polygon exclusion are scheduled for Week 4.
+
+**Recorded Pre-Week 3 Reference Baseline (`balltree_haversine`, commit `3ece859`):**
+- **Uninstrumented wall time (`143,116` analyzed rows):** `13.680 s` total (`0.077 s` BallTree build, `13.341 s` batched radius query + exact Haversine/temporal pruning, `0.262 s` deterministic core-first clustering).
+- **Instrumented memory check (`tracemalloc`):** `38.014 s` total wall time, `225.83 MB` peak Python heap.
+- **Next research milestone (Week 3):** Implement correctness-preserving Uber H3 candidate indexing (`H3NeighborhoodProvider`) on the shared ST-DBSCAN core and run formal comparative H1 benchmarks against this BallTree baseline (H3 is not yet implemented).
+
 ---
 
 ## 10. Environment Setup & CLI Usage
