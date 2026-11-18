@@ -16,6 +16,7 @@ from aegismar.common.constants import (
     FLAG_IMPLIED_SPEED_VIOLATION,
     FLAG_SOG_SENTINEL_NULLIFIED,
     FLAG_STATUS_SENTINEL_NULLIFIED,
+    FLAG_TIMESTAMP_METADATA_CONFLICT,
     FLAG_TIMESTAMP_POSITION_CONFLICT,
     FLAG_ZERO_ELAPSED_TIME,
 )
@@ -323,6 +324,7 @@ def test_13_zero_elapsed_time_behavior() -> None:
     cleaned, _ = process_and_clean_observations(raw_rows)
     assert len(cleaned) == 2
     assert FLAG_ZERO_ELAPSED_TIME in cleaned[1].quality_flags
+    assert cleaned[1].distance_nm is None
     assert cleaned[1].implied_speed_knots is None
 
 
@@ -399,3 +401,155 @@ def test_16_repeated_run_behavior_and_determinism(tmp_path: Path) -> None:
     assert manifest1.unique_vessels_count == manifest2.unique_vessels_count
     assert manifest1.hard_invalid_row_count == manifest2.hard_invalid_row_count
     assert manifest1.source_sha256 == manifest2.source_sha256
+
+
+def test_17_malformed_decimal_mmsi_rejected() -> None:
+    """Reject decimal/float/signed/boolean MMSIs rather than silently truncating."""
+    invalid_values: list[object] = [
+        "366745490.5",
+        "366745490.0",
+        "366745490.123",
+        "123.45.67",
+        366745490.5,
+        366745490.0,
+        "-366745490",
+        "+366745490",
+        "3.6674549e8",
+        True,
+        False,
+        -123456789,
+        0,
+        1_000_000_000,
+    ]
+    for bad in invalid_values:
+        clean, err = sanitize_mmsi(bad)
+        assert clean is None, f"Expected None for malformed MMSI {bad!r}, got {clean!r}"
+        assert err == FLAG_HARD_INVALID_BAD_MMSI
+
+    # Valid integer-format MMSIs with and without leading zeros remain accepted
+    assert sanitize_mmsi("003667454") == ("003667454", None)
+    assert sanitize_mmsi("366745490") == ("366745490", None)
+    assert sanitize_mmsi(3667454) == ("003667454", None)
+
+
+def test_18_conflicting_same_timestamp_no_fictitious_movement() -> None:
+    """Conflicting same-timestamp pings stay auditable without zero-time movement estimates."""
+    raw_rows = [
+        {
+            "mmsi": "366745490",
+            "timestamp_utc": "2025-01-01 00:00:00",
+            "latitude": "33.70000",
+            "longitude": "-118.20000",
+        },
+        {
+            "mmsi": "366745490",
+            "timestamp_utc": "2025-01-01 00:01:00",
+            "latitude": "33.70100",
+            "longitude": "-118.20100",
+        },
+        {
+            "mmsi": "366745490",
+            "timestamp_utc": "2025-01-01 00:01:00",
+            "latitude": "33.75000",
+            "longitude": "-118.25000",
+        },
+        {
+            "mmsi": "366745490",
+            "timestamp_utc": "2025-01-01 00:02:00",
+            "latitude": "33.70200",
+            "longitude": "-118.20200",
+        },
+    ]
+    cleaned, summary = process_and_clean_observations(raw_rows)
+    assert len(cleaned) == 4
+    assert summary["timestamp_conflicts_flagged"] == 2
+
+    # Conflicting records (rows 2 and 3) must not have fabricated movement estimates
+    for conflict_ping in (cleaned[1], cleaned[2]):
+        assert FLAG_TIMESTAMP_POSITION_CONFLICT in conflict_ping.quality_flags
+        assert conflict_ping.prev_source_row is None
+        assert conflict_ping.elapsed_seconds is None
+        assert conflict_ping.distance_nm is None
+        assert conflict_ping.implied_speed_knots is None
+
+    assert FLAG_ZERO_ELAPSED_TIME in cleaned[2].quality_flags
+
+    # Next unambiguous record (row 4) links back to the last unambiguous record (row 1)
+    assert cleaned[3].prev_source_row == 1
+    assert cleaned[3].elapsed_seconds == 120.0
+    assert cleaned[3].distance_nm is not None and cleaned[3].distance_nm > 0.0
+
+
+def test_19_same_position_different_metadata_not_silently_discarded() -> None:
+    """Differing metadata at identical vessel/position/time is retained and flagged."""
+    raw_rows = [
+        {
+            "mmsi": "366745490",
+            "timestamp_utc": "2025-01-01 00:00:00",
+            "latitude": "33.70000",
+            "longitude": "-118.20000",
+            "sog": "5.0",
+            "vessel_name": "ALPHA",
+        },
+        # Exact full-record duplicate of row 1 -> should be consolidated
+        {
+            "mmsi": "366745490",
+            "timestamp_utc": "2025-01-01 00:00:00",
+            "latitude": "33.70000",
+            "longitude": "-118.20000",
+            "sog": "5.0",
+            "vessel_name": "ALPHA",
+        },
+        # Same position and timestamp, but different SOG and vessel_name -> must be retained
+        {
+            "mmsi": "366745490",
+            "timestamp_utc": "2025-01-01 00:00:00",
+            "latitude": "33.70000",
+            "longitude": "-118.20000",
+            "sog": "12.5",
+            "vessel_name": "BETA",
+        },
+    ]
+    cleaned, summary = process_and_clean_observations(raw_rows)
+    assert len(cleaned) == 2
+    assert summary["exact_duplicates_consolidated"] == 1
+    assert summary["metadata_conflicts_flagged"] == 2
+    assert FLAG_EXACT_DUPLICATE in cleaned[0].quality_flags
+    for p in cleaned:
+        assert FLAG_TIMESTAMP_METADATA_CONFLICT in p.quality_flags
+        assert p.distance_nm is None
+        assert p.implied_speed_knots is None
+
+
+def test_20_mixed_and_ambiguous_legacy_modern_headers() -> None:
+    """Reject duplicate/ambiguous canonical header mappings; allow unambiguous mixed headers."""
+    # Both legacy LAT and modern latitude present -> must reject
+    with pytest.raises(SchemaAdapterError, match="Ambiguous header mapping"):
+        detect_and_build_column_mapping(["mmsi", "base_date_time", "latitude", "LAT", "longitude"])
+
+    # Both modern mmsi and legacy MMSI present -> must reject
+    with pytest.raises(SchemaAdapterError, match="Ambiguous header mapping"):
+        detect_and_build_column_mapping(["mmsi", "MMSI", "base_date_time", "latitude", "longitude"])
+
+    # Duplicate exact header -> must reject
+    with pytest.raises(SchemaAdapterError, match="Ambiguous header mapping"):
+        detect_and_build_column_mapping(["mmsi", "mmsi", "base_date_time", "latitude", "longitude"])
+
+    # Duplicate canonical target on optional column (status + Status) -> must reject
+    with pytest.raises(SchemaAdapterError, match="Ambiguous header mapping"):
+        detect_and_build_column_mapping(
+            ["mmsi", "base_date_time", "latitude", "longitude", "status", "Status"]
+        )
+
+    # Unambiguous 1-to-1 mixed legacy/modern headers -> accepted cleanly
+    schema_name, mapping = detect_and_build_column_mapping(
+        ["MMSI", "base_date_time", "LAT", "longitude", "SOG"]
+    )
+    assert schema_name == "noaa_mixed"
+    assert mapping == {
+        "MMSI": "mmsi",
+        "base_date_time": "timestamp_utc",
+        "LAT": "latitude",
+        "longitude": "longitude",
+        "SOG": "sog",
+    }

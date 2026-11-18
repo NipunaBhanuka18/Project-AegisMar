@@ -289,4 +289,42 @@ This log documents chronological engineering actions, commands executed, test re
   - Quality gates: 100% passed (Ruff: 0 errors; Ruff format: clean; Mypy: 0 errors in 16 files).
   - Real dataset ingested into Parquet with complete manifest audit trail.
 - **Next Action:**
-  - Stage, commit with message `feat: implement validated AIS ingestion and Parquet pipeline (W1-02B)`, push to `origin/main`, and report completion.
+  - Proceed with W2-01 (Ingestion Corrections & BallTree ST-DBSCAN Reference Engine).
+
+---
+
+## Log Entry: 2026-11-18 — Task W2-01
+
+- **Date:** 2026-11-18
+- **Task Identifier:** `W2-01: Ingestion Corrections & BallTree ST-DBSCAN Reference Engine`
+- **Summary of Changes:**
+  - **Bounded W1-02B Ingestion Corrections**:
+    - Clarified in `src/aegismar/ingestion/pipeline.py`, `docs/01-project/brs.md`, `docs/01-project/srs.md`, and `docs/03-research/datasets.md` that the current MVP ingestion materializes rows in memory in Python lists prior to `zstd`-compressed Parquet serialization (in-memory batch processing, not bounded-memory streaming).
+    - Hardened `sanitize_mmsi` (`src/aegismar/ingestion/cleaner.py`) to strictly accept integer-format MMSIs and reject decimal strings, floats, booleans, signs, and non-ASCII digits rather than silently truncating on `"."`.
+    - Hardened duplicate & same-timestamp conflict policy (`src/aegismar/ingestion/cleaner.py`): exact deduplication requires full-record equality (`_full_record_dedup_key`); same-position differing metadata is retained with `TIMESTAMP_METADATA_CONFLICT`; same-timestamp differing coordinates remain retained with `TIMESTAMP_POSITION_CONFLICT`; conflicting same-timestamp observations do not produce fictitious zero-time movement estimates (`prev_source_row`, `elapsed_seconds`, `distance_nm`, and `implied_speed_knots` remain `None`).
+    - Hardened `detect_and_build_column_mapping` (`src/aegismar/ingestion/schema.py`) to inspect all raw columns across modern 2025 and legacy vocabularies and reject duplicate or ambiguous canonical mappings (e.g., `LAT` + `latitude`, `mmsi` + `MMSI`, duplicate raw headers) via `SchemaAdapterError`.
+  - **Reference Clustering Dependencies**:
+    - Installed `numpy==2.4.6` and `scikit-learn==1.9.1` via `uv add numpy scikit-learn` (`h3` intentionally NOT installed; deferred to Week 3).
+  - **Reference BallTree ST-DBSCAN Engine & Independent Oracle**:
+    - Implemented `src/aegismar/clustering/config.py`: validated `QualityFilterPolicy` and `STDBSCANConfig` (`eps_spatial_m`, `eps_temporal_s`, `min_samples`, radian conversion).
+    - Implemented `src/aegismar/clustering/types.py`: canonical total-order sorting `(timestamp_us, mmsi, latitude_deg, longitude_deg, source_row)`, `NeighborhoodGraph` (CSR), `NeighborhoodProvider` protocol, `STDBSCANResult`, and Parquet loader (`load_clustering_dataset_from_parquet`).
+    - Implemented `src/aegismar/clustering/balltree_neighbors.py`: `BallTreeNeighborhoodProvider` (`metric="haversine"`, `[lat_rad, lon_rad]`, chunked batch queries avoiding $N \times N$ matrices, exact integer-microsecond temporal filter, exact degree-difference Haversine pruning).
+    - Implemented `src/aegismar/clustering/st_dbscan.py`: provider-agnostic deterministic core-first ST-DBSCAN (`stdbscan-core-first-v1.0`) with vectorized BFS core connected components in ascending canonical order and nearest-core border tie-breaking `(dist_m, |dt_us|, cluster_id, core_index)`.
+    - Implemented `src/aegismar/clustering/export.py`: Parquet, summary JSON, compact GeoJSON preview, and offline zero-dependency SVG static HTML map exporter; added `aegismar cluster` CLI subcommand in `src/aegismar/cli.py`.
+    - Implemented `src/aegismar/spatial/oracle.py`: isolated $O(N^2)$ `BruteForceNeighborhoodOracle` (safety cap $N \le 5{,}000$) and `verify_provider_against_oracle`.
+  - **Automated Verification & Oracle Testing**:
+    - Added 4 ingestion regression tests (`test_17`–`test_20`), 16 critical ST-DBSCAN fixtures + export roundtrip (`tests/unit/test_st_dbscan.py`), 7 randomized/dateline/polar/guard oracle tests (`tests/unit/test_oracle.py`), and CLI cluster tests (`tests/unit/test_cli.py`).
+    - Total test suite: 52 passed (0 failed), 95% total coverage across `src/aegismar` (clustering modules 95%–98%, oracle 98%).
+  - **Exploratory Real AIS Baseline (`data/processed/lalb_20250101/cleaned_ais.parquet`)**:
+    - Raw and cleaned Parquet inputs strictly untouched (`cleaned_ais.parquet` SHA-256 `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b`).
+    - Parameters: `eps_spatial_m=300.0`, `eps_temporal_s=900.0`, `min_samples=5`, `exclude_timestamp_conflicts=True`.
+    - Counts: 143,124 input -> 8 excluded (`TIMESTAMP_POSITION_CONFLICT`) -> 143,116 analyzed; 241 clusters; 136,276 core + 934 border + 5,906 noise = 143,116.
+    - Performance: uninstrumented wall time 13.680 s (build 0.077 s, query 13.341 s, clustering 0.262 s); under `tracemalloc` 38.014 s with 225.83 MB peak Python heap.
+    - Determinism: repeated full run matched saved Parquet labels and roles 100%.
+    - Real-data oracle spot-check (first 1,000 canonical LA/LB rows): 27,324 / 27,324 edges matched (recall=1.0, precision=1.0, exact neighborhood/role/label match).
+    - Artifacts exported to gitignored `experiments/outputs/w2_01_lalb_balltree/`.
+- **Problems Encountered & Fixes**:
+  - Detected 1-ULP IEEE-754 difference between `np.deg2rad(lat2) - np.deg2rad(lat1)` vs `np.deg2rad(lat2 - lat1)` on exact spatial boundary tests; aligned `_exact_haversine_to_candidates_m` to compute degree differences prior to radian conversion for bit-for-bit oracle parity.
+  - Replaced initial Python scalar Union-Find loop (~89 s under `tracemalloc`) with vectorized NumPy BFS seeded in ascending canonical core-index order, cutting uninstrumented clustering time to 0.262 s (and `tracemalloc` clustering time to 6.583 s) with 100% identical labels.
+- **Next Action:**
+  - Run final pre-push quality gates, verify remote state, commit `feat: implement verified BallTree ST-DBSCAN baseline (W2-01)`, push to `origin/main`, and stop before Week 3 H3 work.

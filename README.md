@@ -3,7 +3,7 @@
 > **Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3119/)
-[![Project Status: Planning](https://img.shields.io/badge/status-planning%20%2F%20initialization-orange.svg)](#2-current-status)
+[![Project Status: Pre-Alpha MVP](https://img.shields.io/badge/status-pre--alpha%20MVP-blue.svg)](#2-current-status)
 [![License: Pending](https://img.shields.io/badge/license-pending-lightgrey.svg)](#14-license-attribution)
 
 ---
@@ -19,9 +19,9 @@ The project investigates scalable spatiotemporal clustering and kinematic trajec
 <a id="current-status"></a>
 ## 2. Current Status
 
-- **Phase**: Milestone **W1-01: Repository Initialization & Documentation Foundation**.
-- **State**: Initial repository skeleton established; Python 3.11 environment pinned; static quality gates configured; foundational documentation tree completed.
-- **Codebase Implementation**: Pre-alpha (`0.1.0.dev1`). Ingestion pipelines, clustering engines, anomaly detection, API, and UI are planned for subsequent milestones.
+- **Phase**: Milestone **W2-01: Ingestion Corrections & BallTree ST-DBSCAN Reference Engine (Completed)**.
+- **State**: Validated in-memory AIS ingestion pipeline (`zstd` Parquet + manifest), hardened MMSI/conflict/schema checks, reference Haversine `BallTree` ST-DBSCAN (`stdbscan-core-first-v1.0`), independent $O(N^2)$ brute-force oracle, and exploratory LA/LB baseline completed and verified (52 unit/oracle tests, 95% coverage).
+- **Codebase Implementation**: Pre-alpha (`0.1.0.dev1`). Uber H3 candidate optimization, comparative H1 benchmarks, stay-point/anchorage analytics, anomaly detection, DuckDB/FastAPI, and web UI are planned for Weeks 3–8 (H3 is **not yet implemented**).
 
 ---
 
@@ -94,10 +94,10 @@ flowchart TD
 | **Package Manager**| `uv` (0.11.x) | `uv` | High performance, reproducible dependency locking (`uv.lock`), PEP 621 compliant. |
 | **Build Backend** | `hatchling` | `hatchling` | Standard, modern PEP 517 build backend. |
 | **Quality Gates** | `ruff`, `mypy`, `pytest` | `ruff`, `mypy`, `pytest` | Sub-second linting/formatting, strict static typing, rigorous unit testing. |
-| **Data Engine** | *Planned (W1-02)* | `duckdb`, `pyarrow` | In-process columnar analytical query engine over Parquet. No database server required. |
-| **Spatial Indexing**| *Planned (W2)* | `scikit-learn`, `h3` (4.x) | BallTree haversine baseline; H3 discrete hexagonal hierarchical grid. |
-| **Web Service** | *Planned (W5)* | `fastapi`, `uvicorn` | Lightweight, asynchronous, typed, read-only HTTP endpoints serving GeoJSON. |
-| **Geospatial UI** | *Planned (W6)* | Vanilla JS + Leaflet / MapLibre | Zero-build-step interactive geospatial visualization. |
+| **Data Engine** | Implemented (`pyarrow`); `duckdb` planned (W6) | `duckdb`, `pyarrow` | Columnar Parquet I/O (`zstd`) implemented via PyArrow; in-process DuckDB planned for W6. |
+| **Spatial Indexing**| BallTree Implemented (W2-01); H3 Planned (W3) | `numpy`, `scikit-learn`, `h3` (4.x) | Haversine `BallTree` reference baseline verified; Uber H3 deferred to Week 3. |
+| **Web Service** | *Planned (W6)* | `fastapi`, `uvicorn` | Lightweight, asynchronous, typed, read-only HTTP endpoints serving GeoJSON. |
+| **Geospatial UI** | *Planned (W7)* | Vanilla JS + Leaflet / MapLibre | Zero-build-step interactive geospatial visualization. |
 
 ---
 
@@ -106,8 +106,8 @@ flowchart TD
 The project is structured around an estimated 200 hours (25 h/week) across 8 milestone weeks:
 
 - **Week 1**: Repository initialization, doc tree, AIS data ingestion, and sentinel masking.
-- **Week 2**: Spatial indexing (Haversine BallTree baseline vs. H3 grid candidate generation).
-- **Week 3**: ST-DBSCAN clustering implementation and formal spatial correctness evaluation.
+- **Week 2**: Ingestion hardening, Haversine `BallTree` reference ST-DBSCAN, and independent brute-force oracle verification.
+- **Week 3**: Uber H3 candidate optimization, boundary/pentagon completeness testing, and comparative H1 benchmarks.
 - **Week 4**: Vessel-aware stay-point extraction and anchorage dwell analysis (with berth exclusion).
 - **Week 5**: Trajectory anomaly detection engine (rule-based kinematics and optional Isolation Forest).
 - **Week 6**: Analytical storage integration (DuckDB/Parquet) and read-only FastAPI service.
@@ -123,9 +123,9 @@ The project is structured around an estimated 200 hours (25 h/week) across 8 mil
 | **W1-01** | Repository Initialization & Documentation Foundation | Week 1 | **Completed** |
 | **W1-02A**| NOAA AIS Dataset Selection & Schema Investigation | Week 1 | **Completed** |
 | **W1-02B**| AIS Ingestion, Data Quality & Parquet Storage | Week 1 | **Completed** |
-| **W2-01** | Haversine Metric & BallTree Baseline Implementation | Week 2 | Planned |
-| **W2-02** | H3 Hexagonal Grid Candidate Generation Engine | Week 2 | Planned |
-| **W3-01** | ST-DBSCAN Core Engine & Spatial Oracle Verification | Week 3 | Planned |
+| **W2-01** | Ingestion Corrections, BallTree ST-DBSCAN & Brute-Force Oracle | Week 2 | **Completed** |
+| **W3-01** | H3 Candidate Optimization & Completeness Verification | Week 3 | Planned |
+| **W3-02** | Comparative H1 Benchmarking (BallTree vs. H3) | Week 3 | Planned |
 | **W4-01** | Stay-Point Extraction & Anchorage Dwell Identification | Week 4 | Planned |
 | **W5-01** | Kinematic Anomaly Scoring & Evaluation Engine | Week 5 | Planned |
 | **W6-01** | DuckDB Analytical Query Layer & Read-Only API | Week 6 | Planned |
@@ -153,19 +153,22 @@ uv sync --locked
 
 # Run test suite and static quality gates
 uv run pytest -v
-uv run pytest --cov=aegismar
+uv run pytest --cov=aegismar --cov-report=term-missing
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src tests
 ```
 
-### AIS Data Ingestion CLI
+### AIS Data Ingestion & Reference Clustering CLI
 ```powershell
-# Ingest raw/regional AIS CSV into canonical Parquet storage
+# Ingest raw/regional AIS CSV into canonical Parquet storage (in-memory batch pipeline)
 uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
 
 # Ingest with custom implied speed threshold (knots) and overwrite permission
 uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101 -s 50.0 --overwrite
+
+# Run reference Haversine BallTree ST-DBSCAN on cleaned AIS Parquet
+uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w2_01_lalb_balltree --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
 ```
 
 ---

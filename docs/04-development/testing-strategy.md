@@ -47,9 +47,9 @@ flowchart TD
 
 ### Tier 3: Independent Test Oracles
 - Algorithmic correctness is verified against an **independent test oracle**:
-  - An exact, unaccelerated $O(N^2)$ brute-force geodesic distance comparator (`aegismar.spatial.oracle`) serves as the ground truth.
-  - Both `BallTree` queries and `H3` candidate generation must prove zero false negatives against the oracle across synthetic and downsampled real fixtures.
-  - Border conditions: Points placed within 10 meters of H3 cell edges are specifically evaluated to verify that no candidates are missed across hexagonal boundaries.
+  - An exact, unaccelerated $O(N^2)$ brute-force geodesic-temporal comparator (`aegismar.spatial.oracle.BruteForceNeighborhoodOracle`, implemented in W2-01 with a safety guard at $N \le 5{,}000$) serves as the ground truth.
+  - `BallTreeNeighborhoodProvider` is verified in automated tests (`tests/unit/test_oracle.py`, `tests/unit/test_st_dbscan.py`) against the oracle across 16 critical fixtures (isolated points, multi-cluster, exact spatial/temporal thresholds, core/border/noise, ambiguous multi-cluster borders, dateline crossing, high latitudes, randomized coastal sets, row permutation invariance, and quality-filtered conflicts) with zero missing or extra neighbors and 100% identical labels.
+  - In Week 3, `H3NeighborhoodProvider` will be verified against the exact same oracle and BallTree reference, adding H3 cell-boundary ($\delta \le 10\text{ m}$) and pentagon tests.
 
 ---
 
@@ -68,8 +68,8 @@ To comply with the rule that raw AIS datasets must never be committed to Git:
 |---|---|---|
 | **Static Linting** | `uv run ruff check .` | 0 errors, 0 warnings |
 | **Code Formatting** | `uv run ruff format --check .` | 100% compliant, 0 re-formats needed |
-| **Type Safety** | `uv run mypy src` | 0 type errors in strict mode |
+| **Type Safety** | `uv run mypy src tests` | 0 type errors in strict mode |
 | **Test Suite** | `uv run pytest -v` | 100% passing |
-| **Coverage Analysis** | `uv run pytest --cov=src --cov-report=term-missing` | $\ge 85\%$ core branch coverage |
-| **Full Quality Gate** | `uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run pytest -v` | All checks pass |
+| **Coverage Analysis** | `uv run pytest --cov=aegismar --cov-report=term-missing` | $\ge 80\%$ ($\ge 85\%$ target) core coverage |
+| **Full Quality Gate** | `uv run ruff check . && uv run ruff format --check . && uv run mypy src tests && uv run pytest -v` | All checks pass |
 

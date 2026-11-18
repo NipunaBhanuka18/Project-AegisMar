@@ -143,5 +143,5 @@ flowchart TD
 - [x] **Sentinel Audit**: Verified that 2025 NOAA data replaces sentinels (`102.3`, `511`, `15`) with null values.
 - [x] **Implied Speed Sanity**: Profiled: 18 speed violations ($>50\text{ kt}$) cataloged in LA/LB sample.
 - [x] **Berth Reference Geometry Identified**: Port of Los Angeles GeoPOLA and Port of Long Beach open GIS feature services verified.
-- [x] **Production Ingestion & Parquet Partitioning**: Completed in Milestone W1-02B (`cleaned_ais.parquet`, 4.15 MB, Snappy compression).
+- [x] **Production Ingestion & Parquet Storage**: Completed in Milestone W1-02B (`cleaned_ais.parquet`, 4.15 MB, zstd compression; in-memory batch ingestion; quality and schema rules hardened in W2-01).
 - [x] **Final Pipeline Validation**: Completed in Milestone W1-02B (`manifest.json` cryptographic traceability with SHA-256 and schema metadata).

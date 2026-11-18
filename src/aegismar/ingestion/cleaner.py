@@ -28,6 +28,7 @@ from aegismar.common.constants import (
     FLAG_SOG_SENTINEL_NULLIFIED,
     FLAG_STATUS_SENTINEL_NULLIFIED,
     FLAG_STATUS_UNDEFINED,
+    FLAG_TIMESTAMP_METADATA_CONFLICT,
     FLAG_TIMESTAMP_POSITION_CONFLICT,
     FLAG_ZERO_ELAPSED_TIME,
     HEADING_MAX_VALID_DEGREES,
@@ -87,7 +88,12 @@ def parse_utc_timestamp(val: Any) -> datetime | None:
 
 
 def sanitize_mmsi(val: Any) -> tuple[str | None, str | None]:
-    """Validate and format an MMSI identifier into a 9-digit string.
+    """Validate and format an integer-format MMSI identifier into a 9-digit string.
+
+    Only pure integer values (`int`, excluding `bool`) or pure ASCII digit strings
+    matching the documented NOAA source schema are accepted. Decimal strings
+    (e.g., ``'366745490.5'`` or ``'366745490.0'``), floats, signs, or non-digit
+    characters are explicitly rejected rather than truncated.
 
     Returns
     -------
@@ -97,18 +103,25 @@ def sanitize_mmsi(val: Any) -> tuple[str | None, str | None]:
     if val is None:
         return None, FLAG_HARD_INVALID_MISSING_ID
 
-    s = str(val).strip()
+    if isinstance(val, bool):
+        return None, FLAG_HARD_INVALID_BAD_MMSI
+
+    if isinstance(val, int):
+        if val <= 0 or val > 999_999_999:
+            return None, FLAG_HARD_INVALID_BAD_MMSI
+        return f"{val:09d}", None
+
+    if not isinstance(val, str):
+        return None, FLAG_HARD_INVALID_BAD_MMSI
+
+    s = val.strip()
     if not s:
         return None, FLAG_HARD_INVALID_MISSING_ID
 
-    # Handle numeric float strings (e.g. '366745490.0' from loose CSV readers)
-    if "." in s:
-        s = s.split(".")[0].strip()
-
-    if not s.isdigit():
+    if not (s.isascii() and s.isdigit()):
         return None, FLAG_HARD_INVALID_BAD_MMSI
 
-    # Check length and pad leading zeros if valid integer length (<= 9)
+    # Check length and pad leading zeros if valid integer length (1..9 digits)
     if len(s) > 9:
         return None, FLAG_HARD_INVALID_BAD_MMSI
 
@@ -283,11 +296,48 @@ class RecordValidator:
         return ping, None
 
 
+def _full_record_dedup_key(ping: CanonicalPing) -> tuple[Any, ...]:
+    """Return full-record equality key for exact duplicate detection.
+
+    Deduplication requires full-record equality across spatial coordinates,
+    kinematic fields, navigational status, and vessel metadata so that
+    conflicting metadata at the same vessel-position-timestamp is never
+    silently discarded.
+    """
+    return (
+        ping.latitude,
+        ping.longitude,
+        ping.sog,
+        ping.cog,
+        ping.heading,
+        ping.nav_status,
+        ping.vessel_type,
+        ping.vessel_name,
+        ping.imo,
+        ping.call_sign,
+        ping.transceiver_class,
+    )
+
+
 def process_and_clean_observations(
     raw_rows: list[dict[str, Any]],
     speed_threshold_knots: float = DEFAULT_IMPLIED_SPEED_THRESHOLD_KNOTS,
 ) -> tuple[list[CanonicalPing], dict[str, Any]]:
     """Clean, deduplicate, sort, and validate implied speeds across AIS observations.
+
+    Duplicate and conflict policy:
+    - Exact duplicates are defined by full-record equality across coordinates,
+      kinematics, status, and vessel metadata for the same ``(mmsi, timestamp_utc)``.
+      Exact duplicates are consolidated into the lowest-``source_row`` observation
+      tagged with ``EXACT_DUPLICATE``.
+    - Same-``(mmsi, timestamp_utc)`` observations with differing coordinates are
+      all retained for investigation and tagged with ``TIMESTAMP_POSITION_CONFLICT``.
+    - Same-``(mmsi, timestamp_utc)`` observations with identical coordinates but
+      differing kinematics or metadata are all retained and tagged with
+      ``TIMESTAMP_METADATA_CONFLICT`` rather than silently discarding metadata.
+    - Conflicting same-timestamp observations do not produce fictitious zero-time
+      movement estimates (``prev_source_row``, ``elapsed_seconds``, ``distance_nm``,
+      and ``implied_speed_knots`` remain ``None``).
 
     Parameters
     ----------
@@ -320,6 +370,7 @@ def process_and_clean_observations(
     final_cleaned_pings: list[CanonicalPing] = []
     exact_duplicate_count = 0
     conflict_count = 0
+    metadata_conflict_count = 0
     all_quality_flags: Counter[str] = Counter()
 
     # 2. Process each vessel trajectory independently
@@ -341,53 +392,90 @@ def process_and_clean_observations(
             if len(same_ts_group) == 1:
                 deduped_trajectory.append(curr)
             else:
-                # Check whether coordinates are identical (exact duplicate) or different (conflict)
-                first_coord = (curr.latitude, curr.longitude)
-                all_same_coord = all(
-                    (p.latitude, p.longitude) == first_coord for p in same_ts_group
-                )
+                # Step 2a: Collapse exact full-record duplicates deterministically
+                unique_by_payload: dict[tuple[Any, ...], list[CanonicalPing]] = {}
+                for p in same_ts_group:
+                    unique_by_payload.setdefault(_full_record_dedup_key(p), []).append(p)
 
-                if all_same_coord:
-                    # Consolidate exact duplicates: retain the first observation
-                    curr.quality_flags.append(FLAG_EXACT_DUPLICATE)
-                    exact_duplicate_count += len(same_ts_group) - 1
-                    deduped_trajectory.append(curr)
+                unique_records: list[CanonicalPing] = []
+                for payload_group in unique_by_payload.values():
+                    rep = payload_group[0]
+                    if len(payload_group) > 1:
+                        rep.quality_flags.append(FLAG_EXACT_DUPLICATE)
+                        exact_duplicate_count += len(payload_group) - 1
+                    unique_records.append(rep)
+
+                unique_records.sort(key=lambda p: p.source_row)
+
+                # Step 2b: Classify remaining distinct records at the identical timestamp
+                if len(unique_records) == 1:
+                    deduped_trajectory.append(unique_records[0])
                 else:
-                    # Conflicting observations at identical timestamp: retain both with warning flag
-                    conflict_count += len(same_ts_group)
-                    for p in same_ts_group:
-                        p.quality_flags.append(FLAG_TIMESTAMP_POSITION_CONFLICT)
-                        deduped_trajectory.append(p)
+                    first_coord = (unique_records[0].latitude, unique_records[0].longitude)
+                    all_same_coord = all(
+                        (p.latitude, p.longitude) == first_coord for p in unique_records
+                    )
+                    if all_same_coord:
+                        metadata_conflict_count += len(unique_records)
+                        for p in unique_records:
+                            p.quality_flags.append(FLAG_TIMESTAMP_METADATA_CONFLICT)
+                            deduped_trajectory.append(p)
+                    else:
+                        conflict_count += len(unique_records)
+                        for p in unique_records:
+                            p.quality_flags.append(FLAG_TIMESTAMP_POSITION_CONFLICT)
+                            deduped_trajectory.append(p)
 
             i = j
 
-        # 3. Calculate implied speeds between consecutive valid observations
-        for k in range(len(deduped_trajectory)):
-            current_ping = deduped_trajectory[k]
-            if k > 0:
-                prev_ping = deduped_trajectory[k - 1]
-                dt_sec = (current_ping.timestamp_utc - prev_ping.timestamp_utc).total_seconds()
-                current_ping.prev_source_row = prev_ping.source_row
-                current_ping.elapsed_seconds = dt_sec
+        # 3. Calculate implied speeds between consecutive unambiguous observations
+        last_unambiguous_ping: CanonicalPing | None = None
+        for k, current_ping in enumerate(deduped_trajectory):
+            is_conflict = (
+                FLAG_TIMESTAMP_POSITION_CONFLICT in current_ping.quality_flags
+                or FLAG_TIMESTAMP_METADATA_CONFLICT in current_ping.quality_flags
+            )
 
-                if dt_sec == 0.0:
-                    current_ping.quality_flags.append(FLAG_ZERO_ELAPSED_TIME)
-                    current_ping.distance_nm = 0.0
-                    current_ping.implied_speed_knots = None
-                elif dt_sec > 0.0:
-                    dist_nm = haversine_distance_nm(
-                        prev_ping.latitude,
-                        prev_ping.longitude,
-                        current_ping.latitude,
-                        current_ping.longitude,
-                    )
-                    current_ping.distance_nm = dist_nm
-                    hours = dt_sec / SECONDS_PER_HOUR
-                    speed_kt = dist_nm / hours
-                    current_ping.implied_speed_knots = speed_kt
+            if (
+                k > 0
+                and (
+                    current_ping.timestamp_utc - deduped_trajectory[k - 1].timestamp_utc
+                ).total_seconds()
+                == 0.0
+            ):
+                current_ping.quality_flags.append(FLAG_ZERO_ELAPSED_TIME)
 
-                    if speed_kt > speed_threshold_knots:
-                        current_ping.quality_flags.append(FLAG_IMPLIED_SPEED_VIOLATION)
+            if is_conflict:
+                # Conflicting same-timestamp observations must not generate
+                # fictitious zero-time movement estimates.
+                current_ping.prev_source_row = None
+                current_ping.elapsed_seconds = None
+                current_ping.distance_nm = None
+                current_ping.implied_speed_knots = None
+            else:
+                if last_unambiguous_ping is not None:
+                    dt_sec = (
+                        current_ping.timestamp_utc - last_unambiguous_ping.timestamp_utc
+                    ).total_seconds()
+                    current_ping.prev_source_row = last_unambiguous_ping.source_row
+                    current_ping.elapsed_seconds = dt_sec
+
+                    if dt_sec > 0.0:
+                        dist_nm = haversine_distance_nm(
+                            last_unambiguous_ping.latitude,
+                            last_unambiguous_ping.longitude,
+                            current_ping.latitude,
+                            current_ping.longitude,
+                        )
+                        current_ping.distance_nm = dist_nm
+                        hours = dt_sec / SECONDS_PER_HOUR
+                        speed_kt = dist_nm / hours
+                        current_ping.implied_speed_knots = speed_kt
+
+                        if speed_kt > speed_threshold_knots:
+                            current_ping.quality_flags.append(FLAG_IMPLIED_SPEED_VIOLATION)
+
+                last_unambiguous_ping = current_ping
 
             # Record quality flags for accounting
             for flag in current_ping.quality_flags:
@@ -405,6 +493,7 @@ def process_and_clean_observations(
         "hard_invalid_breakdown": dict(hard_invalid_counts),
         "exact_duplicates_consolidated": exact_duplicate_count,
         "timestamp_conflicts_flagged": conflict_count,
+        "metadata_conflicts_flagged": metadata_conflict_count,
         "quality_flag_totals": dict(all_quality_flags),
         "unique_mmsis": len(vessels_dict),
     }

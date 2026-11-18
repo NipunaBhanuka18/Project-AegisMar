@@ -30,25 +30,23 @@ The eight-week development lifecycle is partitioned into four major phases:
 - **Dependencies**: None.
 - **Acceptance Gate**: 100% passing unit tests on synthetic corrupted AIS pings; strict mypy and ruff compliance; clean Parquet round-trip.
 
-### Week 2: Metric Space Foundation & Spatial Indexing
+### Week 2: Ingestion Hardening & BallTree Reference ST-DBSCAN Engine
 - **Capacity**: 25 Hours
-- **Primary Goal**: Implement exact geodesic distance calculations and compare spatial indexing mechanisms.
+- **Primary Goal**: Complete bounded W1-02B ingestion corrections and implement the verified Haversine BallTree reference ST-DBSCAN engine with an independent brute-force test oracle.
 - **Key Deliverables**:
-  - `W2-01`: Vectorized Haversine distance functions and scikit-learn `BallTree` wrapper with haversine metric.
-  - `W2-02`: Uber H3 grid candidate generation engine (cell assignment at resolution $R$, $k$-ring neighborhood expansion).
-  - `W2-03`: Brute-force $O(N^2)$ geodesic test oracle.
-- **Dependencies**: Week 1 data structures.
-- **Acceptance Gate**: H3 candidate search retrieves 100% of spatial neighbors identified by the brute-force oracle across test fixtures.
+  - `W2-01`: Ingestion corrections (strict MMSI validation, full-record duplicate/conflict semantics, ambiguous header rejection, accurate memory documentation), `scikit-learn` Haversine `BallTree` neighborhood engine, provider-agnostic deterministic core-first ST-DBSCAN, independent $O(N^2)$ brute-force test oracle, 16 critical test fixtures, and exploratory baseline run on the LA/LB dataset.
+- **Dependencies**: Week 1 cleaned Parquet dataset.
+- **Acceptance Gate**: BallTree neighborhood sets, core/border/noise roles, and final cluster labels match the independent brute-force oracle 100% across all synthetic and randomized test fixtures; real LA/LB dataset baseline executes deterministically.
 
-### Week 3: Spatiotemporal ST-DBSCAN Clustering
+### Week 3: H3 Candidate Optimization, Completeness Testing & Comparative H1 Benchmarks
 - **Capacity**: 25 Hours
-- **Primary Goal**: Implement the reference and accelerated ST-DBSCAN clustering algorithms.
+- **Primary Goal**: Implement the correctness-preserving Uber H3 neighborhood provider plugging into the shared ST-DBSCAN core, verify completeness across cell boundaries and pentagons, and execute comparative H1 benchmarks against the BallTree reference.
 - **Key Deliverables**:
-  - `W3-01`: BallTree-backed ST-DBSCAN baseline with deterministic core, border, and noise classification.
-  - `W3-02`: H3-accelerated ST-DBSCAN engine with exact geodesic distance pruning.
-  - `W3-03`: Quantitative clustering correctness benchmark (Rand index, Adjusted Mutual Info, Neighbor Recall).
-- **Dependencies**: Week 2 spatial indexes.
-- **Acceptance Gate**: Cluster labels between H3-accelerated and BallTree engines achieve $>99.9\%$ concordance with verified query speedups.
+  - `W3-01`: Uber H3 discrete hexagonal grid candidate generation engine (`H3NeighborhoodProvider`) with exact geodesic and temporal pruning.
+  - `W3-02`: Completeness verification across H3 cell boundaries, pentagons, dateline, and high latitudes against the brute-force oracle and BallTree reference.
+  - `W3-03`: Quantitative comparative H1 benchmark (Neighbor Recall, Precision, ARI, build/query/clustering wall time, peak memory).
+- **Dependencies**: Week 2 BallTree ST-DBSCAN reference engine and oracle.
+- **Acceptance Gate**: Cluster labels between H3-accelerated and BallTree engines achieve exact concordance with 100% eligible-neighbor recall on correctness tests and empirically measured runtime comparisons.
 
 ### Week 4: Stay-Point Extraction & Anchorage Intelligence
 - **Capacity**: 25 Hours

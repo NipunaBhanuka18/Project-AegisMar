@@ -74,7 +74,7 @@ The scope covers:
 ## 5. Non-Functional Requirements & Provisional Targets
 
 - **NFR-REL-01 (Reproducibility)**: Every benchmark and experiment shall record input dataset hashes, parameter configurations, random seeds, and host hardware environment.
-- **NFR-PERF-01 (Provisional Ingestion Throughput)**: The ingestion pipeline shall process standard NOAA AIS daily extracts on standard consumer hardware without exhausting available RAM (batch/streaming chunking). *Note: Specific record throughput targets are provisional and subject to empirical measurement in Week 1.*
+- **NFR-PERF-01 (Provisional Ingestion Memory & Throughput)**: The current MVP ingestion pipeline is an **in-memory batch processor** that materializes CSV rows and cleaned `CanonicalPing` objects in Python lists prior to Arrow/Parquet serialization (not bounded-memory streaming). It operates comfortably on regional daily extracts (~100k–500k pings) on standard consumer workstations; true bounded-memory streaming is deferred outside the MVP scope.
 - **NFR-PERF-02 (Scalability Thresholds)**: Benchmark evaluations shall explicitly evaluate dataset scales of 10k, 50k, 100k, and optionally 500k records, measuring runtime, peak memory, and indexing overhead.
 - **NFR-SEC-01 (Local Execution)**: The MVP shall operate entirely offline on localhost without requiring internet egress, external database connections, or cloud service credentials.
 

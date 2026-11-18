@@ -35,7 +35,15 @@ def run_ingestion_pipeline(
     speed_threshold_knots: float = DEFAULT_IMPLIED_SPEED_THRESHOLD_KNOTS,
     overwrite: bool = False,
 ) -> IngestionManifest:
-    """Execute the complete CSV-to-Parquet ingestion pipeline.
+    """Execute the complete in-memory CSV-to-Parquet ingestion pipeline.
+
+    Note
+    ----
+    This MVP implementation materializes raw mapped rows and cleaned
+    ``CanonicalPing`` observations in Python lists prior to Arrow table
+    construction. It is an in-memory batch processor designed for regional
+    daily extracts (e.g., ~100k-500k pings) rather than bounded-memory
+    streaming over multi-gigabyte nationwide files.
 
     Parameters
     ----------
@@ -94,7 +102,7 @@ def run_ingestion_pipeline(
 
     schema_detected, column_mapping = detect_and_build_column_mapping(header_row)
 
-    # 3. Stream/load raw rows with mapped column names
+    # 3. Materialize raw rows in memory with mapped column names
     mapped_rows: list[dict[str, Any]] = []
     with open(input_path, encoding="utf-8", errors="replace") as f:
         dict_reader = csv.DictReader(f)

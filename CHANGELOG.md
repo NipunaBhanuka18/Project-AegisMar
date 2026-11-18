@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added & Fixed - Milestone W2-01 (2026-11-18)
+- **Ingestion Hardening & Audit Corrections**:
+  - Updated `sanitize_mmsi` (`src/aegismar/ingestion/cleaner.py`) to strictly accept integer-format MMSIs and reject malformed decimal/float/boolean inputs rather than truncating.
+  - Hardened duplicate and same-timestamp conflict semantics: exact deduplication requires full-record equality; same-position differing metadata is preserved with `TIMESTAMP_METADATA_CONFLICT`; conflicting same-timestamp observations never produce fictitious zero-time movement estimates (`distance_nm`, `implied_speed_knots`, `elapsed_seconds`, `prev_source_row` set to `None`).
+  - Hardened `detect_and_build_column_mapping` (`src/aegismar/ingestion/schema.py`) to reject duplicate raw headers and ambiguous mixed legacy/modern canonical mappings (e.g., `LAT` + `latitude`, `mmsi` + `MMSI`) via `SchemaAdapterError`.
+  - Corrected documentation (`pipeline.py`, `brs.md`, `srs.md`, `datasets.md`) to state explicitly that MVP ingestion materializes rows in memory in Python lists prior to `zstd`-compressed Parquet serialization rather than bounded-memory streaming.
+- **Reference BallTree ST-DBSCAN Engine**:
+  - Added `numpy` and `scikit-learn` via `uv` (`h3` intentionally deferred to Week 3).
+  - Implemented typed configuration (`src/aegismar/clustering/config.py`: `QualityFilterPolicy`, `STDBSCANConfig`), canonical data structures & Parquet loader (`src/aegismar/clustering/types.py`), and `BallTreeNeighborhoodProvider` (`src/aegismar/clustering/balltree_neighbors.py`) using `metric="haversine"` with `[lat_rad, lon_rad]` radians, chunked batch queries, exact integer-microsecond temporal filtering, and exact Haversine pruning.
+  - Implemented provider-agnostic deterministic core-first ST-DBSCAN (`src/aegismar/clustering/st_dbscan.py`, policy `stdbscan-core-first-v1.0`) with ascending canonical core-index component numbering and nearest-core border tie-breaking.
+  - Implemented result exporters (`src/aegismar/clustering/export.py`) writing Parquet assignments, summary JSON, compact GeoJSON preview, and offline SVG static HTML map, plus CLI subcommand `aegismar cluster`.
+- **Independent Brute-Force Oracle & Test Suite**:
+  - Implemented isolated $O(N^2)$ `BruteForceNeighborhoodOracle` and `verify_provider_against_oracle` (`src/aegismar/spatial/oracle.py`) with safety cap ($N \le 5{,}000$).
+  - Authored all 16 critical ST-DBSCAN fixtures, randomized oracle tests, ingestion regression tests, and CLI cluster tests (`tests/unit/test_st_dbscan.py`, `tests/unit/test_oracle.py`, `tests/unit/test_ingestion.py`, `tests/unit/test_cli.py`): 52 tests passing, 95% total code coverage.
+- **Exploratory Real AIS Baseline (Los Angeles / Long Beach)**:
+  - Executed BallTree ST-DBSCAN on `data/processed/lalb_20250101/cleaned_ais.parquet` (`eps_spatial_m=300.0`, `eps_temporal_s=900.0`, `min_samples=5`, excluding 8 `TIMESTAMP_POSITION_CONFLICT` rows -> 143,116 analyzed): 241 clusters, 136,276 core, 934 border, 5,906 noise; 13.68 s uninstrumented wall time (38.01 s / 225.83 MB peak heap under `tracemalloc`); 100% oracle match on 1,000-row real subset; 100% deterministic across repeated runs.
+
 ### Added - Milestone W1-02B (2026-11-14)
 - **AIS Ingestion & Cleaning Engine**:
   - Implemented `src/aegismar/common/` domain constants, ITU sentinels, and typed dataclasses (`CanonicalPing`, `IngestionManifest`).

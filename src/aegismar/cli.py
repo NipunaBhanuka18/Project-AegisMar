@@ -7,6 +7,16 @@ import sys
 from pathlib import Path
 
 from aegismar import __version__
+from aegismar.clustering.config import (
+    DEFAULT_EPS_SPATIAL_M,
+    DEFAULT_EPS_TEMPORAL_S,
+    DEFAULT_MIN_SAMPLES,
+    QualityFilterPolicy,
+    STDBSCANConfig,
+)
+from aegismar.clustering.export import export_clustering_artifacts
+from aegismar.clustering.st_dbscan import run_balltree_st_dbscan
+from aegismar.clustering.types import load_clustering_dataset_from_parquet
 from aegismar.common.constants import DEFAULT_IMPLIED_SPEED_THRESHOLD_KNOTS
 from aegismar.ingestion.pipeline import run_ingestion_pipeline
 
@@ -61,6 +71,62 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Allow overwriting existing output Parquet and manifest files",
+    )
+
+    # Clustering subcommand (BallTree ST-DBSCAN reference engine)
+    cluster_parser = subparsers.add_parser(
+        "cluster",
+        help="Run reference Haversine BallTree ST-DBSCAN clustering on cleaned AIS Parquet",
+    )
+    cluster_parser.add_argument(
+        "--input",
+        "-i",
+        type=str,
+        required=True,
+        help="Path to canonical cleaned AIS Parquet file",
+    )
+    cluster_parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        required=True,
+        help="Target output directory for clustering Parquet, summary JSON, GeoJSON, and map",
+    )
+    cluster_parser.add_argument(
+        "--eps-spatial-m",
+        type=float,
+        default=DEFAULT_EPS_SPATIAL_M,
+        help=f"Spatial search radius in meters (default: {DEFAULT_EPS_SPATIAL_M})",
+    )
+    cluster_parser.add_argument(
+        "--eps-temporal-s",
+        type=float,
+        default=DEFAULT_EPS_TEMPORAL_S,
+        help=f"Temporal threshold in seconds (default: {DEFAULT_EPS_TEMPORAL_S})",
+    )
+    cluster_parser.add_argument(
+        "--min-samples",
+        type=int,
+        default=DEFAULT_MIN_SAMPLES,
+        help=f"Minimum neighborhood observations including self (default: {DEFAULT_MIN_SAMPLES})",
+    )
+    cluster_parser.add_argument(
+        "--include-timestamp-conflicts",
+        action="store_true",
+        default=False,
+        help="Retain same-timestamp conflict rows instead of excluding them",
+    )
+    cluster_parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=None,
+        help="Optional deterministic row limit applied after canonical sorting",
+    )
+    cluster_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        default=False,
+        help="Allow overwriting existing clustering output artifacts",
     )
 
     return parser
@@ -120,6 +186,82 @@ def handle_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_cluster(args: argparse.Namespace) -> int:
+    """Execute the reference BallTree ST-DBSCAN clustering subcommand."""
+    print("=================================================================")
+    print("Project AegisMar - BallTree ST-DBSCAN Reference Clustering")
+    print("=================================================================")
+    print(f"Input Parquet:    {args.input}")
+    print(f"Output Dir:       {args.output}")
+    print(f"eps_spatial_m:    {args.eps_spatial_m} m")
+    print(f"eps_temporal_s:   {args.eps_temporal_s} s")
+    print(f"min_samples:      {args.min_samples}")
+    print("-----------------------------------------------------------------")
+
+    try:
+        policy = QualityFilterPolicy(
+            exclude_timestamp_conflicts=not args.include_timestamp_conflicts,
+        )
+        config = STDBSCANConfig(
+            eps_spatial_m=args.eps_spatial_m,
+            eps_temporal_s=args.eps_temporal_s,
+            min_samples=args.min_samples,
+            quality_filter=policy,
+        )
+        dataset = load_clustering_dataset_from_parquet(
+            parquet_path=args.input,
+            quality_filter=policy,
+            max_rows=args.max_rows,
+        )
+        result = run_balltree_st_dbscan(
+            dataset=dataset,
+            config=config,
+            measure_memory=True,
+        )
+        artifacts = export_clustering_artifacts(
+            result=result,
+            output_dir=args.output,
+            overwrite=args.overwrite,
+            extra_metadata={"input_parquet_path": str(Path(args.input).resolve())},
+        )
+    except FileNotFoundError as e:
+        print(f"Error: Input file not found: {e}", file=sys.stderr)
+        return 1
+    except FileExistsError as e:
+        print(f"Error: Output artifact exists: {e}", file=sys.stderr)
+        print("Hint: Pass --overwrite to permit replacement.", file=sys.stderr)
+        return 1
+    except ValueError as e:
+        print(f"Error: Invalid clustering configuration: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Fatal error during clustering: {e}", file=sys.stderr)
+        return 1
+
+    print("\nClustering Completed Successfully!")
+    print("-----------------------------------------------------------------")
+    print(f"Provider:             {result.provider_name}")
+    print(f"Total Input Rows:     {result.dataset.total_input_count:,}")
+    print(f"Excluded Rows:        {result.dataset.excluded_count:,}")
+    print(f"Analyzed Rows:        {result.dataset.num_points:,}")
+    print(f"Clusters Found:       {result.num_clusters:,}")
+    print(f"Core Observations:    {result.core_count:,}")
+    print(f"Border Observations:  {result.border_count:,}")
+    print(f"Noise Observations:   {result.noise_count:,}")
+    print(f"Build Time:           {result.build_time_seconds:.3f} s")
+    print(f"Query Time:           {result.query_time_seconds:.3f} s")
+    print(f"Clustering Time:      {result.clustering_time_seconds:.3f} s")
+    print(f"Total Wall Time:      {result.total_time_seconds:.3f} s")
+    peak_mb = result.peak_tracemalloc_bytes / (1024 * 1024)
+    print(f"Peak Python Heap:     {peak_mb:.2f} MB")
+    print(f"Parquet Artifact:     {artifacts['parquet']}")
+    print(f"Summary Artifact:     {artifacts['summary']}")
+    print(f"GeoJSON Preview:      {artifacts['geojson']}")
+    print(f"Static Map Artifact:  {artifacts['html_map']}")
+    print("=================================================================")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main CLI entrypoint."""
     parser = build_parser()
@@ -127,9 +269,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "ingest":
         return handle_ingest(args)
-    else:
-        parser.print_help()
-        return 0
+    if args.command == "cluster":
+        return handle_cluster(args)
+    parser.print_help()
+    return 0
 
 
 if __name__ == "__main__":

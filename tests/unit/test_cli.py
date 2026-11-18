@@ -91,3 +91,64 @@ def test_cli_ingest_custom_speed_threshold(
     assert ret == 0
     captured = capsys.readouterr()
     assert "Speed threshold:  30.0 knots" in captured.out
+
+
+def test_cli_cluster_end_to_end_and_errors(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Cluster subcommand should process Parquet inputs, export artifacts, and handle errors."""
+    ingest_dir = tmp_path / "ingested"
+    assert main(["ingest", "-i", str(SYNTHETIC_2025), "-o", str(ingest_dir)]) == 0
+    parquet_file = ingest_dir / "cleaned_ais.parquet"
+    cluster_dir = tmp_path / "clusters"
+
+    # Valid run
+    ret = main(
+        [
+            "cluster",
+            "-i",
+            str(parquet_file),
+            "-o",
+            str(cluster_dir),
+            "--eps-spatial-m",
+            "500",
+            "--eps-temporal-s",
+            "900",
+            "--min-samples",
+            "2",
+        ]
+    )
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Clustering Completed Successfully!" in out
+    assert (cluster_dir / "cluster_assignments.parquet").is_file()
+    assert (cluster_dir / "clustering_summary.json").is_file()
+    assert (cluster_dir / "clusters_preview.geojson").is_file()
+    assert (cluster_dir / "clusters_map.html").is_file()
+
+    # Overwrite refusal
+    ret_dup = main(["cluster", "-i", str(parquet_file), "-o", str(cluster_dir)])
+    assert ret_dup == 1
+    assert "Error: Output artifact exists" in capsys.readouterr().err
+
+    # Invalid configuration
+    ret_bad = main(
+        [
+            "cluster",
+            "-i",
+            str(parquet_file),
+            "-o",
+            str(tmp_path / "bad_cfg"),
+            "--eps-spatial-m",
+            "-10",
+        ]
+    )
+    assert ret_bad == 1
+    assert "Error: Invalid clustering configuration" in capsys.readouterr().err
+
+    # Missing file
+    ret_missing = main(
+        ["cluster", "-i", str(tmp_path / "missing.parquet"), "-o", str(tmp_path / "m_out")]
+    )
+    assert ret_missing == 1
+    assert "Error: Input file not found" in capsys.readouterr().err

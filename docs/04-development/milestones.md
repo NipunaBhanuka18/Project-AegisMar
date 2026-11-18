@@ -16,10 +16,9 @@
 | **W1-01** | Week 1 | Repository Initialization & Documentation Foundation | 10 h | **Completed** | None |
 | **W1-02A** | Week 1 | NOAA AIS Dataset Selection & Schema Investigation | 5 h | **Completed** | W1-01 |
 | **W1-02B** | Week 1 | Production AIS Ingestion, Sentinel Handling & Parquet Storage | 10 h | **Completed** | W1-02A |
-| **W2-01** | Week 2 | Geodesic Metric Space & BallTree Baseline | 12 h | Planned | W1-02B |
-| **W2-02** | Week 2 | H3 Discrete Hex Grid Candidate Engine & Oracle | 13 h | Planned | W2-01 |
-| **W3-01** | Week 3 | Spatiotemporal ST-DBSCAN Clustering Core | 15 h | Planned | W2-02 |
-| **W3-02** | Week 3 | Clustering Correctness & Recall Evaluation | 10 h | Planned | W3-01 |
+| **W2-01** | Week 2 | Ingestion Corrections, BallTree Reference ST-DBSCAN & Brute-Force Oracle | 15 h | **Completed** | W1-02B |
+| **W3-01** | Week 3 | H3 Candidate Optimization & Completeness Verification | 15 h | Planned | W2-01 |
+| **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01 |
 | **W4-01** | Week 4 | Stay-Point Extraction & Berth Polygon Exclusion | 15 h | Planned | W3-02 |
 | **W4-02** | Week 4 | Anchorage Dwell Metrics & Utilization Analytics | 10 h | Planned | W4-01 |
 | **W5-01** | Week 5 | Kinematic Trajectory Anomaly Detector (Rule-based) | 15 h | Planned | W1-02, W4-01 |
@@ -83,8 +82,8 @@
   - `src/aegismar/spatial/haversine.py` (spherical geodesic metric functions)
   - `src/aegismar/ingestion/schema.py` (dual 2025/legacy schema adapter and Arrow canonical schema)
   - `src/aegismar/ingestion/cleaner.py` (record validation, sentinel nullification, duplicate consolidation, conflict detection, implied speed calculation)
-  - `src/aegismar/ingestion/storage.py` (Arrow table conversion, Snappy Parquet writer, manifest manager, metadata inspector)
-  - `src/aegismar/ingestion/pipeline.py` (end-to-end ingestion pipeline runner with SHA-256 computation and overwrite protection)
+  - `src/aegismar/ingestion/storage.py` (Arrow table conversion, zstd Parquet writer, manifest manager, metadata inspector)
+  - `src/aegismar/ingestion/pipeline.py` (in-memory batch CSV-to-Parquet pipeline runner with SHA-256 computation and overwrite protection)
   - `src/aegismar/cli.py` & `__main__.py` (CLI entrypoints with `ingest` subcommand)
   - Unit test suite (`tests/unit/test_ingestion.py`, `tests/unit/test_cli.py`, 25 total tests, 91% coverage)
   - Production dataset ingestion: 143,156 input records parsed -> 143,124 output rows in `data/processed/lalb_20250101/cleaned_ais.parquet` (4.15 MB) + `manifest.json` in 7.19 s
@@ -96,52 +95,50 @@
   - [x] Duplicate observations consolidated and same-timestamp conflicts flagged
   - [x] All 25 unit tests pass; test coverage $\ge 90\%$; ruff and mypy exit cleanly with 0 errors
 
-### Milestone W2-01: Geodesic Metric Space & BallTree Baseline
-- **Goal:** Implement exact geodesic distance calculations and the reference BallTree spatial nearest-neighbor search.
-- **Estimated Hours:** 12 Hours
-- **Status:** Planned
-- **Dependencies:** W1-02
-- **Planned Deliverables:**
-  - `src/aegismar/spatial/haversine.py` (vectorized geodesic formulas)
-  - `src/aegismar/spatial/balltree.py` (`scikit-learn` BallTree wrapper)
-  - Unit tests on known geographical landmark distances
+### Milestone W2-01: Ingestion Corrections, BallTree Reference ST-DBSCAN & Brute-Force Oracle
+- **Goal:** Complete bounded W1-02B ingestion corrections and implement the verified `scikit-learn` Haversine `BallTree` reference ST-DBSCAN engine, injectable neighborhood provider architecture, independent brute-force oracle, and exploratory LA/LB baseline.
+- **Estimated Hours:** 15 Hours
+- **Status:** **Completed**
+- **Dependencies:** W1-02B
+- **Deliverables:**
+  - Ingestion corrections: strict integer-format `sanitize_mmsi`, full-record deduplication & `TIMESTAMP_METADATA_CONFLICT` preservation, zero fictitious movement on same-timestamp conflicts, ambiguous/duplicate header rejection in `schema.py`, accurate in-memory batch documentation.
+  - `src/aegismar/clustering/config.py` (`STDBSCANConfig`, `QualityFilterPolicy` with strict validation & radian conversion).
+  - `src/aegismar/clustering/types.py` (`ClusteringInputDataset`, `NeighborhoodGraph` CSR, `NeighborhoodProvider` protocol, `STDBSCANResult`, Parquet loader with canonical total ordering).
+  - `src/aegismar/clustering/balltree_neighbors.py` (`BallTreeNeighborhoodProvider` with `metric="haversine"`, `[lat_rad, lon_rad]` radians, chunked batch queries, exact integer-microsecond temporal filter, exact Haversine pruning).
+  - `src/aegismar/clustering/st_dbscan.py` (provider-agnostic deterministic core-first ST-DBSCAN `stdbscan-core-first-v1.0` with nearest-core border tie-breaking).
+  - `src/aegismar/clustering/export.py` (Parquet, summary JSON, compact GeoJSON preview, and offline SVG static map exporter) + CLI `aegismar cluster`.
+  - `src/aegismar/spatial/oracle.py` (isolated $O(N^2)$ `BruteForceNeighborhoodOracle` with $N \le 5{,}000$ safety cap and `verify_provider_against_oracle`).
+  - Test suites (`tests/unit/test_st_dbscan.py`, `tests/unit/test_oracle.py`, updated `test_ingestion.py` & `test_cli.py`): 52 passing tests, 95% total coverage ($\ge 95\%$ across clustering & oracle modules).
+  - Exploratory LA/LB baseline (`experiments/outputs/w2_01_lalb_balltree/`): 143,116 analyzed rows (8 `TIMESTAMP_POSITION_CONFLICT` excluded), 241 clusters, 136,276 core, 934 border, 5,906 noise; 13.68 s uninstrumented wall time (38.01 s / 225.83 MB peak heap under `tracemalloc`); 100% oracle match on 1,000-row real subset; 100% deterministic across repeated runs.
 - **Acceptance Checks:**
-  - Calculated distances match known geodesic benchmarks within $0.01\%$ relative error
+  - [x] All 5 W1-02B ingestion corrections implemented with regression tests
+  - [x] `BallTree` neighborhoods, core/border/noise roles, and cluster labels match brute-force oracle 100% across all synthetic, dateline, high-latitude, randomized, and real 1,000-row LA/LB fixtures
+  - [x] Cluster accounting verified: `core + border + noise == analyzed`
+  - [x] Full LA/LB baseline deterministic across repeated runs with artifacts exported to gitignored directory
+  - [x] `uv sync --locked`, `pytest` (52 passed, 95% coverage), `ruff check`, `ruff format --check`, and `mypy src tests` exit cleanly with 0 errors
 
-### Milestone W2-02: H3 Discrete Hex Grid Candidate Engine & Oracle
-- **Goal:** Implement H3 grid cell indexing, $k$-ring candidate generation, and the brute-force spatial test oracle.
-- **Estimated Hours:** 13 Hours
+### Milestone W3-01: H3 Candidate Optimization & Completeness Verification
+- **Goal:** Install Uber H3 (4.x), implement `H3NeighborhoodProvider` plugging into the shared `run_st_dbscan` engine, and verify 100% eligible-neighbor completeness against the brute-force oracle and BallTree reference across cell boundaries, pentagons, dateline, and high latitudes. *(Not yet started.)*
+- **Estimated Hours:** 15 Hours
 - **Status:** Planned
 - **Dependencies:** W2-01
 - **Planned Deliverables:**
-  - `src/aegismar/spatial/h3_grid.py` (H3 4.x API candidate generator)
-  - `src/aegismar/spatial/oracle.py` (Brute-force $O(N^2)$ geodesic test oracle)
-  - Oracle comparison tests verifying zero false negatives
+  - `src/aegismar/clustering/h3_neighbors.py` (`H3NeighborhoodProvider` implementing `NeighborhoodProvider`)
+  - Exact geodesic and temporal pruning over $k$-ring cell candidates
+  - Completeness tests targeting H3 cell edges ($\delta \le 10\text{ m}$) and pentagonal distortion zones
 - **Acceptance Checks:**
-  - Spatial neighbor candidate sets achieve $\ge 99.9\%$ recall against the brute-force oracle across test datasets
+  - Zero missing neighbors against brute-force oracle ($\text{Recall} = 1.0$) and 100% label identity with BallTree reference
 
-### Milestone W3-01: Spatiotemporal ST-DBSCAN Clustering Core
-- **Goal:** Implement spatiotemporal clustering with both BallTree baseline and H3 candidate acceleration.
-- **Estimated Hours:** 15 Hours
-- **Status:** Planned
-- **Dependencies:** W2-02
-- **Planned Deliverables:**
-  - `src/aegismar/clustering/st_dbscan.py`
-  - Interchangeable spatial index interface
-  - Deterministic core, border, and noise labeling logic
-- **Acceptance Checks:**
-  - Cluster assignments are identical across repeated runs on sorted input
-
-### Milestone W3-02: Clustering Correctness & Recall Evaluation
-- **Goal:** Formally benchmark clustering correctness, neighbor recall, and runtime between BallTree and H3 engines.
+### Milestone W3-02: Comparative H1 Benchmarking (BallTree vs. H3)
+- **Goal:** Formally benchmark runtime (build, query, pruning, clustering), peak memory, neighbor recall/precision, and Adjusted Rand Index between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` across dataset scales (10k, 50k, 100k, full LA/LB). *(Not yet started.)*
 - **Estimated Hours:** 10 Hours
 - **Status:** Planned
 - **Dependencies:** W3-01
 - **Planned Deliverables:**
-  - Benchmark script comparing runtime, memory, and Rand Index
-  - Empirical evaluation table for thesis documentation
+  - Automated H1 benchmark harness writing structured experiment JSON records under `experiments/outputs/`
+  - Empirical comparative evaluation tables for thesis documentation
 - **Acceptance Checks:**
-  - H3 engine achieves statistically significant speedup at 100k pings with zero neighbor omissions
+  - Statistically rigorous comparison of BallTree vs. H3 across repeated deterministic trials with zero fabricated numbers
 
 ### Milestone W4-01: Stay-Point Extraction & Berth Polygon Exclusion
 - **Goal:** Detect vessel dwell periods and exclude terminal berths using spatial polygon clipping.

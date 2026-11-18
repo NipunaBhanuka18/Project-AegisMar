@@ -61,24 +61,25 @@ flowchart LR
 ### 3.1 Data Ingestion & Sentinel Validation (FR-ING)
 
 - **FR-ING-01 (AIS Field Parsing & Schema Adaptability)** `[STATUS: IMPLEMENTED & VERIFIED — W1-02B]`: The system shall parse standard AIS fields supporting both legacy NOAA headers (2018–2024 PascalCase: `MMSI`, `BaseDateTime`, `LAT`, `LON`, `SOG`, `COG`, `Heading`, `VesselType`, `Status`) and modernized NOAA headers (2025+ snake_case: `mmsi`, `base_date_time`, `longitude`, `latitude`, `sog`, `cog`, `heading`, `vessel_type`, `status`), standardizing both into canonical representations.
-- **FR-ING-02 (Sentinel Masking & Null Coercion)** `[STATUS: IMPLEMENTED & VERIFIED — W1-02B]`: The system shall explicitly identify and mask international AIS sentinel values, whether presented as raw numeric sentinels (legacy) or pre-nullified values (2025+ format):
+- **FR-ING-02 (Sentinel Masking & Null Coercion)** `[STATUS: IMPLEMENTED & VERIFIED — W1-02B; HARDENED — W2-01]`: The system shall explicitly identify and mask international AIS sentinel values, whether presented as raw numeric sentinels (legacy) or pre-nullified values (2025+ format):
   - Latitude outside $[-90.0, 90.0]$ or Longitude outside $[-180.0, 180.0]$ $\to$ Drop record.
-  - Coordinate null island $(0.0, 0.0)$ $\to$ Drop record if accompanied by zero speed and invalid course.
+  - Coordinate null island $(0.0, 0.0)$ $\to$ Drop record if accompanied by zero speed and invalid course (note: valid `(0.0, 0.0)` coordinate boundary is preserved unless hard-invalid).
   - `SOG == 102.3` or null (speed unavailable) $\to$ Set to `None / NaN`.
   - `COG == 360.0` or null (course unavailable) $\to$ Set to `None / NaN`.
   - `Heading == 511` or null (heading unavailable) $\to$ Set to `None / NaN`.
-  - `Status == 15` or null (navigational status undefined / default) $\to$ Flag as `STATUS_UNDEFINED`.
-  - `MMSI` zero-padded to 9 digits; non-conforming or zero IDs $\to$ Quarantine record.
-- **FR-ING-03 (Implied Speed Validation)** `[STATUS: IMPLEMENTED & VERIFIED — W1-02B]`: For consecutive pings of a vessel, the system shall compute geodesic distance $\Delta d$ (via Haversine) and elapsed time $\Delta t$. If implied speed $v_{\text{implied}} = \Delta d / \Delta t > 50\text{ knots}$, the ping shall be flagged with `IMPLIED_SPEED_VIOLATION`.
-- **FR-ING-04 (Parquet Partitioning & Storage)** `[STATUS: IMPLEMENTED & VERIFIED — W1-02B]`: Cleaned records shall be written to canonical Parquet files accompanied by an immutable cryptographic manifest (`data/processed/`), preserving original raw files untouched.
+  - `Status == 15` or null (navigational status undefined / default) $\to$ Flag as `STATUS_UNDEFINED` / `STATUS_SENTINEL_NULLIFIED`.
+  - `MMSI` accepts only integer-format identifiers supported by the NOAA schema (rejecting malformed decimals/floats rather than truncating), zero-padded to 9 digits; non-conforming or all-zero IDs $\to$ Drop record.
+  - Exact deduplication requires full-record equality; same-timestamp differing coordinates are retained with `TIMESTAMP_POSITION_CONFLICT`, same-position differing metadata is retained with `TIMESTAMP_METADATA_CONFLICT`, and conflicting same-timestamp records never produce fictitious zero-time movement estimates.
+- **FR-ING-03 (Implied Speed Validation)** `[STATUS: IMPLEMENTED & VERIFIED — W1-02B; HARDENED — W2-01]`: For consecutive unambiguous pings of a vessel, the system shall compute geodesic distance $\Delta d$ (via Haversine) and elapsed time $\Delta t$. If implied speed $v_{\text{implied}} = \Delta d / \Delta t > 50\text{ knots}$, the ping shall be flagged with `IMPLIED_SPEED_VIOLATION`.
+- **FR-ING-04 (Parquet Storage & Manifest)** `[STATUS: IMPLEMENTED & VERIFIED — W1-02B]`: Cleaned records shall be written to zstd-compressed canonical Parquet files accompanied by an immutable cryptographic manifest (`data/processed/`), preserving original raw files untouched. *(Note: Current ingestion materializes rows in memory in Python lists prior to Arrow table serialization; it is an in-memory batch pipeline, not bounded-memory streaming.)*
 
 ### 3.2 Spatiotemporal Clustering (FR-CLU)
 
-- **FR-CLU-01 (Haversine BallTree Baseline)**: The system shall implement an ST-DBSCAN clustering algorithm using `scikit-learn.neighbors.BallTree` configured with `metric='haversine'` as the spatial index baseline.
-- **FR-CLU-02 (H3 Hexagonal Indexing)**: The system shall implement an H3-accelerated candidate neighbor generator that indexes points into H3 cells at resolution $R$ and searches $k$-ring neighborhoods ($k \ge 1$) to retrieve spatial candidates.
-- **FR-CLU-03 (Correctness-Preserving H3 Pruning)**: All candidates retrieved from the H3 index must undergo exact Haversine distance filtering against spatial radius $\varepsilon_{\text{spatial}}$, guaranteeing zero false-positive neighbor admissions and zero false-negative omissions.
-- **FR-CLU-04 (Temporal Filtering)**: For every candidate neighbor satisfying $d_{\text{spatial}}(p, q) \le \varepsilon_{\text{spatial}}$, the system shall evaluate temporal difference $|t_p - t_q| \le \Delta T_{\text{temporal}}$.
-- **FR-CLU-05 (Deterministic Label Assignment)**: The ST-DBSCAN engine shall assign cluster IDs deterministically. Core points, border points, and noise points (`-1`) shall be tagged unambiguously.
+- **FR-CLU-01 (Haversine BallTree Baseline)** `[STATUS: IMPLEMENTED & VERIFIED — W2-01]`: The system shall implement a reference ST-DBSCAN clustering algorithm using `scikit-learn.neighbors.BallTree` configured with `metric='haversine'` (coordinates in `[lat_rad, lon_rad]` radians, spatial radius converted via `eps_spatial_m / 6371008.8`), verified against an independent $O(N^2)$ brute-force oracle.
+- **FR-CLU-02 (H3 Hexagonal Indexing)** `[STATUS: PLANNED — WEEK 3 (NOT YET IMPLEMENTED)]`: The system shall implement an H3-accelerated candidate neighbor generator that indexes points into H3 cells at resolution $R$ and searches $k$-ring neighborhoods ($k \ge 1$) to retrieve spatial candidates.
+- **FR-CLU-03 (Correctness-Preserving H3 Pruning)** `[STATUS: PLANNED — WEEK 3 (NOT YET IMPLEMENTED)]`: All candidates retrieved from the H3 index must undergo exact Haversine distance filtering against spatial radius $\varepsilon_{\text{spatial}}$, guaranteeing zero false-positive neighbor admissions and zero false-negative omissions.
+- **FR-CLU-04 (Temporal Filtering)** `[STATUS: IMPLEMENTED & VERIFIED (BallTree Reference) — W2-01]`: For every candidate neighbor satisfying $d_{\text{spatial}}(p, q) \le \varepsilon_{\text{spatial}}$, the system shall evaluate exact temporal difference $|t_p - t_q| \le \Delta T_{\text{temporal}}$ in integer UTC microseconds.
+- **FR-CLU-05 (Deterministic Label Assignment)** `[STATUS: IMPLEMENTED & VERIFIED (Core-First Policy v1.0) — W2-01]`: The ST-DBSCAN engine shall assign cluster IDs deterministically via a six-step core-first policy (canonical total ordering, full-neighborhood core detection, core connected components, canonical component IDs, deterministic nearest-core border tie-breaking, and `-1` noise tagging). Core, border, and noise roles are tagged unambiguously and satisfy `core + border + noise = analyzed observations`.
 
 ### 3.3 Stay-Point & Anchorage Intelligence (FR-ANC)
 
@@ -112,7 +113,7 @@ flowchart LR
 ## 4. Non-Functional Requirements (NFR)
 
 ### 4.1 Performance & Resource Limits
-- **NFR-PERF-01 (Memory Ceiling)**: Offline batch execution must operate within 4 GB RAM on 100k AIS pings by utilizing Parquet streaming and chunked processing.
+- **NFR-PERF-01 (Memory Behavior & Limits)**: Offline batch execution must operate within 4 GB RAM on 100k AIS pings. *Clarification (W2-01)*: The current MVP ingestion pipeline materializes CSV rows and cleaned `CanonicalPing` objects in Python lists prior to Arrow table serialization (in-memory batch ingestion, not bounded-memory streaming). The BallTree clustering engine avoids $N \times N$ pairwise distance matrices by executing chunked radius queries (`batch_size=2048`) and storing filtered spatiotemporal neighborhoods in a compact CSR graph.
 - **NFR-PERF-02 (Clustering Speedup Benchmark)**: The H3 candidate search shall achieve a statistically significant runtime speedup over the BallTree baseline at 100k pings while maintaining $\ge 99.9\%$ recall.
 
 ### 4.2 Code Quality & Maintainability
@@ -130,8 +131,9 @@ flowchart LR
 
 ### 5.1 Internal Parquet Schema (Cleaned AIS Ping)
 ```text
-mmsi: int64
-timestamp: timestamp[us, tz=UTC]
+source_row: int64
+mmsi: string (9-character zero-padded)
+timestamp_utc: timestamp[us, tz=UTC]
 latitude: float64
 longitude: float64
 sog: float32 (nullable)
@@ -139,6 +141,14 @@ cog: float32 (nullable)
 heading: float32 (nullable)
 nav_status: int8 (nullable)
 vessel_type: int16 (nullable)
+vessel_name: string (nullable)
+imo: string (nullable)
+call_sign: string (nullable)
+transceiver_class: string (nullable)
+prev_source_row: int64 (nullable)
+elapsed_seconds: float64 (nullable)
+distance_nm: float64 (nullable)
+implied_speed_knots: float64 (nullable)
 quality_flags: list[string]
 ```
 

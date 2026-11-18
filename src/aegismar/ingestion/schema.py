@@ -80,10 +80,23 @@ class SchemaAdapterError(ValueError):
     """Raised when an input schema cannot be recognized or contains conflicting mappings."""
 
 
+# Unified case-insensitive alias lookup across NOAA 2025 and legacy schemas
+_UNIFIED_LOWERCASE_ALIASES: dict[str, str] = {
+    **{src.lower(): tgt for src, tgt in NOAA_LEGACY_MAPPINGS.items()},
+    **{src.lower(): tgt for src, tgt in NOAA_2025_MAPPINGS.items()},
+}
+
+
 def detect_and_build_column_mapping(
     headers: list[str],
 ) -> tuple[str, dict[str, str]]:
     """Detect source schema format and construct an unambiguous column mapping.
+
+    Inspects every source column across both modern NOAA 2025 (`snake_case`)
+    and legacy NOAA 2018-2024 (`PascalCase`) header vocabularies. Any duplicate
+    raw header or mixed legacy/modern header pair that resolves to the same
+    canonical target is explicitly rejected via ``SchemaAdapterError`` rather
+    than silently choosing one column.
 
     Parameters
     ----------
@@ -101,42 +114,46 @@ def detect_and_build_column_mapping(
         If required canonical columns are missing, or duplicate/ambiguous mappings exist.
     """
     clean_headers = [h.strip() for h in headers]
-    header_set = set(clean_headers)
 
-    # 1. Determine match score for 2025 vs Legacy
-    matches_2025 = {src: tgt for src, tgt in NOAA_2025_MAPPINGS.items() if src in header_set}
-    matches_legacy = {src: tgt for src, tgt in NOAA_LEGACY_MAPPINGS.items() if src in header_set}
-
-    # 2. Select best-matching schema family
     mapping: dict[str, str] = {}
-    schema_name: str = "unknown"
-
-    if len(matches_2025) >= len(matches_legacy) and len(matches_2025) > 0:
-        schema_name = "noaa_2025"
-        mapping = dict(matches_2025)
-    elif len(matches_legacy) > 0:
-        schema_name = "noaa_legacy"
-        mapping = dict(matches_legacy)
-    else:
-        # Fallback: check case-insensitive match against canonical fields
-        mapping = {}
-        for h in clean_headers:
-            lower_h = h.lower()
-            if lower_h in NOAA_2025_MAPPINGS:
-                mapping[h] = NOAA_2025_MAPPINGS[lower_h]
-        if mapping:
-            schema_name = "generic_case_insensitive"
-
-    # 3. Check for conflicting or ambiguous mappings
     target_to_sources: dict[str, list[str]] = {}
-    for src, tgt in mapping.items():
-        target_to_sources.setdefault(tgt, []).append(src)
+    families_used: set[str] = set()
 
+    # 1. Resolve every header against both 2025 and legacy vocabularies
+    for h in clean_headers:
+        if h in NOAA_2025_MAPPINGS:
+            target = NOAA_2025_MAPPINGS[h]
+            families_used.add("2025")
+        elif h in NOAA_LEGACY_MAPPINGS:
+            target = NOAA_LEGACY_MAPPINGS[h]
+            families_used.add("legacy")
+        elif h.lower() in _UNIFIED_LOWERCASE_ALIASES:
+            target = _UNIFIED_LOWERCASE_ALIASES[h.lower()]
+            families_used.add("case_insensitive")
+        else:
+            continue
+
+        target_to_sources.setdefault(target, []).append(h)
+        mapping[h] = target
+
+    # 2. Reject any duplicate or ambiguous canonical mappings before schema selection
     ambiguous = {tgt: srcs for tgt, srcs in target_to_sources.items() if len(srcs) > 1}
     if ambiguous:
         raise SchemaAdapterError(
             f"Ambiguous header mapping: multiple source columns map to same target: {ambiguous}"
         )
+
+    # 3. Assign descriptive schema family name
+    if families_used == {"2025"}:
+        schema_name = "noaa_2025"
+    elif families_used == {"legacy"}:
+        schema_name = "noaa_legacy"
+    elif families_used == {"2025", "legacy"}:
+        schema_name = "noaa_mixed"
+    elif families_used:
+        schema_name = "generic_case_insensitive"
+    else:
+        schema_name = "unknown"
 
     # 4. Verify all required canonical fields are present
     mapped_targets = set(mapping.values())
