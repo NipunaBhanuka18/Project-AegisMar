@@ -15,11 +15,25 @@ This document establishes the official **Research Evidence Register** for Projec
 ### Evidence Classification Hierarchy
 Every claim in this register is categorized under one of six strict evidentiary categories:
 1. **Implemented and Code-Inspected**: Verified by manual code review and static analysis of production source files in `src/`.
-2. **Tested by Automated Checks**: Formally verified by deterministic unit tests or oracle tests in `tests/` passing in CI/CD.
+2. **Tested by Automated Checks**: Formally verified by deterministic unit tests or oracle tests in `tests/` (executed and verified locally via `uv run pytest`).
 3. **Experimentally Observed**: Directly measured in an executed experiment with logged JSON artifacts and execution parameters.
 4. **Independently Reproduced**: Re-executed and verified independently across separate environments or repeated runs.
 5. **Reported by Development Assistant**: Recorded in historical completion reports but not yet independently re-measured in multi-trial runs.
 6. **Planned or Hypothesized**: Theoretical expectations, research hypotheses (H1, H2), or planned capabilities not yet implemented.
+
+### Claim Accounting & Evidentiary Category Totals
+
+The register currently tracks **15 formal claims** classified across the evidentiary hierarchy:
+
+| Evidentiary Category | Claim Count | Active Claim Identifiers |
+|---|---|---|
+| **1. Implemented and Code-Inspected** | 0 | *(Baseline modules covered under Category 2 checks)* |
+| **2. Tested by Automated Checks** | 10 | `CLM-ING-01`, `CLM-ING-02`, `CLM-ING-03`, `CLM-ING-04`, `CLM-ING-05`, `CLM-SPA-01`, `CLM-SPA-02`, `CLM-CLU-01`, `CLM-CLU-02`, `CLM-CLU-03` |
+| **3. Experimentally Observed** | 2 | `CLM-ING-06`, `CLM-CLU-04` |
+| **4. Independently Reproduced** | 0 | *(Awaiting multi-environment reproduction runs)* |
+| **5. Reported by Development Assistant** | 1 | `CLM-CLU-05` |
+| **6. Planned or Hypothesized** | 2 | `CLM-CLU-06`, `CLM-ANO-01` |
+| **Total Tracked Claims** | **15** | |
 
 > [!CAUTION]
 > **Scientific Integrity Guardrails**:
@@ -45,7 +59,7 @@ Before evaluating algorithmic claims, the data pipeline accounting from raw byte
        ├─ Timestamp Conflicts Flagged:         8 rows (TIMESTAMP_POSITION_CONFLICT, preserved)
        └─ Teleportation Speeds Flagged:       18 rows (IMPLIED_SPEED_VIOLATION, preserved)
        │
-  Cleaned Canonical Dataset (cleaned_ais.parquet)
+  Cleaned Canonical Dataset (cleaned_ais.parquet, zstd-compressed)
   └─ 143,124 output rows (362 unique MMSIs, 19 canonical columns)
        │
        ▼ [Clustering Quality Filter Policy: QualityFilterPolicy(exclude_timestamp_conflicts=True)]
@@ -80,10 +94,10 @@ Before evaluating algorithmic claims, the data pipeline accounting from raw byte
 | **CLM-SPA-01** | Tested by Automated Checks | Haversine distance implementation computes exact spherical great-circle distances across standard coordinates, high latitudes, and anti-meridian dateline crossings ($\pm 180^\circ$). | Synthetic & extreme coordinates | `v0.1.0.dev1` | `src/aegismar/spatial/haversine.py`<br>`tests/unit/test_st_dbscan.py` (`test_10`, `test_11`) | **Verified** (Tests pass) | Assumes spherical Earth ($R=6{,}371{,}008.8\text{ m}$); max ~0.5% deviation from WGS 84 ellipsoid. |
 | **CLM-SPA-02** | Tested by Automated Checks | Independent $O(N^2)$ brute-force test oracle calculates exact scalar Haversine distances independently of scikit-learn, with an automated $N \le 5{,}000$ safety cap. | Synthetic fixtures | `v0.1.0.dev1` | `src/aegismar/spatial/oracle.py`<br>`tests/unit/test_oracle.py` (7 tests) | **Verified** (Tests pass) | Capped at $N \le 5{,}000$ to prevent quadratic execution lockup. |
 | **CLM-CLU-01** | Tested by Automated Checks | `BallTreeNeighborhoodProvider` matches brute-force oracle neighbor sets 100% across randomized datasets, extreme boundaries, and a 1,000-row real LA/LB subset. | Randomized & real 1k subset | `v0.1.0.dev1` | `src/aegismar/clustering/balltree_neighbors.py`<br>`tests/unit/test_oracle.py` (`test_12`, `test_oracle_matches_balltree...`) | **Verified** (Tests pass) | Tests neighborhood candidate retrieval; does not measure traffic semantics. |
-| **CLM-CLU-02** | Tested by Automated Checks | Core-first ST-DBSCAN (`stdbscan-core-first-v1.0`) produces bit-for-bit identical cluster assignments regardless of input row permutation (permutation invariance). | Synthetic permutation fixtures | Policy `v1.0` | `src/aegismar/clustering/st_dbscan.py`<br>`tests/unit/test_st_dbscan.py` (`test_13`) | **Verified** (Tests pass) | Requires canonical sorting pass prior to clustering. |
+| **CLM-CLU-02** | Tested by Automated Checks | Core-first ST-DBSCAN (`stdbscan-core-first-v1.0`) produces identical cluster assignments regardless of input row permutation (input permutation invariance on tested runtime). | Synthetic permutation fixtures | Policy `v1.0` | `src/aegismar/clustering/st_dbscan.py`<br>`tests/unit/test_st_dbscan.py` (`test_13`) | **Verified** (Tests pass) | Requires canonical sorting pass prior to clustering; verified deterministic within tested Python runtime. |
 | **CLM-CLU-03** | Tested by Automated Checks | Non-core points reachable from multiple core components are deterministically attached to the nearest core component via lexicographical tie-breaker tuple `(dist, |dt|, cluster_id, core_idx)`. | Multi-core boundary fixtures | Policy `v1.0` | `src/aegismar/clustering/st_dbscan.py`<br>`tests/unit/test_st_dbscan.py` (`test_09`) | **Verified** (Tests pass) | Tie-breaking is geometric and temporal; not hydrodynamic. |
 | **CLM-CLU-04** | Experimentally Observed | Exploratory BallTree ST-DBSCAN run on 143,116 analyzed LA/LB rows partitions observations into 241 spatiotemporal density clusters (136,276 core, 934 border, 5,906 noise). | `cleaned_ais.parquet`<br>(SHA-256: `4a7ca719...`) | $\varepsilon_s=300\text{m}$, $\Delta T=900\text{s}$, $\text{MinPts}=5$ | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json` | **Verified on Local Disk** (Summary JSON verified) | Clusters represent raw density groups; they are **NOT** 241 confirmed anchorages. |
-| **CLM-CLU-05** | Reported by Development Assistant | Exploratory BallTree ST-DBSCAN run recorded 13.680 s uninstrumented wall time (0.077 s build, 13.341 s query, 0.262 s clustering), and 38.014 s wall time with 225.83 MB peak heap under `tracemalloc`. | `cleaned_ais.parquet` | Commit `3ece859` | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json` | **Recorded in Log; Not Multi-Trial Benchmark** | Measured on a single workstation run; not a statistically validated multi-trial benchmark. |
+| **CLM-CLU-05** | Reported by Development Assistant | Exploratory BallTree ST-DBSCAN recorded 13.680 s uninstrumented wall time (0.077 s build, 13.341 s query, 0.262 s clustering) in development log; instrumented run recorded 38.014 s wall time with 225.83 MB peak heap in summary JSON. | `cleaned_ais.parquet` | Commit `3ece859` | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json`<br>`docs/04-development/development-log.md` | **Recorded in Log; Not Multi-Trial Benchmark** | Measured on a single workstation run; uninstrumented timing reported in dev log, instrumented timing in summary JSON; not a multi-trial benchmark. |
 | **CLM-CLU-06** | Planned / Hypothesized | H3 hexagonal candidate indexing with exact Haversine pruning will achieve a statistically significant speedup over BallTree on datasets $\ge 50\text{k}$ rows with 100% recall ($H_{1,A}$). | Future benchmark datasets | Resolution $R$, $k$-ring | `docs/03-research/research-plan.md` | **Unverified Hypothesis** (Planned for Week 3) | H3 candidate engine is **not yet implemented**; performance claims are hypotheses. |
 | **CLM-ANO-01** | Planned / Hypothesized | Multi-factor kinematic trajectory anomaly scoring will achieve at least 15 percentage points higher $F_1$ than ST-DBSCAN spatial density noise ($H_{2,A}$). | Held-out trajectory partitions | Rule-based vs. IF | `docs/03-research/vessel-behavior-ml.md` | **Unverified Hypothesis** (Planned ML track) | Anomaly models are **not yet implemented**; hypotheses remain subject to experiment. |
 

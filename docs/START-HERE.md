@@ -27,16 +27,16 @@ The project investigates two complementary computational and behavioral challeng
 Over 80% of global commercial merchandise travels by sea. Modern coastal surveillance and port operations depend on the **Automatic Identification System (AIS)**—a VHF radio broadcast system mandated by the International Maritime Organization (IMO) that transmits real-time vessel identifiers, positions, speeds, courses, and operational statuses.
 
 In high-density waterways like San Pedro Bay (Port of Los Angeles and Port of Long Beach), thousands of messages are broadcast every minute. Port authorities, coast guards, and maritime analysts face severe analytical bottlenecks:
-- **Spatial Outliers $\neq$ Behavioral Threats**: Standard density-based clustering algorithms (like DBSCAN) treat isolated, low-density points as "noise." However, an isolated merchant ship peacefully cruising in an offshore traffic lane is normal, whereas a vessel making sudden speed drops or sharp, erratic turns inside a crowded entrance channel represents an urgent navigational hazard.
+- **Spatial Outliers $\neq$ Behavioral Threats**: Standard density-based clustering algorithms (like DBSCAN) treat isolated, low-density points as "noise." However, an isolated merchant ship peacefully cruising in an offshore traffic lane is normal, whereas a vessel exhibiting abrupt speed drops or sharp heading disparities inside an entrance channel represents a potential navigational hazard requiring operator review.
 - **Port Dwell vs. True Anchorage Congestion**: In traditional ping-density heatmaps, a single tugboat broadcasting every 2 seconds produces 90× more spatial pings than a container ship broadcasting every 3 minutes. This creates massive sampling-frequency bias, making docks appear congested while obscuring true vessel dwell times in offshore commercial anchorages.
-- **Black-Box Alert Fatigue**: Many machine learning anomaly models output opaque scalar risk scores (e.g., $P(\text{anomaly}) = 0.94$). When an alert fires, port operators cannot determine whether it was triggered by GPS antenna shielding near port cranes, strong tidal drift, or actual vessel distress. Without transparent physical explanations, operators ignore the system.
+- **Black-Box Alert Fatigue**: Many machine learning anomaly models output opaque scalar risk scores (e.g., $P(\text{anomaly}) = 0.94$). When an alert fires, port operators cannot determine whether it was triggered by GPS antenna shielding near port cranes, strong tidal drift, or actual vessel distress. As documented in maritime operational literature on alert fatigue, unexplainable alarm systems risk being disregarded by operators.
 
 ---
 
 ## 3. Why Historical AIS Data Is Useful
 
 AegisMar uses **historical daily AIS extracts** (specifically from NOAA Marine Cadastre) rather than live streaming feeds for its core research phase:
-- **Scientific Reproducibility**: Historical batches are immutable. Any researcher can download the exact same 24-hour extract, verify its cryptographic hash (SHA-256), and reproduce benchmark results bit-for-bit.
+- **Scientific Reproducibility**: Historical batches are immutable. Any researcher can download the exact same 24-hour extract, verify its cryptographic hash (SHA-256), and reproduce data processing and benchmark results deterministically within defined numerical tolerances on the tested Python 3.11 environment (subject to standard cross-platform floating-point precision tolerances).
 - **Authentic Sensor Noise**: Real NOAA AIS telemetry contains authentic GPS jitter, sensor nulls, duplicate broadcasts, and sentinel codes (e.g. SOG of 102.3 kt, Heading 511°).
 - **Offline Local Execution**: The entire research pipeline runs deterministically on standard local storage without requiring internet connections, cloud accounts, or third-party streaming API credentials.
 
@@ -48,7 +48,7 @@ To prevent unscientific claims or misleading terminology in our papers and docum
 
 | Observation in AIS | What It CAN Establish | What It CANNOT Establish |
 |---|---|---|
-| **Prolonged Broadcast Gap ($\Delta t > 30\text{ min}$)** | A transponder reception outage occurred within the receiver network. | That the crew deliberately deactivated their transponder for illicit or clandestine purposes (gaps often result from terrain shadowing, antenna shielding near cranes, or terrestrial receiver line-of-sight limits). |
+| **Prolonged Broadcast Gap ($\Delta t > 30\text{ min}$)** | A signal reception gap occurred within the terrestrial receiving station network (no valid packet was recorded for the vessel during that period). | That the vessel's transponder was deactivated or suffered hardware failure, or that the crew acted with illicit or clandestine intent (terrestrial gaps frequently arise from antenna shadowing near port gantry cranes, VHF packet collisions in high-density waterways, or terrain occlusion). |
 | **Course-Heading Disparity ($|\text{COG} - \text{HDG}| > 45^\circ$)** | The vessel's direction of movement deviates from its bow orientation (crabbing or drifting). | Malicious intent (crabbing is standard maritime behavior when counteracting strong cross-winds or tidal currents, and gyrocompasses drift at low speeds $<1.5\text{ kt}$). |
 | **Same-Timestamp Position Conflict** | Two different GPS coordinates were broadcast at the identical second for one MMSI. | Which coordinate was genuine without external radar or satellite verification; both are retained with `TIMESTAMP_POSITION_CONFLICT`. |
 | **ST-DBSCAN Density Cluster** | Points are spatiotemporally co-located within 300 m and 900 s. | That the cluster is an official anchorage (it may be a terminal berth, a dredged channel, or a slow-traffic fairway). |
@@ -59,7 +59,7 @@ To prevent unscientific claims or misleading terminology in our papers and docum
 ## 5. What the Proposed Final Product Does
 
 When fully assembled, Project AegisMar delivers an offline-first analytical platform:
-1. **Batch Ingestion Engine**: Converts raw AIS CSV files into standardized, quality-flagged, Snappy-compressed Parquet tables with cryptographic manifests.
+1. **Batch Ingestion Engine**: Converts raw AIS CSV files into standardized, quality-flagged, zstd-compressed Parquet tables with cryptographic manifests.
 2. **Dual Clustering Engine**: Executes ST-DBSCAN via either reference Haversine BallTree or accelerated Uber H3 candidate generation.
 3. **Anchorage & Dwell Intelligence**: Extracts vessel stay-points ($\Delta D_{\text{max}} \le 500\text{ m}$ for $\Delta T_{\text{min}} \ge 30\text{ min}$), clips out terminal berths using official port GIS polygons, and aggregates unique vessel waiting times (`count(distinct MMSI)`).
 4. **Trajectory Anomaly Engine**: Identifies physical velocity discontinuities, abnormal drifting, and dark transponder gaps, emitting explainable incident JSON records with factor decompositions.
@@ -94,7 +94,7 @@ flowchart LR
 AegisMar is built as a **Python-first modular monolith** backed by in-process columnar storage (Apache Parquet + DuckDB).
 
 ### Why not microservices, Docker, Kafka, or PostGIS?
-- **Serialization Overhead**: Sending 143k+ spatial observations over TCP sockets between microservices incurs massive serialization penalties compared to zero-copy in-memory Arrow buffers.
+- **Serialization Overhead**: Sending 143k+ spatial observations over TCP sockets between microservices incurs substantial serialization and IPC overhead (JSON/gRPC marshalling) compared to shared in-memory Arrow buffers.
 - **Infrastructure Drag**: Managing Docker daemons, Kubernetes, PostgreSQL servers, and Kafka message queues would consume dozens of hours on devops plumbing instead of mathematical and scientific research.
 - **Reproducibility**: Any student or academic evaluator can clone the repository, run `uv sync --locked`, and immediately run the entire test suite and pipeline without setting up database servers or network mappings.
 
@@ -118,14 +118,14 @@ The repository has completed foundational data engineering and reference cluster
 To ensure absolute transparency, our current measurements are categorized according to the [Research Evidence Register](03-research/evidence-register.md):
 
 1. **Automated Software Correctness**:
-   - 52 automated unit, oracle, and CLI regression tests pass 100% in CI/CD.
+   - 52 automated unit, oracle, and CLI regression tests pass 100% in local test suite verification (pre-commit quality gates executed via pytest).
    - The reference `BallTreeNeighborhoodProvider` matches the independent brute-force oracle 100% on synthetic fixtures, dateline crossings, polar coordinates, and a 1,000-row real LA/LB subset.
 2. **Exploratory Real-Data Baseline (Single Workstation Run on LA/LB)**:
    - Input: 143,124 cleaned rows -> 8 position conflicts excluded -> **143,116 analyzed observations**.
    - Output: **241 spatiotemporal density clusters** (136,276 core, 934 border, 5,906 noise).
    - Accounting check: $136{,}276 + 934 + 5{,}906 = 143{,}116$ (exact match).
-   - Recorded uninstrumented wall time: **13.680 seconds** (0.077 s build, 13.341 s query, 0.262 s clustering).
-   - Recorded `tracemalloc` run: **38.014 seconds** total wall time with **225.83 MB peak heap memory**.
+   - Recorded uninstrumented wall time (reported in development log): **13.680 seconds** (0.077 s build, 13.341 s query, 0.262 s clustering).
+   - Recorded instrumented run under `tracemalloc` (persisted in `clustering_summary.json`): **38.014 seconds** total wall time (0.083 s build, 31.348 s query, 6.583 s clustering) with **225.83 MB peak heap memory**.
    - *Note*: This is a single recorded exploratory run, not a statistically generalized multi-trial benchmark.
 
 ---
@@ -196,19 +196,56 @@ Get-Content experiments/outputs/w2_01_lalb_balltree/clustering_summary.json
 
 ---
 
-## 13. How a New Collaborator Begins Contributing
+## 13. Practical Collaborator Onboarding Checklist
 
-1. **Read the Collaboration Plan**: Review [docs/01-project/collaboration-plan.md](01-project/collaboration-plan.md) to understand track leadership, module boundaries, and authorship principles.
-2. **Read the Contributing Guide**: Review [CONTRIBUTING.md](../CONTRIBUTING.md) for branch naming conventions, quality check requirements, and strict data protection rules (never commit CSV or Parquet datasets).
-3. **Read the ML Onboarding Guide**: If working on Track B, review [docs/05-guides/ml-research-onboarding.md](05-guides/ml-research-onboarding.md).
-4. **Create a Topic Branch**:
+First-time contributors, academic evaluators, and research collaborators can follow this step-by-step 11-point workflow to get fully onboarded:
+
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/NipunaBhanuka18/Project-AegisMar.git
+   cd Project-AegisMar
+   ```
+2. **Install the Locked Environment**:
+   Ensure Python 3.11.9 is available and synchronize dependencies:
+   ```bash
+   uv sync --locked
+   ```
+3. **Execute Local Quality Gates**:
+   Run the full suite of automated unit, oracle, linting, formatting, and strict type tests:
+   ```powershell
+   uv run pytest -v
+   uv run ruff check .
+   uv run ruff format --check .
+   uv run mypy src tests
+   ```
+4. **Reproduce or Obtain Permitted AIS Telemetry**:
+   Generate canonical Parquet storage from the regional San Pedro Bay sample without committing data:
+   ```powershell
+   uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101 --overwrite
+   ```
+   *(For full-day NOAA downloads, follow instructions in [docs/05-guides/ml-research-onboarding.md](05-guides/ml-research-onboarding.md#6-how-to-acquire-or-reproduce-permitted-research-data)).*
+5. **Understand the Existing Implementation**:
+   Familiarize yourself with established modules under [`src/aegismar/`](../src/aegismar/):
+   - `ingestion/`: Schema adapters and Parquet writers.
+   - `spatial/`: Spherical Haversine metric and $O(N^2)$ brute-force test oracle.
+   - `clustering/`: Core-first ST-DBSCAN (`stdbscan-core-first-v1.0`), BallTree neighborhood provider, and preview exporters.
+   - `common/`: Canonical types, ITU sentinels, and quality flags.
+6. **Read Key Architecture Decision Records**:
+   Review [ADR-001 (Modular Monolith)](02-architecture/decisions/ADR-001-modular-monolith.md), [ADR-007 (Core-First ST-DBSCAN)](02-architecture/decisions/ADR-007-deterministic-core-first-st-dbscan.md), and [ADR-010 (Collaborative Workstream)](02-architecture/decisions/ADR-010-separate-integrated-behavioral-ml-workstream.md).
+7. **Distinguish Implemented Features from Planned Work**:
+   Consult the [Research Evidence Register](03-research/evidence-register.md) to verify what has been formally measured versus what remains a planned hypothesis.
+8. **Review the ML Research Proposal**:
+   If contributing to behavioral analytics (Track B), review the [ML Research Proposal](03-research/vessel-behavior-ml.md) and detailed [ML Onboarding Guide](05-guides/ml-research-onboarding.md).
+9. **Create an Isolated Development Branch**:
    ```bash
    git checkout main
    git pull origin main
    git checkout -b feat/ml-trajectory-features
    ```
-5. **Verify Locally Before Opening a PR**:
-   Run `uv sync --locked && uv run pytest -v && uv run ruff check . && uv run ruff format --check . && uv run mypy src tests`.
+10. **Use Coding Assistants Responsibly**:
+    Adhere to academic integrity rules: never accept simulated or synthetic benchmark metrics from AI assistants, manually verify mathematical formulations, and inspect `git status` prior to staging.
+11. **Submit a Pull Request**:
+    Review [CONTRIBUTING.md](../CONTRIBUTING.md) and fill out the pull request checklist in [`.github/pull_request_template.md`](../.github/pull_request_template.md). Verify all quality gates pass locally before requesting review.
 
 ---
 

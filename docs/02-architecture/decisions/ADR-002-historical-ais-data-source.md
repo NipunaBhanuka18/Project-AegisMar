@@ -37,7 +37,7 @@ Specific study regions (e.g., San Pedro Bay, Los Angeles / Long Beach, CA) are e
 
 ## 4. Rationale
 
-1. **Academic Reproducibility**: Historical batches are immutable. Anyone can download the identical 24-hour extract from NOAA Azure Blob storage, verify its cryptographic hash, and reproduce benchmark results bit-for-bit.
+1. **Academic Reproducibility**: Historical batches are immutable. Anyone can download the identical 24-hour extract from NOAA Azure Blob storage, verify its cryptographic hash, and reproduce data ingestion and benchmark results deterministically within defined numerical tolerances (verified identical on the pinned Python 3.11 Windows runtime, subject to standard cross-architecture floating-point tolerances on boundary conditions).
 2. **Authentic Sensor Noise**: Real NOAA AIS telemetry contains genuine GPS jitter, transmitter sentinel values (`102.3`, `511`, `15`), variable broadcast frequencies, and real traffic density distributions.
 3. **Zero Network Dependency during Execution**: The complete analytical pipeline runs offline on local storage without internet egress or API keys.
 4. **Public Domain Licensing**: NOAA AIS data is in the public domain (U.S. Government Work / CC0 equivalent), allowing unrestricted academic research and artifact publication.

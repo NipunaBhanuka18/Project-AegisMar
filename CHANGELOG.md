@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation & Quality - Milestone DOC-01A: Research Documentation Accuracy & Collaborator Readiness (2026-11-22)
+- **Evidence Register Claim Count Reconciliation**:
+  - Audited `docs/03-research/evidence-register.md` to reconcile claim accounting, formally indexing all 15 claims across the evidentiary hierarchy (10 Tested by Automated Checks, 2 Experimentally Observed, 1 Reported by Development Assistant, 2 Planned or Hypothesized).
+  - Qualified `CLM-CLU-02` (runtime determinism within tested Python environment) and `CLM-CLU-05` (uninstrumented dev log timing vs instrumented summary JSON).
+- **Parquet Compression Alignment**:
+  - Verified codebase implementation defaults to `zstd` compression across `src/aegismar/ingestion/storage.py` and `src/aegismar/clustering/export.py`, and verified on-disk Parquet files are `ZSTD`-compressed. Corrected outdated mentions of Snappy in `docs/START-HERE.md`, `CHANGELOG.md`, and `development-log.md`.
+- **Pre-Commit Quality Gate vs. CI Clarification**:
+  - Replaced claims of "passing in CI/CD" with "passing in local test suite verification" since GitHub Actions workflows are not yet configured.
+- **Evidence-Based Language Qualification**:
+  - Qualified claims regarding cross-machine floating-point reproducibility, AIS reception gaps versus clandestine transponder deactivation, potential navigational hazards requiring operator review, and microservice serialization overhead.
+- **Comprehensive Onboarding Workflow**:
+  - Embedded the verified 11-step collaborator onboarding checklist into `docs/START-HERE.md` Section 13 with verified commands and relative links.
+
 ### Documentation & Research Traceability - Milestone DOC-01 (2026-11-22)
 - **Research-Oriented START HERE Guide**:
   - Authored comprehensive `docs/START-HERE.md` as the primary onboarding entry point for both researchers and external evaluators. Covers maritime problem context, AIS telemetry strengths and limits, platform capabilities, dual-track structure, architecture rationale, verified measurements, baseline reproduction steps, code/experiment navigation, and next milestones.
@@ -78,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented spherical geodesic haversine metric module (`src/aegismar/spatial/haversine.py`).
   - Implemented dual-format schema adapter (`src/aegismar/ingestion/schema.py`) supporting NOAA 2025 (`snake_case`) and legacy 2018–2024 (`PascalCase`) CSV headers.
   - Implemented cleaning and validation engine (`src/aegismar/ingestion/cleaner.py`): ISO 8601 UTC timestamp parsing, 9-digit zero-padded MMSI preservation, sentinel nullification (`102.3`, `360.0`, `511`, `15`), duplicate consolidation, same-timestamp coordinate conflict flagging, deterministic trajectory sorting, and implied speed calculation ($>50\text{ kt}$).
-  - Implemented columnar storage writer (`src/aegismar/ingestion/storage.py`) writing Snappy-compressed Parquet files and cryptographic `manifest.json`.
+  - Implemented columnar storage writer (`src/aegismar/ingestion/storage.py`) writing zstd-compressed Parquet files and cryptographic `manifest.json`.
   - Implemented end-to-end pipeline runner (`src/aegismar/ingestion/pipeline.py`) with source SHA-256 computation and overwrite protection.
   - Added `tzdata` dependency for cross-platform IANA timezone support.
 - **CLI Interface**:

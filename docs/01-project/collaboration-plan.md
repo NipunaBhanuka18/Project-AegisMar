@@ -75,7 +75,7 @@ flowchart TD
   - Uber H3 candidate generation optimization (`aegismar.clustering.h3_neighbors`) and comparative H1 benchmarks.
   - Stay-point extraction and berth polygon exclusion (`aegismar.staypoint`).
   - Shared analytical storage (DuckDB) and read-only FastAPI service integration (`aegismar.api`).
-  - Primary platform architecture maintenance and CI/CD quality enforcement.
+  - Primary platform architecture maintenance and pre-commit quality gate enforcement.
 
 ### Track B: ML-Based Vessel Behavior Intelligence
 - **Proposed Track Lead**: Kishakya *(participation pending review)*

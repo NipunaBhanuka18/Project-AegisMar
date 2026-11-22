@@ -18,6 +18,7 @@
 | **W1-02B** | Week 1 | Production AIS Ingestion, Sentinel Handling & Parquet Storage | 10 h | **Completed** | W1-02A |
 | **W2-01** | Week 2 | Ingestion Corrections, BallTree Reference ST-DBSCAN & Brute-Force Oracle | 15 h | **Completed** | W1-02B |
 | **DOC-01** | Week 2+ | Evidence-Backed Research & Engineering Documentation | 10 h | **Completed** | W2-01 |
+| **DOC-01A** | Week 2+ | Research Documentation Accuracy & Collaborator Readiness | 4 h | **Completed** | DOC-01 |
 | **W3-01** | Week 3 | H3 Candidate Optimization & Completeness Verification | 15 h | Planned | W2-01 |
 | **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01 |
 | **W4-01** | Week 4 | Stay-Point Extraction & Berth Polygon Exclusion | 15 h | Planned | W3-02 |
@@ -139,6 +140,28 @@
   - [x] Evidence register reconciles 14 claims with explicit categories and verification statuses
   - [x] ML proposal updated with domain corrections and synthetic documentation labeling
   - [x] All 5 automated quality gates pass: `uv sync --locked`, `pytest`, `ruff check`, `ruff format --check`, and strict `mypy`
+
+### Milestone DOC-01A: Research Documentation Accuracy & Collaborator Readiness
+- **Goal:** Conduct a rigorous documentation audit, reconcile claim accounting in the Evidence Register (exactly 15 claims), align Parquet compression statements with `zstd` implementation, remove unverified CI claims, qualify domain statements, and verify practical onboarding.
+- **Estimated Hours:** 4 Hours
+- **Status:** **Completed**
+- **Dependencies:** DOC-01
+- **Deliverables:**
+  - `docs/03-research/evidence-register.md`: Audited all 15 claims and added explicit Claim Accounting & Evidentiary Category Totals matrix (10 automated, 2 observed, 1 assistant reported, 2 hypothesized); qualified `CLM-CLU-02` (runtime determinism) and `CLM-CLU-05` (uninstrumented dev log vs instrumented summary JSON); aligned Parquet reference to `zstd`.
+  - `docs/START-HERE.md`: Corrected Parquet compression to `zstd`, qualified CI/CD claims to local pytest suite, qualified domain claims (reception gaps, potential hazards, alert fatigue literature), toned down microservice serialization phrasing, distinguished uninstrumented vs `tracemalloc` metrics, and embedded the complete 11-step collaborator onboarding checklist.
+  - `README.md`: Qualified explainability motivation and dark-vessel scope exclusions.
+  - `docs/03-research/vessel-behavior-ml.md`: Qualified black-box opacity motivation and heuristic kinematic baseline bounds.
+  - `docs/01-project/collaboration-plan.md`: Reconciled quality enforcement to pre-commit quality gates.
+  - `docs/02-architecture/decisions/`: ADR-001 (toned down serialization phrasing) and ADR-002 (qualified cross-machine floating point reproducibility).
+  - `CHANGELOG.md` & `docs/04-development/development-log.md`: Reconciled historical Snappy references to `zstd`.
+- **Acceptance Checks:**
+  - [x] Evidence Register claim count reconciled to exact 15 claims with verified category breakdown
+  - [x] All Parquet compression references aligned to `zstd` matching codebase implementation
+  - [x] CI/CD claims qualified to local pre-commit quality gates
+  - [x] Overbroad domain and architectural claims qualified with evidence-based nuance
+  - [x] Practical 11-step collaborator onboarding checklist verified
+  - [x] Zero code modifications under `src/` or `tests/`
+  - [x] All 5 automated quality gates pass cleanly
 
 ### Milestone W3-01: H3 Candidate Optimization & Completeness Verification
 - **Goal:** Install Uber H3 (4.x), implement `H3NeighborhoodProvider` plugging into the shared `run_st_dbscan` engine, and verify 100% eligible-neighbor completeness against the brute-force oracle and BallTree reference across cell boundaries, pentagons, dateline, and high latitudes. *(Not yet started.)*

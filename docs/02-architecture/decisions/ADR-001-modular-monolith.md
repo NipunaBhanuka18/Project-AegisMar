@@ -19,7 +19,7 @@ We needed an architectural pattern that maximizes scientific rigor, engineering 
 
 ### Alternative A: Distributed Microservices (Docker Compose / Kubernetes)
 - **Concept:** Separate containerized services for Ingestion, Clustering, Anomaly Detection, Database, and Web API, communicating over gRPC or HTTP REST.
-- **Evaluation at Decision Time (2026-11-14):** Evaluated and rejected. Transmitting hundreds of thousands of multi-dimensional AIS observations across network sockets incurs massive serialization/deserialization penalties compared to in-memory zero-copy Arrow buffers. Debugging network failures, container networking, and distributed logging would consume developer hours needed for algorithmic correctness.
+- **Evaluation at Decision Time (2026-11-14):** Evaluated and rejected. Transmitting hundreds of thousands of multi-dimensional AIS observations across network sockets incurs substantial serialization/deserialization and inter-process communication overhead compared to shared in-memory Arrow buffers. Debugging network failures, container networking, and distributed logging would consume developer hours needed for algorithmic correctness.
 
 ### Alternative B: Enterprise Spatial Database (PostgreSQL + PostGIS + Kafka)
 - **Concept:** Streaming ingestion via Apache Kafka into PostgreSQL/PostGIS, executing queries via `ST_DWithin` and `ST_ClusterDBSCAN`.
@@ -42,7 +42,7 @@ All application logic—ingestion, spatial indexing, clustering, trajectory anom
 ## 4. Rationale
 
 1. **Zero Infrastructure Friction**: Anyone can clone the repository, run `uv sync --locked`, and immediately execute tests, pipelines, and benchmarks without running Docker daemons or configuring database servers.
-2. **Extreme Analytical Performance**: Utilizing in-memory PyArrow buffers and in-process DuckDB queries eliminates IPC serialization overhead and delivers sub-second analytical execution on local SSDs.
+2. **Extreme Analytical Performance**: Utilizing in-memory PyArrow buffers and in-process DuckDB queries avoids inter-process serialization overhead and delivers sub-second analytical execution on local SSDs.
 3. **Direct Research Instrumentation**: Algorithmic components have direct in-memory access to spatial candidate sets, geodesic oracles, and timing counters, enabling precise scientific measurement of indexing overhead, memory footprint, and neighborhood recall.
 4. **Clean Cognitive Load**: Both researchers work in a shared, unified workspace with clear internal namespace boundaries (`aegismar.clustering` vs `aegismar.anomaly`).
 

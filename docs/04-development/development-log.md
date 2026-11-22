@@ -227,7 +227,7 @@ This log documents chronological engineering actions, commands executed, test re
   - Implemented haversine spherical geodesic distance metric functions in `src/aegismar/spatial/haversine.py`.
   - Implemented schema adapter in `src/aegismar/ingestion/schema.py` supporting both NOAA 2025 (`snake_case`) and NOAA legacy 2018–2024 (`PascalCase`) CSV headers with ambiguity and missing field checks, and PyArrow canonical schema mapping.
   - Implemented record validator, sentinel nullification, duplicate consolidation, conflict detection, and trajectory implied-speed calculator in `src/aegismar/ingestion/cleaner.py`.
-  - Implemented columnar storage layer in `src/aegismar/ingestion/storage.py` (PyArrow table conversion, Snappy Parquet writer, manifest manager, and metadata inspector).
+  - Implemented columnar storage layer in `src/aegismar/ingestion/storage.py` (PyArrow table conversion, zstd Parquet writer, manifest manager, and metadata inspector).
   - Implemented end-to-end ingestion pipeline runner in `src/aegismar/ingestion/pipeline.py` with source SHA-256 calculation and overwrite protection.
   - Added `tzdata` dependency for Windows IANA timezone compatibility in standard `zoneinfo` and PyArrow scalar conversion.
   - Implemented CLI and entrypoint in `src/aegismar/cli.py` and `__main__.py` (`python -m aegismar ingest ...`).
@@ -424,4 +424,49 @@ This log documents chronological engineering actions, commands executed, test re
   - Verified all 31+ relative markdown links across all repository Markdown files with automated Python checker script.
   - Re-ran quality gates: `uv sync --locked`, `uv run pytest -v` (52 passed), `uv run ruff check .` (0 errors), `uv run ruff format --check .` (0 unformatted), `uv run mypy src tests` (strict mode clean).
 - **Next Action:**
-  - Commit documentation changes with message `docs: establish evidence-backed research and engineering knowledge base`, push to `origin/main`, verify remote SHA, and deliver completion report.
+  - Execute Milestone DOC-01A: Research Documentation Accuracy & Collaborator Readiness.
+
+---
+
+## Log Entry: 2026-11-22 — Task DOC-01A
+
+- **Date:** 2026-11-22
+- **Task Identifier:** `DOC-01A: Research Documentation Accuracy & Collaborator Readiness`
+- **Scope:** Narrowly scoped documentation correction and collaborator onboarding audit; zero changes to source code or tests under `src/` or `tests/`.
+- **Summary of Changes:**
+  - **Reconciled Evidence Register (`docs/03-research/evidence-register.md`)**:
+    - Audited claim IDs: verified exact count of **15 claims** (reconciling previous completion report text stating 14 claims against the 15 actual rows in the register matrix).
+    - Added explicit **Claim Accounting & Evidentiary Category Totals** matrix:
+      - Category 1 (Implemented and Code-Inspected): 0 (subsumed under Category 2 automated checks)
+      - Category 2 (Tested by Automated Checks): 10 claims (`CLM-ING-01` through `CLM-ING-05`, `CLM-SPA-01`, `CLM-SPA-02`, `CLM-CLU-01` through `CLM-CLU-03`)
+      - Category 3 (Experimentally Observed): 2 claims (`CLM-ING-06`, `CLM-CLU-04`)
+      - Category 4 (Independently Reproduced): 0 (pending multi-trial, multi-environment replication)
+      - Category 5 (Reported by Development Assistant): 1 claim (`CLM-CLU-05`)
+      - Category 6 (Planned or Hypothesized): 2 claims (`CLM-CLU-06`, `CLM-ANO-01`)
+      - Total: 15 claims.
+    - Qualified `CLM-CLU-02` (runtime determinism within tested Python environment).
+    - Clarified `CLM-CLU-05` to cite both the instrumented `clustering_summary.json` (38.014 s wall time, 225.83 MB peak heap under `tracemalloc`) and uninstrumented development log timing (13.680 s wall time).
+  - **Parquet Compression Alignment**:
+    - Checked implementation (`src/aegismar/ingestion/storage.py`, `src/aegismar/clustering/export.py`) and confirmed default is `zstd`.
+    - Inspected `cleaned_ais.parquet` and `cluster_assignments.parquet` metadata on disk and confirmed compression is `ZSTD`.
+    - Corrected outdated references to "Snappy" in `docs/START-HERE.md`, `CHANGELOG.md`, and `docs/04-development/development-log.md` to `zstd`.
+  - **CI/CD Status Qualification**:
+    - Verified `.github/` contains only `pull_request_template.md` (no active GitHub Actions workflows configured).
+    - Replaced claims of "passing in CI/CD" with "passing in local test suite verification via `uv run pytest`" in `docs/START-HERE.md`, `docs/03-research/evidence-register.md`, and `docs/01-project/collaboration-plan.md`.
+  - **Evidence-Based Language Qualification**:
+    - Qualified "bit-for-bit reproducibility across machines" to deterministic execution within defined numerical tolerances on the tested Python 3.11 Windows runtime (`ADR-002`, `docs/START-HERE.md`).
+    - Qualified AIS signal gaps to terrestrial receiving network reception gaps rather than transponder deactivation or clandestine intent (`docs/START-HERE.md`, `README.md`).
+    - Qualified operational hazard statements to potential navigational hazards requiring operator review (`docs/START-HERE.md`).
+    - Toned down microservice serialization penalties from "massive" to substantial IPC/serialization overhead (`ADR-001`, `docs/START-HERE.md`).
+    - Re-verified that 241 density clusters are consistently documented as raw spatiotemporal density groups, not confirmed anchorages (`docs/START-HERE.md`, `README.md`, `docs/03-research/evidence-register.md`).
+    - Re-verified non-probabilistic semantics of Isolation Forest anomaly indices (`docs/START-HERE.md`, `docs/03-research/vessel-behavior-ml.md`).
+    - Reframed operator alert fatigue assertions as documented findings from maritime decision-support literature (`docs/START-HERE.md`, `README.md`, `docs/03-research/vessel-behavior-ml.md`).
+  - **Collaborator Onboarding Practicality**:
+    - Embedded the comprehensive 11-step collaborator onboarding checklist into `docs/START-HERE.md` Section 13 with verified commands and cross-links.
+    - Verified all paths, command syntax, and relative markdown links across the documentation.
+- **Verification:**
+  - Confirmed zero modifications under `src/` or `tests/` (`git diff --stat src/ tests/` empty).
+  - Re-ran quality gates: `uv sync --locked`, `uv run pytest -v` (52 passed), `uv run ruff check .` (clean), `uv run ruff format --check .` (clean), `uv run mypy src tests` (strict mode clean).
+  - Verified 100% relative markdown links across all documentation.
+- **Next Action:**
+  - Commit documentation changes with message `docs: correct research evidence and collaborator onboarding claims`, push to `origin/main`, verify remote SHA, and deliver completion report.

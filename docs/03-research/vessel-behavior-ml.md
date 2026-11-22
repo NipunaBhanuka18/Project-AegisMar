@@ -27,7 +27,7 @@ Maritime Domain Awareness (MDA) requires coastal monitoring authorities, port op
 However, operational anomaly detection on raw AIS feeds presents severe analytical challenges:
 1. **Conflation of Density Noise and Kinematic Anomalies**: Conventional spatial density algorithms (such as DBSCAN or ST-DBSCAN) identify unclustered points as spatial noise. In maritime operations, an isolated vessel transiting a low-density open lane is not necessarily anomalous, whereas a vessel executing erratic turns or unannounced speed drops inside a dense shipping fairway is highly anomalous. Spatial outlier status does not equal behavioral risk.
 2. **Alert Fatigue from Sensor Artifacts**: Marine GPS telemetry frequently suffers from multi-path reflections, receiver antenna shielding, dead-reckoning dropouts, and sentinel broadcast values (e.g., SOG 102.3 kt, Heading 511°). Naive anomaly detectors trigger high volumes of false alerts on benign sensor glitches.
-3. **Black-Box Opacity**: Many contemporary machine learning and deep learning anomaly detection papers propose high-dimensional recurrent or transformer models that emit scalar anomaly probabilities without physical justification. Maritime operators cannot act on uninterpretable scores when deploying pilot boats, inspection teams, or tug assists.
+3. **Black-Box Opacity**: Many contemporary machine learning anomaly detection papers propose high-dimensional recurrent or deep architectures that emit uncalibrated scalar risk scores without physical justification. Maritime operational literature emphasizes that operators cannot act effectively on uninterpretable scores when deploying inspection resources or safety interventions.
 
 This research track addresses the need for **physically interpretable, trajectory-aware vessel behavior anomaly detection** that reliably distinguishes benign sensor artifacts and operational dwelling from genuine kinematic abnormalities.
 
@@ -174,7 +174,7 @@ flowchart TD
 ```
 
 ### 7.1 Rule-Based Multi-Factor Kinematic Baseline
-A transparent, deterministic scoring function based on maritime physical bounds:
+A transparent, deterministic scoring function based on heuristic maritime kinematic bounds (requiring empirical calibration against operational traffic in San Pedro Bay):
 - **Rule 1 (Speed Discontinuity)**: $\text{score}_{\text{speed}} = \min\left(1.0, \frac{|a|}{a_{\text{threshold}}}\right)$, where $a_{\text{threshold}} \approx 0.5\text{ m/s}^2$ (~$1.0\text{ kt/s}$ for commercial ships).
 - **Rule 2 (Drift Angle)**: $\text{score}_{\text{drift}} = \min\left(1.0, \frac{\max(0, \theta_{\text{drift}} - 45^\circ)}{45^\circ}\right)$ for $\text{SOG} > 1.5\text{ kt}$.
 - **Rule 3 (Transponder Gap in Channel)**: $\text{score}_{\text{gap}} = \min\left(1.0, \frac{\max(0, \Delta t - 1800\text{ s})}{7200\text{ s}}\right)$ when subsequent ping indicates significant displacement.

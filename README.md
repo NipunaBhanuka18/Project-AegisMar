@@ -41,7 +41,7 @@ Maritime domain awareness (MDA) relies heavily on global AIS transponder broadca
 1. **High Volume & Velocity**: Billions of spatial pings overwhelm naive quadratic spatial algorithms.
 2. **Data Quality Flaws**: Pervasive missing records, dead-reckoning nulls, GPS drift, and sentinel values (e.g., SOG 102.3 kt, heading 511°, status 15).
 3. **Density Noise vs. Malicious Anomalies**: Vessels lingering in holding areas or drifting with tidal currents generate dense clusters that naive detectors misclassify as anomalous, while actual kinematic deviations (e.g., sudden dark transponder gaps, abnormal loitering outside designated anchorages) are obscured.
-4. **Lack of Explainability**: "Black box" anomaly detection fails maritime operators who require transparent, physical justifications for alerts.
+4. **Lack of Explainability**: Maritime decision-support literature highlights that opaque "black box" anomaly scores risk operator alert fatigue; effective intervention requires transparent, physical justifications for alerts.
 
 ---
 
@@ -254,7 +254,7 @@ To ensure successful delivery within the 8-week developer capacity, the followin
 - **No Real-Time Streaming or Replay**: Real-time NMEA stream ingestion or playback servers are excluded.
 - **No Complex Distributed Infrastructure**: No PostgreSQL/PostGIS, Apache Kafka, Kubernetes, or microservices.
 - **No Authentication / Authorization**: The MVP is designed strictly as a localhost single-user tool.
-- **No Unverifiable Dark-Vessel Guarantees**: AIS signal gaps are flagged as kinematic/transponder gaps; no unverified claims of "hostile intent" or "sanction evasion" will be made.
+- **No Unverifiable Dark-Vessel Guarantees**: AIS signal gaps are flagged as reception or transponder gaps; no unverified claims of intentional deactivation, hostile intent, or sanction evasion will be made.
 
 ---
 
