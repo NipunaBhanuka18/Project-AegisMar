@@ -1,9 +1,9 @@
 # ML Research Collaborator Onboarding Guide
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**  
-> **Document Version:** 1.0  
+> **Document Version:** 1.1  
 > **Target Audience:** Kishakya (Incoming ML Research Collaborator) & Academic Collaborators  
-> **Track:** Vessel Trajectory Feature Engineering & Behavior Anomaly Detection  
+> **Track:** Track B — ML-Based Vessel Behavior Intelligence  
 > **Platform Lead:** NipunaBhanuka18  
 > **Date:** 2026-11-22  
 
@@ -11,42 +11,51 @@
 
 Welcome to **Project AegisMar**! This guide is designed to get you up to speed quickly on the problem space, repository architecture, data contracts, and development practices.
 
-As the proposed Machine Learning Research Collaborator, you will lead an independent, high-impact research track focusing on **vessel trajectory feature engineering and explainable behavioral anomaly detection**.
+As the proposed Machine Learning Research Collaborator, you will lead Track B: **vessel trajectory feature engineering, explainable behavioral anomaly scoring, and unsupervised machine learning models**.
 
 ---
 
-## 1. What AegisMar Is Solving
+## 1. Which Documents to Read First
 
-Commercial maritime shipping accounts for over 80% of world trade. Maritime Domain Awareness (MDA) systems collect millions of Automatic Identification System (AIS) transponder broadcasts every day. However, raw AIS data poses three fundamental problems:
-1. **Computational Inefficiency**: Spatial density algorithms (like ST-DBSCAN) scale quadratically without specialized spatial partitioning.
-2. **Data Quality Flaws**: Telemetry is riddled with missing sensor reports, dead-reckoning nulls $(0.0, 0.0)$, GPS multipath jitter, and sentinel values (e.g., speed of 102.3 kt, heading of 511°).
-3. **Black-Box Alert Fatigue**: Standard outlier models flag vessels drifting with currents or waiting at anchor as anomalies, while failing to identify subtle kinematic deviations (e.g. sharp speed drops, unexpected course alterations, or dark transponder gaps) in high-traffic fairways. Furthermore, deep learning "black boxes" provide no physical justification that maritime operators can trust.
-
-**AegisMar addresses this by building two complementary engines:**
-- **Clustering Track (Lead: NipunaBhanuka18)**: Scalable spatiotemporal clustering comparing an Uber H3 discrete hexagonal grid index against a geodesic Haversine BallTree baseline to isolate anchorage basins and vessel dwell areas.
-- **ML Anomaly Track (Proposed Lead: Kishakya)**: Trajectory-aware kinematic feature engineering and unsupervised anomaly detection (e.g. Rule-based + Isolation Forest / LOF) that outputs explainable physical justifications for every alert.
+To get oriented without feeling overwhelmed by documentation, read in this sequence:
+1. **[docs/START-HERE.md](../START-HERE.md)**: Executive overview of the maritime problem, platform architecture, verified baselines, and reproduction steps.
+2. **[docs/01-project/collaboration-plan.md](../01-project/collaboration-plan.md)**: Team structure, track leadership, module boundaries, and authorship principles.
+3. **[docs/03-research/evidence-register.md](../03-research/evidence-register.md)**: The verifiable claims register distinguishing proven facts from hypotheses.
+4. **[docs/03-research/vessel-behavior-ml.md](../03-research/vessel-behavior-ml.md)**: The formal ML research proposal (marked `PROPOSAL — NOT FINALIZED`).
+5. **[CONTRIBUTING.md](../../CONTRIBUTING.md)**: Coding standards, branch conventions, and automated quality gates.
 
 ---
 
-## 2. Current Completed Milestones
+## 2. Distinguishing Specifications from Verified Behavior
 
-The repository has established a solid, verified data engineering and clustering foundation:
-- **Milestone W1-01**: Clean Python 3.11.9 repository skeleton, `uv` packaging, strict `.gitignore`, complete documentation tree.
-- **Milestone W1-02A**: NOAA 2025 AIS schema investigation, San Pedro Bay (Los Angeles / Long Beach) study region selection (143,156 raw pings, 362 vessels).
-- **Milestone W1-02B**: Production AIS ingestion pipeline (`aegismar ingest`), sentinel coercion, coordinate bounds validation, full-record duplicate consolidation, and columnar `zstd` Parquet storage.
-- **Milestone W2-01**: Ingestion corrections (strict integer MMSI sanitation, same-timestamp conflict preservation without fictitious zero-time movement, duplicate raw header rejection), reference Haversine `BallTree` ST-DBSCAN engine (`stdbscan-core-first-v1.0`), and independent brute-force $O(N^2)$ oracle (`BruteForceNeighborhoodOracle`). 52 automated tests passing with 95% total code coverage.
-- **Milestone W2-CLOSE**: Public exploratory clustering visualization published in `README.md` (`docs/assets/w2-balltree-clustering.png`).
+As an AI research engineer, it is essential to distinguish between **what is currently implemented and verified** versus **what is planned or proposed**:
+- **Implemented & Verified**:
+  - Raw AIS CSV ingestion with dual schema adaptation (`aegismar ingest`).
+  - Sentinel nullification, MMSI 9-digit sanitization, duplicate consolidation, and quality flagging.
+  - Columnar `zstd` Parquet storage writer and cryptographic `manifest.json`.
+  - Reference Haversine `BallTree` ST-DBSCAN clustering engine (`stdbscan-core-first-v1.0`).
+  - Independent brute-force $O(N^2)$ geodesic test oracle (`BruteForceNeighborhoodOracle`).
+  - 52 automated tests in `tests/` with 95% total code coverage.
+- **Planned / Hypothesized (Not Yet Implemented)**:
+  - Uber H3 candidate neighbor optimization (Track A, Week 3).
+  - Vessel stay-point extraction and berth polygon exclusion (Track A, Week 4).
+  - Trajectory kinematic feature engineering (Track B, Milestone ML-02/ML-04).
+  - Rule-based kinematic anomaly scoring and Isolation Forest models (Track B).
+  - DuckDB analytical queries and FastAPI map service (Weeks 6–7).
+
+Always check [docs/03-research/evidence-register.md](../03-research/evidence-register.md) if you are unsure whether a capability is verified or proposed.
 
 ---
 
 ## 3. How to Clone and Install the Project
 
-AegisMar uses **`uv`**, an extremely fast Python package and project manager.
+AegisMar uses **`uv`**, an extremely fast, modern Python package manager.
 
 ### Prerequisites
 - Python 3.11.9 (binary wheel compatibility for C-extensions)
 - Git (>= 2.40)
 - `uv` (>= 0.11.0; install via `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"` on Windows, or `curl -LsSf https://astral.sh/uv/install.sh | sh` on Linux/macOS)
+- **Editor / IDE**: You are free to use any editor or IDE of your choice (VS Code, Cursor, PyCharm, Neovim, terminal). The project has zero IDE dependencies or hardcoded editor configurations.
 
 ### Setup Commands
 ```bash
@@ -83,7 +92,10 @@ uv run ruff format --check .
 uv run mypy src tests
 ```
 
-All 5 commands should exit with exit code `0`.
+To automatically format your code according to project rules, simply run:
+```bash
+uv run ruff format .
+```
 
 ---
 
@@ -134,8 +146,6 @@ uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --out
 curl -o data/raw/ais-2025-01-01.csv.zst "https://noaaocm.blob.core.windows.net/ais/csv2/csv2025/ais-2025-01-01.csv.zst"
 
 # 2. Decompress and slice San Pedro Bay bounding box (Lat: [33.5, 33.9], Lon: [-118.4, -118.0])
-# (A lightweight Python snippet can slice this to data/raw/sample_lalb_20250101.csv)
-
 # 3. Run the ingestion pipeline
 uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
 ```
@@ -172,78 +182,49 @@ To prevent merge conflicts and allow you to iterate freely:
 
 ---
 
-## 9. How to Create a Research Branch
+## 9. How to Propose an Experiment & Document Settings
 
-Always branch off a clean, updated `main`:
-
-```bash
-git checkout main
-git pull origin main
-git checkout -b feat/ml-trajectory-features
-```
-
-Recommended branch naming conventions:
-- `feat/ml-<feature-name>`: New ML capabilities (e.g. `feat/ml-isolation-forest`).
-- `exp/ml-<experiment-name>`: Specific research experiments (e.g. `exp/ml-perturbation-study`).
-- `docs/ml-<topic>`: Documentation and research notes (e.g. `docs/ml-feature-spec`).
+When conducting a new machine learning experiment:
+1. **Define the Hypothesis**: What exact question is being tested (e.g. "Does incorporating rate of turn improve PR-AUC over acceleration alone?")?
+2. **Deterministic Configuration**: Always fix random seeds (`random_state=42`) and record hyperparameters (window size $W$, contamination rate, tree count).
+3. **Record Metadata**: Save an experiment JSON file in `experiments/outputs/anomaly/` recording:
+   - Git commit SHA
+   - Input dataset SHA-256 hash
+   - Exact hyperparameters
+   - Execution metrics (PR-AUC, ROC-AUC, $F_1$, confusion matrix)
+4. **Recording Negative Findings**: In scientific research, **negative results are just as valuable as positive results**. If an Isolation Forest fails to outperform a simple velocity rule, or if adding Heading disparity creates too many false alarms, document this clearly in your experiment log! Transparent error analysis strengthens research credibility.
 
 ---
 
-## 10. How to Submit a Pull Request
-
-1. Rerun quality gates locally:
-   `uv run pytest -v && uv run ruff check . && uv run ruff format --check . && uv run mypy src tests`
-2. Push your branch to GitHub:
-   `git push -u origin feat/ml-trajectory-features`
-3. Open a Pull Request on GitHub against `main`.
-4. Fill out the lightweight AegisMar Pull Request template.
-5. NipunaBhanuka18 will review and merge your PR.
-
----
-
-## 11. How to Use an AI Coding Assistant Safely
+## 10. How to Use an AI Coding Assistant Safely
 
 If you use an AI coding assistant (like GitHub Copilot, Gemini, Claude, or ChatGPT):
-1. **Never fabricate research results**: Never accept simulated runtimes, mock recall figures, or fake evaluation scores. All numbers in reports must come from actual execution logs.
+1. **Never accept simulated results**: Never allow an AI to generate mock benchmark runtimes, fake recall scores, or fabricated evaluation metrics. All numbers in reports must come from actual execution logs.
 2. **Review mathematical formulas**: Check geodesic and kinematic equations manually (e.g. ensuring angular differences wrap properly around $360^\circ$).
 3. **Verify Git staging**: Before committing, always check `git status` to ensure virtualenv files, large CSV/Parquet files, or scratch scripts are not staged.
 4. **Run quality gates locally**: Ensure Ruff, Mypy, and Pytest pass after every AI code suggestion.
 
 ---
 
-## 12. How to Record Experiments and Evidence
+## 11. Protected Files & Shared Schema Changes
 
-All ML experiments must be deterministic and reproducible:
-- **Random Seeds**: Always fix seeds (e.g., `random_state=42`).
-- **Input Tracking**: Record the SHA-256 hash of the input Parquet file in your experiment metadata.
-- **Structured JSON Logging**: Save experiment summaries to `experiments/outputs/anomaly/<exp_id>_metrics.json`.
-- **Model Serialization**: Save trained models with `joblib` alongside configuration JSONs.
+To ensure platform stability:
+- **Protected Files**: Do not edit `src/aegismar/clustering/*`, `src/aegismar/ingestion/*`, or `src/aegismar/spatial/*` without prior discussion with NipunaBhanuka18.
+- **Shared Schema Agreement**: Any changes to shared data structures—such as `pyproject.toml` dependencies, the 19-column canonical schema, or the `vessel_anomaly_v1` GeoJSON contract—require mutual discussion and agreement before merging.
 
 ---
 
-## 13. Protected Files: What Not to Modify Without Coordination
-
-To ensure platform stability, do not edit the following files without prior discussion:
-- `src/aegismar/clustering/*` (NipunaBhanuka18's clustering engine)
-- `src/aegismar/ingestion/*` (canonical ingestion pipeline)
-- `src/aegismar/spatial/*` (geodesic math and test oracle)
-- `tests/unit/test_st_dbscan.py`, `tests/unit/test_oracle.py`, `tests/unit/test_ingestion.py`
-- `pyproject.toml` (core dependency additions should be agreed upon before running `uv add`)
-- `.python-version`
-
----
-
-## 14. Known Scientific Limitations
+## 12. Known Scientific Limitations
 
 Keep these real-world constraints in mind when designing your models:
 1. **No Ground Truth for Malicious Behavior**: Public AIS feeds do not label "rogue" ships. Our primary quantitative evaluation relies on documented synthetic perturbations injected into clean trajectories.
 2. **Terrestrial AIS Coverage Blind Spots**: Receiver antenna shielding or line-of-sight limits near port cranes can cause 15–30 minute gaps that are innocent coverage drops, not deliberate transponder blackouts.
-3. **Low-Speed Gyro Drift**: At speeds under $1.0\text{ knot}$, GPS Course Over Ground (COG) swings erratically. Always guard drift angle calculations ($|\text{COG} - \text{Heading}|$) with a minimum speed check ($\text{SOG} > 1.5\text{ kt}$).
+3. **Low-Speed Gyro Drift**: At speeds under $1.5\text{ knots}$, GPS Course Over Ground (COG) swings erratically. Always guard drift angle calculations ($|\text{COG} - \text{Heading}|$) with a minimum speed check ($\text{SOG} > 1.5\text{ kt}$).
 4. **Single-Day Scope**: The primary study sample spans 24 hours of San Pedro Bay traffic (143k pings). Models must not assume weeks of historical training data for individual ships.
 
 ---
 
-## 15. First Suggested Research Tasks (ML Backlog)
+## 13. First Suggested Research Tasks (ML Backlog)
 
 Here is a recommended starting sequence for your research track (no fixed deadlines; proceed at your own pace):
 
@@ -255,7 +236,7 @@ Here is a recommended starting sequence for your research track (no fixed deadli
   - Define exact mathematical formulas for kinematic acceleration, angular course change, drift angle, and gap duration.
   - Define windowing policy (sliding time window vs fixed ping count).
 - **ML-03: Freeze Baseline Models and Evaluation Protocol**:
-  - Define vessel-disjoint train/test split strategy (70/30 MMSI partition).
+  - Define vessel-disjoint train/test split strategy (70/30 MMSI partition with vessel-type stratification).
   - Specify synthetic perturbation parameter bounds (speed jumps, crabbing, coverage dropouts).
   - Define metrics: Precision, Recall, $F_1$, PR-AUC, and Factor Attribution Accuracy.
 - **ML-04: Implement First Feature Engineering Experiment**:

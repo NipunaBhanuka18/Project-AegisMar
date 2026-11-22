@@ -1,7 +1,7 @@
 # Machine Learning Vessel Behavior Anomaly Detection Research Proposal
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**  
-> **Document Version:** 1.0 (PROPOSAL — NOT FINALIZED)  
+> **Document Version:** 1.1 (PROPOSAL — NOT FINALIZED)  
 > **Lifecycle Status:** Candidate Research Proposal (Subject to Collaborator Review & Revision)  
 > **Proposed Research Contributor:** Kishakya *(participation, scope, and attribution pending review)*  
 > **Project Lead & Platform Architecture:** NipunaBhanuka18  
@@ -11,7 +11,12 @@
 
 > [!IMPORTANT]
 > **PROPOSAL — NOT FINALIZED**  
-> This document constitutes a proposed research and experimentation roadmap for the Machine Learning (ML) Vessel Behavior Anomaly Detection track of Project AegisMar. Kishakya is entirely free to evaluate, refine, amend, or restructure the problem statement, feature engineering definitions, model selection, baseline architectures, and evaluation methodology defined herein. No research hypotheses in this document are asserted as proven, and no code has yet been committed for this track.
+> This document constitutes a proposed research and experimentation roadmap for the Machine Learning (ML) Vessel Behavior Anomaly Detection track of Project AegisMar. Kishakya is entirely free to evaluate, refine, amend, or restructure the problem statement, feature engineering definitions, model selection, baseline architectures, and evaluation methodology defined herein.
+> 
+> **Scientific Integrity Notice**:
+> - No machine learning models have yet been implemented or trained in the codebase.
+> - All hypotheses ($H_{\text{ML1}}, H_{\text{ML2}}$) represent untested propositions awaiting empirical evaluation.
+> - Any example incident identifiers, vessel names, coordinates, and anomaly scores appearing in this document are **purely synthetic documentation examples** and do not represent authentic maritime incidents.
 
 ---
 
@@ -38,7 +43,7 @@ The objective is to formulate an anomaly detection subsystem that:
 1. Reconstructs coherent, continuous trajectory segments or sliding analytical windows $W \subseteq T_v$.
 2. Extracts domain-specific kinematic, geometric, and temporal reporting features from $W$.
 3. Evaluates $W$ against an explainable scoring baseline and an unsupervised machine learning model to assign an anomaly score $S(W) \in [0.0, 1.0]$.
-4. Decomposes $S(W)$ into an interpretable vector of contributing physical factors (e.g., abrupt velocity change, heading-drift disparity, abnormal loitering outside designated zones, or dark transponder coverage gaps).
+4. Decomposes $S(W)$ into an interpretable vector of contributing physical factors (e.g., abrupt velocity change, heading-drift disparity, abnormal loitering outside designated zones, or coverage gaps).
 
 ---
 
@@ -48,7 +53,7 @@ The objective is to formulate an anomaly detection subsystem that:
 *Can a trajectory-aware kinematic feature representation (incorporating velocity differentials, angular course acceleration, heading-course disparity, and transponder reporting intervals) distinguish abnormal vessel maneuvers from normal navigation with statistically lower false-positive rates than spatial point-density outlier baselines?*
 
 ### Secondary ML Research Question (RQ-ML2)
-*Does an unsupervised machine learning model (such as Isolation Forest) trained on vessel-disjoint kinematic feature vectors achieve superior anomaly ranking performance (measured via Precision-Recall AUC) compared to hard-threshold rule-based scoring, while maintaining transparent physical factor attribution?*
+*Does an unsupervised machine learning model (such as Isolation Forest or LOF) trained on vessel-disjoint kinematic feature vectors achieve superior anomaly ranking performance (measured via Precision-Recall AUC) compared to hard-threshold rule-based scoring, while maintaining transparent physical factor attribution?*
 
 ### Candidate Formal Hypotheses
 
@@ -59,6 +64,8 @@ The objective is to formulate an anomaly detection subsystem that:
 #### Hypothesis ML-2 (Model Ranking & Explainability)
 - **Null Hypothesis ($H_{\text{ML2}, 0}$)**: An unsupervised Isolation Forest model trained on normalized trajectory kinematic features yields no statistically significant improvement in Precision-Recall AUC ($p \ge 0.05$) over a heuristic rule-based scorer, or fails to explain at least 90% of true positive alerts with the correct injected perturbation factor.
 - **Alternative Hypothesis ($H_{\text{ML2}, A}$)**: An unsupervised Isolation Forest model yields a statistically significant improvement in PR-AUC ($p < 0.05$) over rule-based scoring on test splits, while preserving $\ge 90\%$ attribution accuracy for the primary physical perturbation factor.
+
+*(Note: These hypotheses are currently unverified. The ML track has not yet evaluated any model against the rule-based baseline.)*
 
 ---
 
@@ -104,7 +111,7 @@ Before feature extraction, raw pings must be assembled into valid trajectory win
 
 ---
 
-## 6. Potential Behavioral Features
+## 6. Potential Behavioral Features & Maritime Realities
 
 Candidate features to be engineered and evaluated during experimentation:
 
@@ -119,7 +126,8 @@ Candidate features to be engineered and evaluated during experimentation:
   $$\Delta \text{COG}_{\text{rate}} = \frac{|\text{angle\_diff}(\text{COG}_i, \text{COG}_{i-1})|}{\Delta t} \quad [^\circ/\text{s}]$$
 - **Course-Heading Disparity (Drift / Crabbing Angle)**:
   $$\theta_{\text{drift}} = |\text{angle\_diff}(\text{COG}_i, \text{Heading}_i)|$$
-  *Precondition*: Only valid when $\text{SOG} > 1.5\text{ kt}$ and both `cog` and `heading` are non-null. At low speeds, vessels pivot or drift with currents without propulsion.
+  > [!NOTE]
+  > **Maritime Domain Reality**: A large angular disparity $|\text{COG} - \text{HDG}|$ does **not** necessarily indicate suspicious or hostile maneuvering. Commercial vessels routinely crab at angles of $20^\circ\text{ to } 45^\circ$ when counteracting strong tidal currents or cross-winds in port approaches. Furthermore, harbor tugs push barges or ships at high drift angles, and gyrocompasses drift or report null at low speeds ($< 1.5\text{ kt}$). Therefore, drift disparity is only a meaningful feature when conditioned on speed ($\text{SOG} > 1.5\text{ kt}$) and evaluated alongside environmental context.
 
 ### 6.2 Geometric & Spatial Trajectory Features
 - **Trajectory Tortuosity / Straightness Ratio**:
@@ -130,7 +138,14 @@ Candidate features to be engineered and evaluated during experimentation:
 
 ### 6.3 Transponder Coverage & Behavioral Gaps
 - **Reporting Interval Gap ($\Delta t_{\text{gap}}$)**: Duration in seconds since the prior broadcast.
-- **Expected vs. Observed Interval Ratio**: Ratio of $\Delta t_{\text{gap}}$ to the expected ITU reporting interval based on current speed and navigational status (e.g., expected interval for Class A vessel underway altering course is 2–6 seconds; a 15-minute gap in active transit indicates potential transponder disabling).
+- **Expected vs. Observed Interval Ratio**: Ratio of $\Delta t_{\text{gap}}$ to the expected ITU reporting interval based on current speed and navigational status.
+  > [!NOTE]
+  > **Maritime Domain Reality**: An AIS reception gap does **not** automatically establish intentional transponder deactivation ("going dark"). In terrestrial AIS networks (like NOAA NAIS), signal gaps frequently occur due to:
+  > 1. Line-of-sight shadowing from port gantry cranes, high terrain, or nearby ultra-large vessels.
+  > 2. Receiver antenna desensitization in high-traffic RF environments (packet collisions on maritime VHF channels 87B/88B).
+  > 3. Standard transmitter power cycling during harbor pilot boarding or engine maintenance.
+  > 
+  > Consequently, transponder gaps must be classified factually as `COVERAGE_GAP` or `PROLONGED_INTERVAL`, never as verified clandestine operations.
 
 ---
 
@@ -154,7 +169,7 @@ flowchart TD
         RuleScorer --> Fusion["Incident Synthesizer & Explanation Engine"]
         IsoForest --> Fusion
         AltBaseline -.-> Fusion
-        Fusion --> Contract["vessel_anomaly_v1.json / GeoJSON Output"]
+        Fusion --> Contract["vessel_anomaly_v1.json / GeoJSON Output (Provisional)"]
     end
 ```
 
@@ -185,9 +200,11 @@ A transparent, deterministic scoring function based on maritime physical bounds:
 To ensure models generalize to unseen vessels rather than overfitting to specific vessel hulls:
 - All unique vessels ($\text{MMSI}$) in the dataset are partitioned into **Train (70%)** and **Test (30%)** sets.
 - No MMSI in the training set may ever appear in the test set.
+- > [!IMPORTANT]
+  > An arbitrary 70/30 MMSI partition ratio does **not** automatically guarantee an unbiased evaluation. Because fleet distributions in San Pedro Bay are heavily skewed (e.g. tugboats generate high-frequency local pings while container ships generate sparse steady transits), the holdout partition should be **stratified by vessel type** (`vessel_type`) to ensure test sets reflect representative proportions of commercial cargo, tankers, and workboats.
 
 ### 8.2 Chronological Holdout Partitioning
-- Trajectories within the primary study region may also be split temporally (e.g., initial 16 hours for baseline fitting, final 8 hours for evaluation) to reflect real-world operational deployment.
+- Trajectories within the primary study region may also be split temporally (e.g., initial 16 hours for baseline fitting, final 8 hours for evaluation) to reflect real-world operational deployment and prevent forward-looking temporal leakage.
 
 ### 8.3 Data Leakage Safeguards
 - All scalers (e.g., `StandardScaler`, `MinMaxScaler`) and imputation strategies must be fitted **exclusively on the training partition** and applied transform-only to test data.
@@ -199,9 +216,11 @@ Because authentic public AIS feeds do not contain ground-truth binary labels for
 - **Perturbation Type B (Abnormal Drifting)**: Modifying heading relative to course ($|\text{COG} - \text{HDG}| = 85^\circ$ while $\text{SOG} = 12\text{ kt}$).
 - **Perturbation Type C (Simulated Transponder Blackout)**: Removing 45–90 minutes of pings during transit, followed by an abrupt re-appearance outside the dead-reckoning envelope.
 
-**Limitations of Synthetic Perturbations**:
-- Synthetic deviations represent idealized physical violations; they cannot replicate the complex intentionality, adverse weather maneuvering, or pilotage tactics of real-world rogue vessels.
-- Performance on synthetic perturbations must be reported as a controlled benchmark metric, not as an unvalidated claim of real-world operational efficacy.
+> [!WARNING]
+> **Limitations of Synthetic Perturbations**:
+> - Synthetic deviations evaluate an algorithm's mathematical sensitivity to specific parameterized kinematic violations under controlled assumptions.
+> - High precision or recall on synthetic perturbations does **not** prove operational detection efficacy against real-world maritime threats, complex adverse-weather maneuvers, or pilotage tactics.
+> - Experimental reports must explicitly document perturbation parameters as a controlled benchmark rather than claiming validated real-world accuracy.
 
 ---
 
@@ -237,12 +256,17 @@ The ML track consumes the canonical PyArrow / Parquet schema defined in `src/aeg
 
 ### 10.2 Proposed Vessel Anomaly Output Contract (`vessel_anomaly_v1.json`)
 
-The ML subsystem will produce GeoJSON FeatureCollections adhering to the `vessel_anomaly_v1` specification. Each detected incident is represented as a GeoJSON Feature:
+> [!NOTE]
+> **Provisional Status**: This output contract is a proposed baseline. It is provisional until Kishakya evaluates trajectory window structures and confirms field requirements with the platform serving layer.
+
+The ML subsystem will produce GeoJSON FeatureCollections adhering to the `vessel_anomaly_v1` specification. Each detected incident is represented as a GeoJSON Feature.
+
+The snippet below is a **SYNTHETIC DOCUMENTATION EXAMPLE** illustrating schema structure; values do not represent an authentic incident:
 
 ```json
 {
   "type": "Feature",
-  "id": "INC-20250101-367123450-001",
+  "id": "INC-SYNTHETIC-20250101-367123450-001",
   "geometry": {
     "type": "LineString",
     "coordinates": [
@@ -253,9 +277,9 @@ The ML subsystem will produce GeoJSON FeatureCollections adhering to the `vessel
   },
   "properties": {
     "schema_version": "vessel_anomaly_v1",
-    "incident_id": "INC-20250101-367123450-001",
+    "incident_id": "INC-SYNTHETIC-20250101-367123450-001",
     "mmsi": "367123450",
-    "vessel_name": "PACIFIC_TRANSIT",
+    "vessel_name": "SYNTHETIC_EXAMPLE_VESSEL",
     "vessel_type": 70,
     "start_timestamp_utc": "2025-01-01T14:15:00Z",
     "end_timestamp_utc": "2025-01-01T14:45:00Z",

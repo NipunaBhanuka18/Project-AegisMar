@@ -1,0 +1,224 @@
+# Project AegisMar — START HERE
+
+> **Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**  
+> **Collaborative AI Research & Software Engineering Knowledge Base**  
+> **Repository:** [https://github.com/NipunaBhanuka18/Project-AegisMar](https://github.com/NipunaBhanuka18/Project-AegisMar)  
+> **Primary Researchers:** NipunaBhanuka18 (Project Lead & Author) & Kishakya (Proposed ML Research Collaborator)  
+> **Date:** 2026-11-22  
+
+---
+
+Welcome to **Project AegisMar**! This guide is the primary starting point for researchers, engineering contributors, and evaluators cloning or reviewing the repository. It explains what the project does, why it is architected this way, what has been mathematically verified, what evidence supports each claim, and how to begin contributing.
+
+---
+
+## 1. What is Project AegisMar?
+
+**Project AegisMar** is an undergraduate AI research and software engineering initiative building an open-source, reproducible maritime telemetry analytics platform.
+
+The project investigates two complementary computational and behavioral challenges in maritime domain awareness:
+1. **Computational Acceleration of Spatiotemporal Clustering (Track A)**: Evaluating whether discrete hexagonal spatial partitioning (Uber H3) can accelerate Spatiotemporal DBSCAN (ST-DBSCAN) candidate generation while strictly preserving 100% spatial neighbor recall against a geodesic Haversine BallTree baseline.
+2. **Explainable Vessel Behavior Anomaly Detection (Track B)**: Developing a trajectory-aware kinematic feature engineering and unsupervised anomaly detection subsystem (rule-based scoring and Isolation Forest / LOF) that provides human-interpretable physical factor explanations for alerts, distinguishing benign operational dwell from abnormal maneuvers.
+
+---
+
+## 2. The Real Maritime Business and Operational Problem
+
+Over 80% of global commercial merchandise travels by sea. Modern coastal surveillance and port operations depend on the **Automatic Identification System (AIS)**—a VHF radio broadcast system mandated by the International Maritime Organization (IMO) that transmits real-time vessel identifiers, positions, speeds, courses, and operational statuses.
+
+In high-density waterways like San Pedro Bay (Port of Los Angeles and Port of Long Beach), thousands of messages are broadcast every minute. Port authorities, coast guards, and maritime analysts face severe analytical bottlenecks:
+- **Spatial Outliers $\neq$ Behavioral Threats**: Standard density-based clustering algorithms (like DBSCAN) treat isolated, low-density points as "noise." However, an isolated merchant ship peacefully cruising in an offshore traffic lane is normal, whereas a vessel making sudden speed drops or sharp, erratic turns inside a crowded entrance channel represents an urgent navigational hazard.
+- **Port Dwell vs. True Anchorage Congestion**: In traditional ping-density heatmaps, a single tugboat broadcasting every 2 seconds produces 90× more spatial pings than a container ship broadcasting every 3 minutes. This creates massive sampling-frequency bias, making docks appear congested while obscuring true vessel dwell times in offshore commercial anchorages.
+- **Black-Box Alert Fatigue**: Many machine learning anomaly models output opaque scalar risk scores (e.g., $P(\text{anomaly}) = 0.94$). When an alert fires, port operators cannot determine whether it was triggered by GPS antenna shielding near port cranes, strong tidal drift, or actual vessel distress. Without transparent physical explanations, operators ignore the system.
+
+---
+
+## 3. Why Historical AIS Data Is Useful
+
+AegisMar uses **historical daily AIS extracts** (specifically from NOAA Marine Cadastre) rather than live streaming feeds for its core research phase:
+- **Scientific Reproducibility**: Historical batches are immutable. Any researcher can download the exact same 24-hour extract, verify its cryptographic hash (SHA-256), and reproduce benchmark results bit-for-bit.
+- **Authentic Sensor Noise**: Real NOAA AIS telemetry contains authentic GPS jitter, sensor nulls, duplicate broadcasts, and sentinel codes (e.g. SOG of 102.3 kt, Heading 511°).
+- **Offline Local Execution**: The entire research pipeline runs deterministically on standard local storage without requiring internet connections, cloud accounts, or third-party streaming API credentials.
+
+---
+
+## 4. What AIS Data Can and Cannot Establish
+
+To prevent unscientific claims or misleading terminology in our papers and documentation, we enforce strict domain boundaries:
+
+| Observation in AIS | What It CAN Establish | What It CANNOT Establish |
+|---|---|---|
+| **Prolonged Broadcast Gap ($\Delta t > 30\text{ min}$)** | A transponder reception outage occurred within the receiver network. | That the crew deliberately deactivated their transponder for illicit or clandestine purposes (gaps often result from terrain shadowing, antenna shielding near cranes, or terrestrial receiver line-of-sight limits). |
+| **Course-Heading Disparity ($|\text{COG} - \text{HDG}| > 45^\circ$)** | The vessel's direction of movement deviates from its bow orientation (crabbing or drifting). | Malicious intent (crabbing is standard maritime behavior when counteracting strong cross-winds or tidal currents, and gyrocompasses drift at low speeds $<1.5\text{ kt}$). |
+| **Same-Timestamp Position Conflict** | Two different GPS coordinates were broadcast at the identical second for one MMSI. | Which coordinate was genuine without external radar or satellite verification; both are retained with `TIMESTAMP_POSITION_CONFLICT`. |
+| **ST-DBSCAN Density Cluster** | Points are spatiotemporally co-located within 300 m and 900 s. | That the cluster is an official anchorage (it may be a terminal berth, a dredged channel, or a slow-traffic fairway). |
+| **Isolation Forest Score** | The relative mathematical isolation of a trajectory window in normalized feature space. | A calibrated Bayesian probability of illegal activity or physical distress. |
+
+---
+
+## 5. What the Proposed Final Product Does
+
+When fully assembled, Project AegisMar delivers an offline-first analytical platform:
+1. **Batch Ingestion Engine**: Converts raw AIS CSV files into standardized, quality-flagged, Snappy-compressed Parquet tables with cryptographic manifests.
+2. **Dual Clustering Engine**: Executes ST-DBSCAN via either reference Haversine BallTree or accelerated Uber H3 candidate generation.
+3. **Anchorage & Dwell Intelligence**: Extracts vessel stay-points ($\Delta D_{\text{max}} \le 500\text{ m}$ for $\Delta T_{\text{min}} \ge 30\text{ min}$), clips out terminal berths using official port GIS polygons, and aggregates unique vessel waiting times (`count(distinct MMSI)`).
+4. **Trajectory Anomaly Engine**: Identifies physical velocity discontinuities, abnormal drifting, and dark transponder gaps, emitting explainable incident JSON records with factor decompositions.
+5. **Read-Only FastAPI & Map Inspector**: Serves precomputed GeoJSON layers to an interactive Leaflet browser dashboard running locally on `localhost:8000`.
+
+---
+
+## 6. How the Platform's Two Research Tracks Complement One Another
+
+Project AegisMar is organized as **one unified research and engineering initiative** with two complementary technical workstreams:
+
+```mermaid
+flowchart LR
+    CleanData[("Cleaned Parquet Partitions")] --> TrackA["Track A: Traffic & Anchorages<br><b>Lead: NipunaBhanuka18</b>"]
+    CleanData --> TrackB["Track B: Behavior Anomaly ML<br><b>Proposed Lead: Kishakya</b>"]
+
+    TrackA --> StoredA["Anchorage Dwell Polygons"]
+    TrackB --> StoredB["Explainable Incident GeoJSON"]
+
+    StoredA --> Product[("DuckDB Analytical Query Layer<br>+ Read-Only FastAPI & Leaflet Map")]
+    StoredB --> Product
+```
+
+- **Track A (Geospatial Clustering Lead: NipunaBhanuka18)**: Owns spatial indexing, ST-DBSCAN clustering, H3 optimization benchmarks, stay-point extraction, and anchorage utilization.
+- **Track B (Vessel Behavior ML Lead: Kishakya, *proposed*)**: Owns vessel trajectory feature engineering, explainable rule-based scoring, unsupervised anomaly models (Isolation Forest / LOF), and perturbation evaluation.
+- **Integration**: Both tracks consume the identical cleaned Parquet dataset and feed their precomputed outputs into a shared DuckDB storage layer and read-only map interface.
+
+---
+
+## 7. Why This Architecture Was Selected
+
+AegisMar is built as a **Python-first modular monolith** backed by in-process columnar storage (Apache Parquet + DuckDB).
+
+### Why not microservices, Docker, Kafka, or PostGIS?
+- **Serialization Overhead**: Sending 143k+ spatial observations over TCP sockets between microservices incurs massive serialization penalties compared to zero-copy in-memory Arrow buffers.
+- **Infrastructure Drag**: Managing Docker daemons, Kubernetes, PostgreSQL servers, and Kafka message queues would consume dozens of hours on devops plumbing instead of mathematical and scientific research.
+- **Reproducibility**: Any student or academic evaluator can clone the repository, run `uv sync --locked`, and immediately run the entire test suite and pipeline without setting up database servers or network mappings.
+
+For the detailed architectural decisions and trade-offs, read our [Architecture Decision Records (ADRs)](02-architecture/decisions/README.md).
+
+---
+
+## 8. What Has Already Been Implemented
+
+The repository has completed foundational data engineering and reference clustering milestones:
+- **Milestone W1-01**: Clean Python 3.11.9 repository skeleton, `uv` packaging, strict `.gitignore`, complete documentation hierarchy.
+- **Milestone W1-02A**: NOAA 2025 AIS schema investigation, San Pedro Bay (Los Angeles / Long Beach) study region selection (143,156 raw pings, 362 vessels).
+- **Milestone W1-02B**: Production AIS ingestion pipeline (`aegismar ingest`), dual-format schema adapter (NOAA 2025 + legacy), sentinel nullification, duplicate consolidation, and columnar `zstd` Parquet storage.
+- **Milestone W2-01**: Ingestion hardening (strict integer MMSI sanitation, same-timestamp conflict preservation, ambiguous header rejection), reference Haversine `BallTree` ST-DBSCAN engine (`stdbscan-core-first-v1.0`), and independent brute-force $O(N^2)$ oracle (`BruteForceNeighborhoodOracle`). 52 automated tests passing with 95% total code coverage.
+- **Milestone W2-CLOSE**: Public exploratory clustering visualization published in `README.md` (`docs/assets/w2-balltree-clustering.png`).
+
+---
+
+## 9. What Has Actually Been Tested and Measured
+
+To ensure absolute transparency, our current measurements are categorized according to the [Research Evidence Register](03-research/evidence-register.md):
+
+1. **Automated Software Correctness**:
+   - 52 automated unit, oracle, and CLI regression tests pass 100% in CI/CD.
+   - The reference `BallTreeNeighborhoodProvider` matches the independent brute-force oracle 100% on synthetic fixtures, dateline crossings, polar coordinates, and a 1,000-row real LA/LB subset.
+2. **Exploratory Real-Data Baseline (Single Workstation Run on LA/LB)**:
+   - Input: 143,124 cleaned rows -> 8 position conflicts excluded -> **143,116 analyzed observations**.
+   - Output: **241 spatiotemporal density clusters** (136,276 core, 934 border, 5,906 noise).
+   - Accounting check: $136{,}276 + 934 + 5{,}906 = 143{,}116$ (exact match).
+   - Recorded uninstrumented wall time: **13.680 seconds** (0.077 s build, 13.341 s query, 0.262 s clustering).
+   - Recorded `tracemalloc` run: **38.014 seconds** total wall time with **225.83 MB peak heap memory**.
+   - *Note*: This is a single recorded exploratory run, not a statistically generalized multi-trial benchmark.
+
+---
+
+## 10. What Research Questions Remain Unanswered
+
+The following core research questions are currently under active investigation:
+- **RQ1 (Track A)**: Will discrete hexagonal H3 candidate generation achieve a statistically significant runtime speedup over the 13.34 s BallTree query time on 143k records while preserving 100% eligible-neighbor recall across cell boundaries and pentagonal distortion zones?
+- **Stay-Point Identification (Track A)**: What displacement and duration thresholds ($\Delta D_{\text{max}}, \Delta T_{\text{min}}$) accurately isolate vessels at anchor outside the San Pedro breakwater while excluding maneuvering vessels?
+- **RQ2 (Track B)**: Can trajectory-derived kinematic feature vectors distinguish abnormal maneuvers from normal navigation with lower false alarms than spatial density noise baselines?
+- **Model Explainability (Track B)**: Does an unsupervised Isolation Forest or LOF model provide superior PR-AUC ranking on held-out vessel trajectories compared to a rule-based kinematic scorer while maintaining transparent factor attribution?
+
+---
+
+## 11. How to Reproduce the Current Baseline
+
+You can reproduce our cleaned data and reference clustering run in under 2 minutes:
+
+```powershell
+# 1. Clone repository and install locked dependencies
+git clone https://github.com/NipunaBhanuka18/Project-AegisMar.git
+cd Project-AegisMar
+uv sync --locked
+
+# 2. Run quality gates (all 52 tests should pass)
+uv run pytest -v
+uv run ruff check .
+uv run mypy src tests
+
+# 3. Ingest the San Pedro Bay regional CSV into canonical Parquet
+uv run python -m aegismar ingest `
+  --input data/raw/sample_lalb_20250101.csv `
+  --output data/processed/lalb_20250101 `
+  --overwrite
+
+# 4. Run the reference Haversine BallTree ST-DBSCAN clustering engine
+uv run python -m aegismar cluster `
+  --input data/processed/lalb_20250101/cleaned_ais.parquet `
+  --output experiments/outputs/w2_01_lalb_balltree `
+  --eps-spatial-m 300 `
+  --eps-temporal-s 900 `
+  --min-samples 5 `
+  --overwrite
+
+# 5. Inspect the generated clustering summary
+Get-Content experiments/outputs/w2_01_lalb_balltree/clustering_summary.json
+```
+
+---
+
+## 12. Where to Find Code, Experiments, and Decisions
+
+- **Source Code**: [`src/aegismar/`](../src/aegismar/)
+  - `ingestion/`: CSV parsing, sentinel nullification, schema adapter, Parquet writer.
+  - `spatial/`: Spherical Haversine functions and the isolated $O(N^2)$ brute-force test oracle.
+  - `clustering/`: ST-DBSCAN core (`stdbscan-core-first-v1.0`), BallTree provider, configuration, and exporters.
+  - `common/`: Constants, ITU sentinels, quality flags, and dataclasses.
+- **Automated Tests**: [`tests/`](../tests/)
+  - `unit/test_ingestion.py`: Schema mapping, duplicate consolidation, conflict flagging.
+  - `unit/test_st_dbscan.py`: ST-DBSCAN fixtures, permutation invariance, boundary tie-breaking.
+  - `unit/test_oracle.py`: Oracle vs. BallTree mathematical equivalence tests.
+- **Architecture Decisions**: [`docs/02-architecture/decisions/`](02-architecture/decisions/) (ADRs 001 through 010).
+- **Research Documentation**: [`docs/03-research/`](03-research/)
+  - `evidence-register.md`: The official verification and claims register.
+  - `research-plan.md`: Formal research questions and hypotheses.
+  - `evaluation-protocol.md`: Scientific benchmark methodology.
+  - `vessel-behavior-ml.md`: The ML anomaly detection research proposal.
+
+---
+
+## 13. How a New Collaborator Begins Contributing
+
+1. **Read the Collaboration Plan**: Review [docs/01-project/collaboration-plan.md](01-project/collaboration-plan.md) to understand track leadership, module boundaries, and authorship principles.
+2. **Read the Contributing Guide**: Review [CONTRIBUTING.md](../CONTRIBUTING.md) for branch naming conventions, quality check requirements, and strict data protection rules (never commit CSV or Parquet datasets).
+3. **Read the ML Onboarding Guide**: If working on Track B, review [docs/05-guides/ml-research-onboarding.md](05-guides/ml-research-onboarding.md).
+4. **Create a Topic Branch**:
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b feat/ml-trajectory-features
+   ```
+5. **Verify Locally Before Opening a PR**:
+   Run `uv sync --locked && uv run pytest -v && uv run ruff check . && uv run ruff format --check . && uv run mypy src tests`.
+
+---
+
+## 14. Next Research Milestones
+
+- **Track A (Maritime Traffic & Clustering)**:
+  - **Milestone W3-01**: Implement Uber H3 hexagonal candidate neighborhood provider (`H3NeighborhoodProvider`) and verify 100% neighbor recall against the oracle.
+  - **Milestone W3-02**: Execute comparative H1 benchmarks (BallTree vs. H3) measuring runtime, memory, and recall across dataset scales (10k, 50k, 100k, full LA/LB).
+- **Track B (Vessel Behavior ML)**:
+  - **Milestone ML-01**: Review domain literature, AIS telemetry fields, and evaluation constraints.
+  - **Milestone ML-02**: Define mathematical specifications for trajectory windowing and kinematic features.
+  - **Milestone ML-03**: Freeze baseline models and synthetic perturbation evaluation protocol.
+  - **Milestone ML-04**: Implement first reproducible feature engineering experiment.

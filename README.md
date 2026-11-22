@@ -3,8 +3,12 @@
 > **Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3119/)
-[![Project Status: Pre-Alpha MVP](https://img.shields.io/badge/status-pre--alpha%20MVP-blue.svg)](#2-current-status)
+[![Project Status: Pre-Alpha MVP](https://img.shields.io/badge/status-pre--alpha%20MVP-blue.svg)](#2-current-status-and-research-tracks)
 [![License: Pending](https://img.shields.io/badge/license-pending-lightgrey.svg)](#14-license-attribution)
+
+> [!TIP]
+> **New to Project AegisMar or reviewing for the first time?**  
+> Read the **[START HERE Onboarding Guide](docs/START-HERE.md)** for a complete walkthrough of the real maritime problem, platform architecture, verified mathematical baselines, and quickstart reproduction instructions.
 
 ---
 
@@ -214,7 +218,12 @@ uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_a
 
 The repository maintains comprehensive, verified technical documentation:
 
-- **Project Definition & Requirements**:
+- **Executive & Onboarding Guides**:
+  - **[START HERE Onboarding Guide](docs/START-HERE.md)** *(Start here for architecture, evidence, and reproduction)*
+  - [ML Research Collaborator Onboarding Guide](docs/05-guides/ml-research-onboarding.md)
+  - [Installation & Environment Setup Guide](docs/05-guides/installation.md)
+  - [Contributing Guidelines & Quality Standards](CONTRIBUTING.md)
+- **Project Definition & Governance**:
   - [Project Vision](docs/01-project/vision.md)
   - [Business Requirements Specification (BRS Draft v2.1)](docs/01-project/brs.md)
   - [Software Requirements Specification (SRS Draft v2.1)](docs/01-project/srs.md)
@@ -223,8 +232,9 @@ The repository maintains comprehensive, verified technical documentation:
   - [Collaborative Research & Engineering Plan](docs/01-project/collaboration-plan.md)
 - **Architecture & Technical Decisions**:
   - [System Architecture](docs/02-architecture/system-architecture.md)
-  - [ADR-001: Modular Monolith vs. Distributed Microservices](docs/02-architecture/decisions/ADR-001-modular-monolith.md)
-- **Research & Evaluation**:
+  - [Architecture Decision Register (ADRs 001–010)](docs/02-architecture/decisions/README.md)
+- **Research, Evidence & Evaluation**:
+  - [Research Evidence Register](docs/03-research/evidence-register.md) *(Claims verification matrix)*
   - [Research Plan & Hypotheses](docs/03-research/research-plan.md)
   - [ML Research Proposal: Vessel Behavior Anomaly Detection](docs/03-research/vessel-behavior-ml.md)
   - [Scientific Evaluation Protocol](docs/03-research/evaluation-protocol.md)
@@ -233,10 +243,6 @@ The repository maintains comprehensive, verified technical documentation:
   - [Milestone Schedule & Tracking](docs/04-development/milestones.md)
   - [Development Log](docs/04-development/development-log.md)
   - [Testing & Quality Assurance Strategy](docs/04-development/testing-strategy.md)
-- **Guides & Collaboration**:
-  - [Contributing Guidelines & Quality Standards](CONTRIBUTING.md)
-  - [ML Research Collaborator Onboarding Guide](docs/05-guides/ml-research-onboarding.md)
-  - [Installation & Environment Setup Guide](docs/05-guides/installation.md)
 - **Release History**:
   - [Project Changelog](CHANGELOG.md)
 

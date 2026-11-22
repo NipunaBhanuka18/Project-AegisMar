@@ -1,68 +1,85 @@
-# ADR-001: Modular Monolith Architecture for 8-Week Solo Research MVP
+# ADR-001: Modular Monolith Architecture for Solo/Collaborative AI Research Platform
 
 **Status:** Accepted  
-**Date:** 2026-11-14  
-**Deciders:** Solo Undergraduate AI Engineer / Project AegisMar Author  
+**Date:** 2026-11-14 (Updated: 2026-11-22 for collaborative research track model)  
+**Deciders:** NipunaBhanuka18 (Project Lead & Author); reviewed for collaboration with Kishakya  
 **Technical Scope:** Entire System Architecture  
 
 ---
 
 ## 1. Context and Problem Statement
 
-Project AegisMar is an eight-week solo undergraduate research and software engineering initiative (planned for ~200 hours of development capacity). The project must deliver:
-1. A scientifically correct, mathematically verified spatiotemporal clustering pipeline comparing H3 spatial indexing against a BallTree baseline.
-2. A vessel-aware stay-point and anchorage analysis subsystem.
-3. A lightweight trajectory anomaly detection engine.
-4. An analytical storage and query layer.
-5. A minimal web-based map interface.
+Project AegisMar is an undergraduate AI research and software engineering initiative designed to evaluate spatiotemporal clustering algorithms and trajectory behavior anomaly detection on maritime Automatic Identification System (AIS) telemetry. The project operates within bounded undergraduate capacity (~200 hours across an 8-week lifecycle baseline) and has expanded from a solo initiative into a collaboration between two researchers leading complementary technical workstreams.
 
-Modern distributed architectures often advocate for microservices, message streaming backbones (e.g., Apache Kafka), and distributed spatial databases (e.g., PostgreSQL with PostGIS). We must decide on the architectural pattern that maximizes scientific rigor, engineering productivity, and reproducibility while completely avoiding infrastructure overhead that could jeopardize the 8-week delivery deadline.
+We needed an architectural pattern that maximizes scientific rigor, engineering productivity, local reproducibility, and test execution speed, while completely avoiding operational and distributed infrastructure overhead that would jeopardize deliverability.
 
 ---
 
-## 2. Decision
-
-We will build Project AegisMar as a **Python-first Modular Monolith** coupled with **in-process columnar analytical storage (Apache Parquet + DuckDB)**.
-
-All application logic—ingestion, spatial indexing, clustering, anomaly detection, analytical storage, and the thin read-only HTTP API—will reside within a single codebase under `src/aegismar/`. The system will communicate internally via typed Python function calls and structured dataclasses, with persistent data flowing through local Parquet files.
-
----
-
-## 3. Alternatives Considered and Rejected
+## 2. Considered Alternatives
 
 ### Alternative A: Distributed Microservices (Docker Compose / Kubernetes)
-- **Concept:** Separate services for Ingestion Service, Clustering Service, Anomaly Service, Database Service, and Gateway API, communicating over gRPC or HTTP REST.
-- **Reason for Rejection:**
-  - Enormous operational overhead: managing multiple containers, service discovery, distributed logging, network serialization/deserialization latency, and multi-service deployment configurations.
-  - Serialization bottleneck: Transmitting hundreds of thousands of multi-dimensional AIS trajectory records over network sockets between microservices incurs massive performance penalties compared to in-memory zero-copy Arrow memory buffers.
-  - Incompatible with solo undergraduate capacity: debugging distributed systems and networking failures would consume precious hours needed for scientific clustering correctness and mathematical evaluation.
+- **Concept:** Separate containerized services for Ingestion, Clustering, Anomaly Detection, Database, and Web API, communicating over gRPC or HTTP REST.
+- **Evaluation at Decision Time (2026-11-14):** Evaluated and rejected. Transmitting hundreds of thousands of multi-dimensional AIS observations across network sockets incurs massive serialization/deserialization penalties compared to in-memory zero-copy Arrow buffers. Debugging network failures, container networking, and distributed logging would consume developer hours needed for algorithmic correctness.
 
 ### Alternative B: Enterprise Spatial Database (PostgreSQL + PostGIS + Kafka)
-- **Concept:** Ingest streaming AIS records into an Apache Kafka topic, consume into a PostgreSQL/PostGIS database, and execute spatial queries using PostGIS functions (`ST_DWithin`, `ST_ClusterDBSCAN`).
-- **Reason for Rejection:**
-  - Heavy external dependencies: Requires installing, maintaining, and migrating a local or remote PostgreSQL server and JVM-based Kafka broker.
-  - Reduced algorithm controllability: Offloading clustering to PostGIS built-ins prevents fine-grained control and instrumentation of internal spatial neighbor candidate generation, which is the primary research contribution of this thesis (H3 vs BallTree neighbor candidate performance).
-  - Reproducibility barrier: Reviewers or evaluators would have to configure external relational databases, credentials, and port mappings rather than simply running `uv sync && uv run pytest`.
+- **Concept:** Streaming ingestion via Apache Kafka into PostgreSQL/PostGIS, executing queries via `ST_DWithin` and `ST_ClusterDBSCAN`.
+- **Evaluation at Decision Time (2026-11-14):** Evaluated and rejected. PostGIS built-in DBSCAN operates as a black box, preventing fine-grained candidate generation instrumentation (which is the core research contribution of comparing H3 vs BallTree). External database dependencies create high reproducibility friction for academic evaluators.
+
+### Alternative C: Multi-Repository Split (Retrospective Alternative, 2026-11-22)
+- **Concept:** When collaboration was established, split the repository into two separate Git repositories: one for spatial clustering and one for ML anomaly detection.
+- **Evaluation on 2026-11-22:** Considered and rejected. Splitting repositories would duplicate data engineering code, require complex cross-repo package publishing or submodules, create schema drift, and hinder joint end-to-end integration into the final FastAPI/map dashboard product.
 
 ---
 
-## 4. Consequences and Trade-offs
+## 3. Decision
+
+We will construct Project AegisMar as a **Python-first Modular Monolith** coupled with **local columnar analytical storage (Apache Parquet + DuckDB)**.
+
+All application logic—ingestion, spatial indexing, clustering, trajectory anomaly detection, analytical storage, and the thin read-only HTTP API—resides within a single unified codebase under `src/aegismar/`. Internal communication occurs via typed Python interfaces and structured dataclasses, with persistent analytical state flowing through local Parquet files.
+
+---
+
+## 4. Rationale
+
+1. **Zero Infrastructure Friction**: Anyone can clone the repository, run `uv sync --locked`, and immediately execute tests, pipelines, and benchmarks without running Docker daemons or configuring database servers.
+2. **Extreme Analytical Performance**: Utilizing in-memory PyArrow buffers and in-process DuckDB queries eliminates IPC serialization overhead and delivers sub-second analytical execution on local SSDs.
+3. **Direct Research Instrumentation**: Algorithmic components have direct in-memory access to spatial candidate sets, geodesic oracles, and timing counters, enabling precise scientific measurement of indexing overhead, memory footprint, and neighborhood recall.
+4. **Clean Cognitive Load**: Both researchers work in a shared, unified workspace with clear internal namespace boundaries (`aegismar.clustering` vs `aegismar.anomaly`).
+
+---
+
+## 5. Consequences and Trade-offs
 
 ### Positive Consequences
-- **Zero Infrastructure Friction**: Developers and evaluators can clone the repository, run `uv sync`, and immediately execute tests, pipelines, and benchmarks without running Docker daemons or database servers.
-- **Extreme Analytical Performance**: Utilizing in-memory PyArrow buffers and in-process DuckDB queries eliminates IPC serialization overhead and delivers sub-second analytical execution on local SSDs.
-- **Direct Research Instrumentation**: Algorithmic components have direct in-memory access to spatial candidate sets, geodesic oracles, and timing counters, enabling precise scientific measurement of indexing overhead, memory footprint, and neighborhood recall.
-- **Clean Cognitive Load**: The solo developer maintains full mental context of the codebase within a single IDE workspace.
+- Deterministic single-command setup via `uv`.
+- Sub-second unit test execution (52 tests currently execute in <2.0 seconds).
+- Shared utilities (`CanonicalPing`, geodesic Haversine distance, Parquet loader) are directly reusable without packaging overhead.
 
 ### Negative Consequences / Trade-offs
-- **Single-Node Resource Limits**: The system is bound to the RAM and CPU limits of the host machine (e.g., cannot automatically scale to a 10-node cluster).
-  - *Mitigation:* The 8-week scope targets regional coastal sectors (e.g., Delaware Bay or Tampa Bay with 10k–500k pings), well within the memory capacity of a standard 16 GB workstation when utilizing columnar Parquet streaming.
-- **Monolithic Process Failure**: A crash in one module during an end-to-end pipeline run halts the process.
-  - *Mitigation:* The pipeline is broken into decoupled CLI stages that persist intermediate state to disk in Parquet format, allowing pipeline resumption without reprocessing.
+- **Single-Node Resource Limits**: System memory is bound to the host RAM.
+  - *Mitigation:* The MVP targets regional coastal sectors (e.g., Los Angeles / Long Beach with ~143k pings), well within the memory capacity of a standard 16 GB workstation.
+- **Monolithic Process Failure**: An unhandled exception halts a CLI command.
+  - *Mitigation:* CLI pipeline commands are decoupled into standalone batch stages (`ingest`, `cluster`, future `anomalies`) saving intermediate Parquet artifacts to disk.
 
 ---
 
-## 5. Compliance and Review
+## 6. Implementation Status and Evidence Links
 
-This architectural decision is permanent for the 8-week MVP lifecycle. Any proposal to introduce external databases, message queues, or distributed services must be formally rejected under the approved project scope.
+- **Status**: Implemented and verified in Milestones W1-01, W1-02B, and W2-01.
+- **Source Code**: [src/aegismar/](../../../src/aegismar/)
+- **Configuration**: [pyproject.toml](../../../pyproject.toml)
+- **Verification Evidence**: Automated quality gates (52 unit tests, strict Mypy, Ruff) pass cleanly on Python 3.11.9.
 
+---
+
+## 7. Known Limitations
+
+- Does not support distributed clustering across a cluster of nodes.
+- High memory usage if attempting nationwide daily AIS datasets (7.3M pings) without chunked partition processing.
+
+---
+
+## 8. Conditions for Revisiting
+
+- Dataset scale expands beyond 5,000,000 observations in a single analytical pass, exceeding single-node RAM.
+- Multi-user concurrent write operations are required (the current MVP is strictly single-user, offline, and read-only).

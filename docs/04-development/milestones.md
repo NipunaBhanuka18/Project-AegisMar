@@ -17,6 +17,7 @@
 | **W1-02A** | Week 1 | NOAA AIS Dataset Selection & Schema Investigation | 5 h | **Completed** | W1-01 |
 | **W1-02B** | Week 1 | Production AIS Ingestion, Sentinel Handling & Parquet Storage | 10 h | **Completed** | W1-02A |
 | **W2-01** | Week 2 | Ingestion Corrections, BallTree Reference ST-DBSCAN & Brute-Force Oracle | 15 h | **Completed** | W1-02B |
+| **DOC-01** | Week 2+ | Evidence-Backed Research & Engineering Documentation | 10 h | **Completed** | W2-01 |
 | **W3-01** | Week 3 | H3 Candidate Optimization & Completeness Verification | 15 h | Planned | W2-01 |
 | **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01 |
 | **W4-01** | Week 4 | Stay-Point Extraction & Berth Polygon Exclusion | 15 h | Planned | W3-02 |
@@ -118,6 +119,26 @@
   - [x] Full LA/LB baseline deterministic across repeated runs with artifacts exported to gitignored directory
   - [x] `uv sync --locked`, `pytest` (52 passed, 95% coverage), `ruff check`, `ruff format --check`, and `mypy src tests` exit cleanly with 0 errors
   - [x] Week 2 closure (`W2-CLOSE`) verified: public visualization published, research baseline recorded prior to Week 3 H3 optimization
+
+### Milestone DOC-01: Evidence-Backed Research & Engineering Documentation
+- **Goal:** Establish a professional, evidence-backed research and engineering knowledge base for collaborative AI research, linking all factual claims to concrete code, test, and artifact evidence.
+- **Estimated Hours:** 10 Hours
+- **Status:** **Completed**
+- **Dependencies:** W2-01
+- **Deliverables:**
+  - `docs/START-HERE.md`: Central executive and collaborator onboarding guide (14 sections).
+  - `docs/02-architecture/decisions/`: ADR register and 10 formal Architecture Decision Records (`ADR-001` through `ADR-010`).
+  - `docs/03-research/evidence-register.md`: Comprehensive claims verification matrix reconciling 14 claims with hashes, commits, and parameters.
+  - `docs/03-research/vessel-behavior-ml.md` (v1.1): Critical scientific corrections (AIS gaps, crabbing angles, non-probabilistic IF scores, synthetic documentation examples).
+  - `docs/01-project/collaboration-plan.md` & `docs/05-guides/ml-research-onboarding.md`: Reconciled governance (One team, two complementary lead areas, flexible pace) and experimental guidelines.
+  - `README.md`: Prominent tip linking to `START-HERE.md` and expanded documentation index.
+- **Acceptance Checks:**
+  - [x] Zero code modifications to working clustering, ingestion, or spatial logic (`src/`, `tests/`)
+  - [x] All relative markdown links and paths verified across all repository documents
+  - [x] 10 formal ADRs documented with context, alternatives, rationale, and evidence links
+  - [x] Evidence register reconciles 14 claims with explicit categories and verification statuses
+  - [x] ML proposal updated with domain corrections and synthetic documentation labeling
+  - [x] All 5 automated quality gates pass: `uv sync --locked`, `pytest`, `ruff check`, `ruff format --check`, and strict `mypy`
 
 ### Milestone W3-01: H3 Candidate Optimization & Completeness Verification
 - **Goal:** Install Uber H3 (4.x), implement `H3NeighborhoodProvider` plugging into the shared `run_st_dbscan` engine, and verify 100% eligible-neighbor completeness against the brute-force oracle and BallTree reference across cell boundaries, pentagons, dateline, and high latitudes. *(Not yet started.)*

@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation & Research Traceability - Milestone DOC-01 (2026-11-22)
+- **Research-Oriented START HERE Guide**:
+  - Authored comprehensive `docs/START-HERE.md` as the primary onboarding entry point for both researchers and external evaluators. Covers maritime problem context, AIS telemetry strengths and limits, platform capabilities, dual-track structure, architecture rationale, verified measurements, baseline reproduction steps, code/experiment navigation, and next milestones.
+- **Evidence-Backed Architecture Decision Records (ADRs 001–010)**:
+  - Created ADR register `docs/02-architecture/decisions/README.md` and authored 9 new formal Architecture Decision Records alongside updated `ADR-001`:
+    - `ADR-001`: Modular Monolith Architecture for Solo/Collaborative Research Platform
+    - `ADR-002`: Historical AIS Batch Telemetry as Primary Research Data Source
+    - `ADR-003`: Canonical PyArrow Schema with Explicit Quality Flags & Sentinel Nullification
+    - `ADR-004`: Apache Parquet Columnar Storage with Manifest Verification
+    - `ADR-005`: Scikit-Learn BallTree with Haversine Metric as Reference Neighbor Search Engine
+    - `ADR-006`: Strict Dual-Threshold Spatiotemporal Neighborhood Semantics in Integer Microseconds
+    - `ADR-007`: Deterministic Core-First Labeling Policy for ST-DBSCAN (`stdbscan-core-first-v1.0`)
+    - `ADR-008`: Independent $O(N^2)$ Brute-Force Geodesic Test Oracle for Verification
+    - `ADR-009`: Uber H3 Discrete Hexagonal Grid as Correctness-Preserving Candidate Neighbor Generator
+    - `ADR-010`: Decoupled Parallel Behavioral ML Workstream with Contract-Based Integration
+- **Research Evidence Register & Claims Matrix**:
+  - Authored `docs/03-research/evidence-register.md`, creating a traceable claims matrix reconciling 14 specific technical claims across ingestion and BallTree clustering with dataset provenance hashes, commit SHAs, configuration parameters, and verification statuses.
+  - Reconciled technical facts: clearly distinguished raw observations (143,156), cleaned observations (143,124), filtered inputs (143,116), visualized preview points (5,000), unique vessels (362 MMSIs), and density clusters (241 exploratory clusters); added explicit guardrails clarifying that density clusters are not confirmed anchorages, oracle matching is not detection accuracy, and single runs are not multi-trial benchmarks.
+- **Scientific Refinement of ML Proposal**:
+  - Updated `docs/03-research/vessel-behavior-ml.md` (v1.1) with domain corrections: clarified that AIS gaps stem predominantly from crane shadowing and line-of-sight limits rather than deliberate transponder disabling; noted that crabbing angles occur naturally in currents; reinforced that Isolation Forest scores are non-probabilistic isolation indices; labeled example incidents as purely synthetic documentation examples; marked the `vessel_anomaly_v1` GeoJSON contract as provisional.
+- **Onboarding & Governance Alignment**:
+  - Updated `docs/05-guides/ml-research-onboarding.md` and `docs/01-project/collaboration-plan.md` to reinforce the "One team, one initiative, one integrated product, two complementary lead areas" model with flexible pacing, zero bureaucratic drag, experiment logging guidelines, negative finding documentation, and AI coding assistant safety rules.
+  - Updated `README.md` with prominent tip linking to `docs/START-HERE.md` and expanded documentation index.
+
 ### Documentation & Collaboration - Collaboration Foundation & ML Research Track (2026-11-22)
 - **Collaborative Research Tracks**:
   - Established dual-track collaborative research architecture between Lead Researcher NipunaBhanuka18 (AIS ingestion, BallTree reference ST-DBSCAN, Uber H3 optimization, stay-point/anchorage intelligence) and proposed ML Research Collaborator Kishakya (vessel trajectory feature engineering, unsupervised kinematic anomaly detection, explainable incident generation).

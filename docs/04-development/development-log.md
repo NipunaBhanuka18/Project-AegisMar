@@ -387,3 +387,41 @@ This log documents chronological engineering actions, commands executed, test re
   - Ran `uv sync --locked`, `uv run pytest -v`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src tests`. All passed 100% with exit code 0.
 - **Next Action:**
   - Commit with message `docs: establish collaborative research tracks and ML onboarding`, push to `origin/main`, verify remote SHA, and deliver completion report.
+
+---
+
+## Log Entry: 2026-11-22 — Task: Milestone DOC-01 (Evidence-Backed Documentation & Research Knowledge Base)
+
+- **Date:** 2026-11-22
+- **Task Identifier:** `DOC-01: Evidence-Backed Research & Engineering Documentation`
+- **Scope:** Documentation quality, evidence reconciliation, research traceability, and architectural rationale; zero modifications to application or scientific code under `src/` or `tests/`.
+- **Summary of Changes:**
+  - Audited repository: verified working tree clean at reference commit `d3c17a0`, 52 passing tests, 95% coverage, and reconciled all historical claims against actual files on disk.
+  - Authored comprehensive `docs/START-HERE.md` covering the maritime problem, historical AIS strengths and limits, platform capabilities, dual-track structure, architecture rationale, verified measurements, baseline reproduction steps, code/experiment navigation, and next milestones.
+  - Authored complete Architecture Decision Register (`docs/02-architecture/decisions/README.md`) with 10 formal ADRs:
+    - Updated `ADR-001` (Modular Monolith) with collaborative context and retrospective multi-repo evaluation.
+    - Created `ADR-002` (Historical AIS Batch Telemetry as Primary Research Data Source).
+    - Created `ADR-003` (Canonical PyArrow Schema with Quality Flags & Sentinel Nullification).
+    - Created `ADR-004` (Apache Parquet Columnar Storage with Manifest Verification).
+    - Created `ADR-005` (Scikit-Learn BallTree with Haversine Metric as Reference Neighbor Search Engine).
+    - Created `ADR-006` (Strict Dual-Threshold Spatiotemporal Neighborhood Semantics in Integer Microseconds).
+    - Created `ADR-007` (Deterministic Core-First Labeling Policy for ST-DBSCAN `stdbscan-core-first-v1.0`).
+    - Created `ADR-008` (Independent $O(N^2)$ Brute-Force Geodesic Test Oracle for Verification).
+    - Created `ADR-009` (Uber H3 Discrete Hexagonal Grid as Correctness-Preserving Candidate Neighbor Generator).
+    - Created `ADR-010` (Decoupled Parallel Behavioral ML Workstream with Contract-Based Integration).
+  - Authored Research Evidence Register (`docs/03-research/evidence-register.md`):
+    - Reconciled 14 technical claims across ingestion and BallTree clustering with cryptographic hashes, parameter sets, and verification statuses.
+    - Explicitly distinguished raw observations (143,156), cleaned observations (143,124), filtered inputs (143,116), visualized preview points (5,000), unique vessels (362 MMSIs), and density clusters (241 exploratory clusters).
+    - Established strict scientific guardrails: density clusters $\neq$ confirmed anchorages; oracle matching $\neq$ maritime anomaly detection accuracy; single runs $\neq$ multi-trial benchmarks.
+    - Documented deterministic commands to reproduce all gitignored experiment artifacts.
+  - Refined ML Research Proposal (`docs/03-research/vessel-behavior-ml.md`, v1.1):
+    - Added domain corrections: clarified that AIS gaps stem predominantly from antenna shadowing near cranes and line-of-sight limits; noted that crabbing angles occur naturally in currents; reinforced that Isolation Forest scores are non-probabilistic isolation indices; labeled example incidents as purely synthetic documentation examples; marked the `vessel_anomaly_v1` GeoJSON contract as provisional.
+  - Refined Onboarding & Governance:
+    - Updated `docs/05-guides/ml-research-onboarding.md` and `docs/01-project/collaboration-plan.md` to reinforce the "One team, one initiative, one integrated product, two complementary lead areas" model with flexible pacing, zero bureaucratic drag, experiment logging guidelines, negative finding documentation, and AI coding assistant safety rules.
+    - Updated `README.md` with prominent tip linking to `docs/START-HERE.md` and expanded documentation index.
+- **Verification:**
+  - Confirmed zero changes under `src/` or `tests/` (`git diff --stat src/ tests/` output empty).
+  - Verified all 31+ relative markdown links across all repository Markdown files with automated Python checker script.
+  - Re-ran quality gates: `uv sync --locked`, `uv run pytest -v` (52 passed), `uv run ruff check .` (0 errors), `uv run ruff format --check .` (0 unformatted), `uv run mypy src tests` (strict mode clean).
+- **Next Action:**
+  - Commit documentation changes with message `docs: establish evidence-backed research and engineering knowledge base`, push to `origin/main`, verify remote SHA, and deliver completion report.
