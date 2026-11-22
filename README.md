@@ -10,18 +10,24 @@
 
 ## 1. Project Overview
 
-**Project AegisMar** is an eight-week solo undergraduate research and software engineering initiative designed to build a scientifically rigorous, reproducible maritime Automatic Identification System (AIS) analytics MVP.
+**Project AegisMar** is an undergraduate AI research and software engineering initiative designed to build a scientifically rigorous, reproducible maritime Automatic Identification System (AIS) analytics platform.
 
-The project investigates scalable spatiotemporal clustering and kinematic trajectory anomaly detection to extract explainable maritime traffic intelligence—specifically addressing port congestion, anchorage dwell analysis, and irregular vessel behaviors.
+The platform operates as a collaborative, multi-engine modular monolith structured around two complementary research tracks:
+1. **Clustering & Spatial Indexing Track (Track Lead: NipunaBhanuka18)**: Scalable spatiotemporal density clustering (ST-DBSCAN) comparing discrete hexagonal indexing (Uber H3) against a geodesic Haversine BallTree baseline, combined with vessel-aware stay-point and anchorage intelligence.
+2. **Vessel Behavior Anomaly Detection Track (Proposed Track Lead: Kishakya, *pending review*)**: Trajectory-aware kinematic feature engineering and unsupervised anomaly detection (multi-factor kinematic scoring and Isolation Forest / LOF baselines) producing explainable physical justifications for alerts.
 
 ---
 
 <a id="current-status"></a>
-## 2. Current Status
+## 2. Current Status & Research Tracks
 
-- **Phase**: Milestone **W2-01: Ingestion Corrections & BallTree ST-DBSCAN Reference Engine (Completed)**.
+- **Phase**: Milestone **W2-01 & W2-CLOSE (Completed)**; Collaboration Foundation established.
 - **State**: Validated in-memory AIS ingestion pipeline (`zstd` Parquet + manifest), hardened MMSI/conflict/schema checks, reference Haversine `BallTree` ST-DBSCAN (`stdbscan-core-first-v1.0`), independent $O(N^2)$ brute-force oracle, and exploratory LA/LB baseline completed and verified (52 unit/oracle tests, 95% coverage).
-- **Codebase Implementation**: Pre-alpha (`0.1.0.dev1`). Uber H3 candidate optimization, comparative H1 benchmarks, stay-point/anchorage analytics, anomaly detection, DuckDB/FastAPI, and web UI are planned for Weeks 3–8 (H3 is **not yet implemented**).
+- **Codebase Implementation**: Pre-alpha (`0.1.0.dev1`).
+- **Research Tracks**:
+  - **Track A (Clustering & Platform Lead: NipunaBhanuka18)**: Uber H3 candidate optimization, comparative H1 benchmarks, and stay-point/anchorage analytics (Weeks 3–4).
+  - **Track B (ML Anomaly Detection: Kishakya, *proposed*)**: Trajectory feature engineering and ML behavior anomaly detection (independent track; see [ML Research Proposal](docs/03-research/vessel-behavior-ml.md) and [Collaborator Onboarding Guide](docs/05-guides/ml-research-onboarding.md)).
+  - Shared analytical storage (DuckDB), read-only FastAPI service, and geospatial map dashboard planned for Weeks 6–7.
 
 ---
 
@@ -59,26 +65,32 @@ Evaluate whether a **lightweight, trajectory-aware rule-based scoring engine** (
 
 ## 6. High-Level Architecture
 
-AegisMar is designed as a **Python-first modular monolith** prioritizing scientific correctness, local execution, and reproducibility without distributed systems overhead:
+AegisMar is designed as a **Python-first modular monolith** prioritizing scientific correctness, local execution, and reproducibility without distributed systems overhead. The platform decouples data engineering, spatial clustering, and trajectory anomaly detection across modular boundaries:
 
 ```mermaid
 flowchart TD
-    subgraph Data ["Data Layer (Local Storage)"]
-        Raw["Raw AIS (CSV/Parquet)"] --> Ingest["Ingestion & Quality Engine"]
-        Ingest --> CleanParquet[("Cleaned Parquet Partitions")]
+    subgraph Data ["Data & Contract Layer (Local Parquet)"]
+        Raw["Raw AIS Telemetry (CSV)"] --> Ingest["Ingestion & Quality Engine"]
+        Ingest --> CleanParquet[("Cleaned Parquet (19 Canonical Columns)")]
     end
 
-    subgraph Core ["Core Analytics Engine (Modular Monolith)"]
-        CleanParquet --> TrajPrep["Trajectory Assembly"]
-        TrajPrep --> ClusterBaseline["BallTree ST-DBSCAN (Baseline)"]
-        TrajPrep --> ClusterH3["H3 ST-DBSCAN (Candidate Accelerated)"]
-        ClusterH3 --> StayPoint["Stay-Point & Anchorage Engine"]
-        TrajPrep --> AnomalyEng["Kinematic Anomaly Detector"]
+    subgraph TrackA ["Track A: Geospatial Indexing & Clustering (Lead: NipunaBhanuka18)"]
+        CleanParquet --> BallTree["BallTree ST-DBSCAN (Baseline)"]
+        CleanParquet --> H3["H3 ST-DBSCAN (Candidate Accelerated)"]
+        H3 --> StayPoint["Stay-Point & Anchorage Intelligence"]
+    end
+
+    subgraph TrackB ["Track B: Vessel Behavior ML (Proposed Lead: Kishakya)"]
+        CleanParquet --> TrajFeat["Kinematic Feature Extractor"]
+        TrajFeat --> RuleEngine["Rule-Based Kinematic Scorer"]
+        TrajFeat --> IsoForest["Isolation Forest & LOF Baselines"]
+        RuleEngine --> AnomalyContract["vessel_anomaly_v1 GeoJSON Contract"]
+        IsoForest --> AnomalyContract
     end
 
     subgraph Serving ["Serving & Presentation Layer"]
-        StayPoint --> DuckDBStore[("DuckDB / GeoJSON Store")]
-        AnomalyEng --> DuckDBStore
+        StayPoint --> DuckDBStore[("DuckDB Analytical Query Layer")]
+        AnomalyContract --> DuckDBStore
         DuckDBStore --> FastAPISvc["Read-Only FastAPI Service"]
         FastAPISvc --> MapDashboard["Geospatial Map Dashboard"]
     end
@@ -208,18 +220,22 @@ The repository maintains comprehensive, verified technical documentation:
   - [Software Requirements Specification (SRS Draft v2.1)](docs/01-project/srs.md)
   - [Scope & Boundary Definition](docs/01-project/scope.md)
   - [Eight-Week Roadmap](docs/01-project/roadmap.md)
+  - [Collaborative Research & Engineering Plan](docs/01-project/collaboration-plan.md)
 - **Architecture & Technical Decisions**:
   - [System Architecture](docs/02-architecture/system-architecture.md)
   - [ADR-001: Modular Monolith vs. Distributed Microservices](docs/02-architecture/decisions/ADR-001-modular-monolith.md)
 - **Research & Evaluation**:
   - [Research Plan & Hypotheses](docs/03-research/research-plan.md)
+  - [ML Research Proposal: Vessel Behavior Anomaly Detection](docs/03-research/vessel-behavior-ml.md)
   - [Scientific Evaluation Protocol](docs/03-research/evaluation-protocol.md)
   - [Dataset Management & Quality Protocol](docs/03-research/datasets.md)
 - **Development & Verification**:
   - [Milestone Schedule & Tracking](docs/04-development/milestones.md)
   - [Development Log](docs/04-development/development-log.md)
   - [Testing & Quality Assurance Strategy](docs/04-development/testing-strategy.md)
-- **Guides**:
+- **Guides & Collaboration**:
+  - [Contributing Guidelines & Quality Standards](CONTRIBUTING.md)
+  - [ML Research Collaborator Onboarding Guide](docs/05-guides/ml-research-onboarding.md)
   - [Installation & Environment Setup Guide](docs/05-guides/installation.md)
 - **Release History**:
   - [Project Changelog](CHANGELOG.md)
@@ -228,7 +244,7 @@ The repository maintains comprehensive, verified technical documentation:
 
 ## 13. Scope Exclusions & Known Limitations
 
-To ensure successful delivery within the 8-week solo developer capacity, the following features are strictly out-of-scope for the MVP:
+To ensure successful delivery within the 8-week developer capacity, the following features are strictly out-of-scope for the MVP:
 - **No Real-Time Streaming or Replay**: Real-time NMEA stream ingestion or playback servers are excluded.
 - **No Complex Distributed Infrastructure**: No PostgreSQL/PostGIS, Apache Kafka, Kubernetes, or microservices.
 - **No Authentication / Authorization**: The MVP is designed strictly as a localhost single-user tool.
@@ -240,6 +256,8 @@ To ensure successful delivery within the 8-week solo developer capacity, the fol
 ## 14. License & Attribution
 
 - **License**: Pending formal selection. All rights currently reserved.
-- **Author**: Solo Undergraduate AI Researcher & Software Engineer.
-- **Academic Context**: Undergraduate AI Research & Engineering Capstone Project.
+- **Research Team & Track Leadership**:
+  - **Project Lead & Geospatial Clustering Track**: NipunaBhanuka18
+  - **Proposed ML Research Collaborator**: Kishakya *(participation, schedule, and attribution pending review)*
+- **Academic Context**: Undergraduate AI Research & Software Engineering Capstone Collaboration.
 

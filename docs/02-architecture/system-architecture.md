@@ -2,23 +2,29 @@
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
-**Document Version:** 2.1  
-**Status:** Architecture Baseline (Planned Design)  
-**Architectural Style:** Python-First Modular Monolith  
+**Document Version:** 2.2  
+**Status:** Collaborative Architecture Baseline  
+**Architectural Style:** Python-First Modular Monolith with Parallel Research Tracks  
+**Research Tracks & Ownership:**  
+- **Track A (Clustering & Platform Lead):** NipunaBhanuka18  
+- **Track B (Vessel Behavior ML Track):** Kishakya *(proposed collaborator; participation pending review)*  
 **Target Environment:** Localhost / Single-Node Analytical Workstation  
 
 ---
 
 ## 1. Architectural Principles
 
-Project AegisMar is engineered as a **Python-first modular monolith**. This architecture reflects the operational constraints of an 8-week solo undergraduate engineering and research project (200 hours).
+Project AegisMar is engineered as a **Python-first modular monolith**. The architecture supports collaborative research between two undergraduate AI researchers working on decoupled, complementary tracks:
 
-The architecture is governed by five guiding principles:
+1. **Track A (Clustering & Spatial Indexing Lead: NipunaBhanuka18)**: Owns the ingestion foundation, metric BallTree and discrete H3 spatial indexing, ST-DBSCAN clustering, stay-point/anchorage intelligence, shared DuckDB storage, and API serving.
+2. **Track B (Vessel Behavior Anomaly Detection Lead: Kishakya, *proposed*)**: Owns vessel trajectory feature engineering, rule-based kinematic scoring, unsupervised anomaly modeling (Isolation Forest / LOF), and perturbation evaluation.
+
+The system is governed by five non-negotiable architectural principles:
 1. **Separation of Concerns via Clean Internal Boundaries**: Modules are organized by functional domain (`ingestion`, `spatial`, `clustering`, `staypoint`, `anomaly`, `storage`, `api`). Inter-module communication uses explicit Python interfaces and typed dataclasses.
 2. **Data Immutability & Columnar Storage**: Raw AIS data files are read-only and preserved permanently. All cleaned records, spatial partitions, and analytical results are stored in Apache Parquet files, optimized for analytical querying via DuckDB.
 3. **No Distributed Infrastructure**: The system eliminates external network servers, relational databases (PostgreSQL/PostGIS), message brokers (Kafka/RabbitMQ), and container orchestrators (Kubernetes).
 4. **Precomputation Over Dynamic Computation**: Heavy spatiotemporal clustering and trajectory anomaly evaluations are executed offline in batch CLI pipelines, saving precomputed GeoJSON and Parquet artifacts that are served instantly by a thin read-only API.
-5. **Independent Verification Oracles**: Algorithmic performance and correctness are verified using standalone mathematical oracles (such as brute-force pairwise distance matrices) decoupled from production indexing structures.
+5. **Contract-Based Subsystem Integration**: The ML anomaly track consumes the canonical PyArrow schema from `cleaned_ais.parquet` and exports results via the versioned `vessel_anomaly_v1` GeoJSON contract, ensuring complete modular decoupling.
 
 ---
 
@@ -26,51 +32,35 @@ The architecture is governed by five guiding principles:
 
 ```mermaid
 flowchart TD
-    subgraph StorageLayer ["Data & Storage Layer (Local Disk)"]
-        RawFiles["Raw AIS Files (CSV / Parquet)"]
-        CleanParquet[("Cleaned Parquet Partitions")]
-        AnalyticalStore[("DuckDB / Precomputed GeoJSON Store")]
+    subgraph DataLayer ["Data & Storage Layer (Local Disk)"]
+        RawFiles["Raw AIS Files (CSV)"] --> Ingest["1. AIS Ingestion & Quality Engine"]
+        Ingest --> CleanParquet[("Cleaned Parquet Partitions (19 Canonical Columns)")]
+        CleanParquet --> Manifest["Cryptographic Manifest (manifest.json)"]
     end
 
-    subgraph CLI ["Orchestration & CLI Layer"]
-        CLIRunner["AegisMar CLI Runner (Typer / Click / Argparse)"]
+    subgraph TrackA ["Track A: Geospatial Indexing & Clustering (Lead: NipunaBhanuka18)"]
+        CleanParquet --> SpatialIdx["2. Spatial Index Subsystem"]
+        SpatialIdx --> BallTree["- BallTree Baseline (Haversine)"]
+        SpatialIdx --> H3Engine["- H3 Hex Grid Candidate Generator"]
+        BallTree --> Cluster["3. Spatiotemporal ST-DBSCAN Engine"]
+        H3Engine --> Cluster
+        Cluster --> StayPoint["4. Stay-Point & Anchorage Intelligence"]
     end
 
-    subgraph CoreEngine ["AegisMar Core Engine (Modular Monolith)"]
-        Ingest["1. AIS Ingestion & Quality Validation"]
-        TrajPrep["2. Trajectory Assembly & Quality Filters"]
-        SpatialIdx["3. Spatial Index Subsystem"]
-        BallTree["- BallTree Baseline (Haversine)"]
-        H3Engine["- H3 Hex Grid Candidate Generator"]
-        Cluster["4. Spatiotemporal ST-DBSCAN Engine"]
-        StayPoint["5. Stay-Point & Anchorage Intelligence"]
-        Anomaly["6. Kinematic Trajectory Anomaly Detector"]
+    subgraph TrackB ["Track B: Vessel Behavior ML (Proposed Lead: Kishakya)"]
+        CleanParquet --> TrajFeat["5. Trajectory Assembly & Kinematic Features"]
+        TrajFeat --> RuleEngine["- Rule-Based Kinematic Scorer"]
+        TrajFeat --> IsoForest["- Isolation Forest & LOF Baselines"]
+        RuleEngine --> AnomalyContract["vessel_anomaly_v1 GeoJSON Contract"]
+        IsoForest --> AnomalyContract
     end
 
     subgraph ServingLayer ["Serving & Presentation Layer"]
-        FastAPISvc["Thin Read-Only FastAPI Service"]
-        WebMap["Minimal Web Map Inspector (Leaflet / MapLibre)"]
+        StayPoint --> AnalyticalStore[("DuckDB Analytical Query Layer")]
+        AnomalyContract --> AnalyticalStore
+        AnalyticalStore --> FastAPISvc["Thin Read-Only FastAPI Service"]
+        FastAPISvc --> WebMap["Minimal Web Map Inspector (Leaflet / MapLibre)"]
     end
-
-    %% Flow connections
-    RawFiles --> Ingest
-    Ingest --> CleanParquet
-    CleanParquet --> TrajPrep
-    TrajPrep --> SpatialIdx
-    SpatialIdx --> BallTree
-    SpatialIdx --> H3Engine
-    BallTree --> Cluster
-    H3Engine --> Cluster
-    Cluster --> StayPoint
-    TrajPrep --> Anomaly
-    StayPoint --> AnalyticalStore
-    Anomaly --> AnalyticalStore
-    CLIRunner -.-> Ingest
-    CLIRunner -.-> Cluster
-    CLIRunner -.-> StayPoint
-    CLIRunner -.-> Anomaly
-    AnalyticalStore --> FastAPISvc
-    FastAPISvc --> WebMap
 ```
 
 ---
@@ -128,14 +118,17 @@ flowchart TD
   - Calculate unique vessel dwell metrics ($\text{count}(\text{distinct } MMSI)$, median waiting hours) to avoid sampling-frequency skew.
 
 ### 3.7 Kinematic Trajectory Anomaly Analysis (`aegismar.anomaly`)
-- **Status:** Planned (Week 5).
+- **Status:** Proposed ML Track (Track Lead: Kishakya, *pending review*).
 - **Responsibilities:**
-  - Scan continuous vessel trajectories for physical kinematics anomalies:
-    - Acceleration / speed spikes beyond physical vessel capabilities.
-    - Drifting and course-heading discrepancies ($|COG - HDG| > 45^\circ$ while $SOG > 1.5\text{ kt}$).
-    - Prolonged transponder dropouts in high-traffic channels followed by implausible spatial displacement.
-  - Produce an explainable anomaly score $\in [0, 1]$ accompanied by a JSON factor decomposition explaining the alert trigger.
-  - *(Conditional)* Train an Isolation Forest baseline on kinematic feature vectors to benchmark machine learning versus rule-based scoring.
+  - Trajectory windowing and kinematic feature extraction (`aegismar.anomaly.features`):
+    - Instantaneous acceleration and speed deltas ($\Delta \text{SOG} / \Delta t$).
+    - Rate of turn ($\Delta \text{COG} / \Delta t$) and course-heading drift disparity ($|\text{COG} - \text{HDG}|$).
+    - Transponder reporting intervals and coverage gap identification.
+  - Transparent rule-based heuristic scoring engine (`aegismar.anomaly.rules`) outputting continuous score $\in [0.0, 1.0]$.
+  - Unsupervised machine learning models (`aegismar.anomaly.models`): Isolation Forest and candidate alternative baselines (LOF / Mahalanobis).
+  - Synthetic perturbation and leakage-free evaluation harness (`aegismar.anomaly.evaluation`).
+  - Serialization of incident outputs conforming to the versioned `vessel_anomaly_v1` GeoJSON contract.
+  - *Contract Note*: Raw Isolation Forest scores represent feature isolation depth and must never be represented as calibrated Bayesian probabilities of illicit intent.
 
 ### 3.8 Analytical Storage Layer (`aegismar.storage`)
 - **Status:** Planned (Week 6).

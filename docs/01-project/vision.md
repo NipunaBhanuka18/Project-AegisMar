@@ -2,9 +2,12 @@
 
 > **Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
-**Document Version:** 2.1 (Draft)  
-**Status:** Approved for MVP Planning  
-**Last Updated:** 2026-11-14  
+**Document Version:** 2.2  
+**Status:** Approved Platform Architecture Baseline  
+**Last Updated:** 2026-11-22  
+**Research Tracks & Collaboration:**  
+- **Track A (Clustering & Platform Lead):** NipunaBhanuka18  
+- **Track B (Vessel Behavior ML):** Kishakya *(proposed collaborator; participation and attribution pending review)*  
 
 ---
 
@@ -12,9 +15,9 @@
 
 Maritime transportation accounts for over 80% of global trade volume. Modern maritime operations rely fundamentally on the Automatic Identification System (AIS) for situational awareness, collision avoidance, and maritime domain monitoring. However, port authorities, maritime researchers, and domain analysts face an overwhelming deluge of high-frequency, noisy spatial telemetry that degrades the effectiveness of traditional analytical tools.
 
-**Project AegisMar** is an eight-week solo research and software engineering MVP designed to deliver an explainable, computationally efficient, and scientifically reproducible maritime intelligence platform. AegisMar bridges the gap between raw, imperfect AIS broadcasts and actionable maritime insights, focusing on two central challenges:
-1. **Computational efficiency and correctness in spatiotemporal traffic clustering** (evaluating H3 spatial partitioning against a geodesic BallTree baseline).
-2. **Transparent, physically interpretable vessel behavior anomaly detection** (distinguishing ordinary operational density noise from genuine kinematic abnormalities).
+**Project AegisMar** is an undergraduate AI research and software engineering platform designed to deliver an explainable, computationally efficient, and scientifically reproducible maritime intelligence system. AegisMar bridges the gap between raw, imperfect AIS broadcasts and actionable maritime insights through a collaborative, multi-engine architecture addressing two central challenges:
+1. **Computational efficiency and correctness in spatiotemporal traffic clustering** (evaluating H3 discrete hexagonal spatial partitioning against a geodesic Haversine BallTree baseline).
+2. **Transparent, physically interpretable vessel behavior anomaly detection** (distinguishing ordinary operational density noise from genuine kinematic abnormalities using rule-based scoring and unsupervised learning).
 
 ---
 

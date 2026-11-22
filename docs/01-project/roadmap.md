@@ -2,20 +2,24 @@
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
-**Document Version:** 2.1  
-**Status:** Approved Roadmap  
-**Total Planned Capacity:** 200 Hours (8 Weeks @ 25 Hours/Week)  
-**Developer:** Solo Undergraduate AI Engineer  
+**Document Version:** 2.2  
+**Status:** Approved Roadmap (Collaborative Dual-Track Architecture)  
+**Track A Capacity:** 200 Hours (8 Weeks @ 25 Hours/Week) — Lead: NipunaBhanuka18  
+**Track B Capacity:** Independent Parallel Track — Proposed Lead: Kishakya *(schedule to be agreed)*  
 
 ---
 
 ## 1. Roadmap Architecture
 
-The eight-week development lifecycle is partitioned into four major phases:
-1. **Foundations (Weeks 1–2)**: Ingestion, sentinel filtering, spatial indexing, and test oracles.
-2. **Core Research Algorithms (Weeks 3–4)**: ST-DBSCAN clustering, H3 candidate acceleration, stay-points, and anchorages.
-3. **Behavioral Analytics & Serving (Weeks 5–6)**: Kinematic anomaly detection, DuckDB analytical storage, and read-only API.
-4. **Integration, Geospatial UI & Research Defense (Weeks 7–8)**: Interactive map, benchmarking, reproducibility package, and final thesis documentation.
+The development lifecycle operates across two complementary research tracks:
+- **Track A (Intact Eight-Week Solo Baseline — NipunaBhanuka18)**:
+  1. **Foundations (Weeks 1–2)**: Ingestion, sentinel filtering, spatial indexing, and test oracles.
+  2. **Core Research Algorithms (Weeks 3–4)**: ST-DBSCAN clustering, H3 candidate acceleration, stay-points, and anchorages.
+  3. **Behavioral Analytics & Serving (Weeks 5–6)**: Kinematic anomaly detection, DuckDB analytical storage, and read-only API.
+  4. **Integration, Geospatial UI & Research Defense (Weeks 7–8)**: Interactive map, benchmarking, reproducibility package, and final thesis documentation.
+- **Track B (Parallel ML Anomaly Research Track — Kishakya, *proposed*)**:
+  - Operates on an independent schedule decoupled from Track A's critical path.
+  - Consumes cleaned Parquet datasets via the canonical schema and exports incident predictions via the `vessel_anomaly_v1` GeoJSON contract.
 
 ---
 
@@ -97,4 +101,29 @@ The eight-week development lifecycle is partitioned into four major phases:
   - `W8-03`: Final codebase freeze, reproducibility verification guide, and academic thesis submission.
 - **Dependencies**: Weeks 1–7 complete.
 - **Acceptance Gate**: One-command benchmark execution; zero discrepancies between reported figures and measured data.
+
+---
+
+## 3. Parallel ML Research Track (Proposed Lead: Kishakya)
+
+The machine learning anomaly detection research track proceeds in parallel with its own flexible milestone backlog. No hard deadlines are imposed; milestone timing and priorities will be established collaboratively upon Kishakya's onboarding review.
+
+### Proposed Initial ML Milestones
+- **ML-01: Domain Literature & AIS Schema Review**:
+  - Review maritime anomaly detection literature and existing `docs/03-research/vessel-behavior-ml.md`.
+  - Profile canonical AIS telemetry fields (`cleaned_ais.parquet`) and understand sensor sentinels/limits.
+  - *Deliverable*: Literature summary notes and confirmed feature selection strategy.
+- **ML-02: Vessel Trajectory Feature Specification**:
+  - Formulate mathematical definitions for kinematic acceleration, angular course rates, drift angles, and transponder reporting intervals.
+  - Define windowing parameters (sliding time window vs. fixed-ping strides).
+  - *Deliverable*: Trajectory feature extraction specification document.
+- **ML-03: Baseline Models & Evaluation Protocol Freezing**:
+  - Formalize rule-based heuristic scoring thresholds and Isolation Forest architecture.
+  - Specify vessel-disjoint (70/30 MMSI) and chronological holdout splits.
+  - Parameterize synthetic perturbation types (speed jumps, crabbing, coverage dropouts) with maritime physical bounds.
+  - *Deliverable*: Evaluation protocol document and perturbation configuration schema.
+- **ML-04: First Reproducible Feature-Engineering Experiment**:
+  - Implement `src/aegismar/anomaly/features.py` with comprehensive unit tests (`tests/unit/test_anomaly.py`).
+  - Extract feature representations across San Pedro Bay test partition and log reproducible experiment artifacts under `experiments/outputs/anomaly/`.
+  - *Deliverable*: Feature extractor module and baseline experiment summary JSON.
 

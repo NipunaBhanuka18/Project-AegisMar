@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation & Collaboration - Collaboration Foundation & ML Research Track (2026-11-22)
+- **Collaborative Research Tracks**:
+  - Established dual-track collaborative research architecture between Lead Researcher NipunaBhanuka18 (AIS ingestion, BallTree reference ST-DBSCAN, Uber H3 optimization, stay-point/anchorage intelligence) and proposed ML Research Collaborator Kishakya (vessel trajectory feature engineering, unsupervised kinematic anomaly detection, explainable incident generation).
+  - Maintained the intact 8-week solo clustering roadmap for Track A while defining Track B as an independent parallel research track with its own schedule.
+- **ML Research Proposal & Onboarding Documentation**:
+  - Authored `docs/03-research/vessel-behavior-ml.md` (marked `PROPOSAL — NOT FINALIZED`), defining problem formulation, research questions (RQ-ML1, RQ-ML2), hypotheses, canonical telemetry fields, trajectory windowing, kinematic feature definitions, rule-based baseline, Isolation Forest baseline, alternative baselines (LOF, Mahalanobis), evaluation methodology (vessel-disjoint & chronological splits, synthetic perturbation limits), and open decisions for Kishakya.
+  - Authored `docs/05-guides/ml-research-onboarding.md`, providing a 15-point comprehensive onboarding guide covering problem domain, completed milestones, setup via `uv`, running tests, cleaned AIS Parquet schema, reproducible data acquisition, module boundaries, branch workflow (`feat/ml-...`), AI assistant safety, experiment tracking, protected files, and initial tasks ML-01 to ML-04.
+- **Shared Integration Contracts**:
+  - Documented canonical AIS input contract based on 19 standardized columns in `cleaned_ais.parquet`.
+  - Defined proposed `vessel_anomaly_v1` GeoJSON Feature output contract (`incident_id`, `mmsi`, timestamps, observation source rows, model id/version, non-probabilistic anomaly score, primary factor, factor contributions, data quality context).
+- **Collaboration Infrastructure**:
+  - Created `CONTRIBUTING.md` outlining quality gates, branching conventions, data protection, and reproducibility standards.
+  - Created `.github/pull_request_template.md` providing a lightweight PR checklist for track categorization, quality checks, data protection, and experiment tracking.
+  - Authored `docs/01-project/collaboration-plan.md` defining track responsibilities, module ownership, conflict resolution, and academic co-authorship principles.
+- **Project Documentation Updates**:
+  - Updated `README.md`, `docs/01-project/vision.md`, `docs/01-project/scope.md`, `docs/01-project/roadmap.md`, `docs/02-architecture/system-architecture.md`, and `docs/03-research/research-plan.md` with multi-engine architecture, parallel research tracks, and updated Mermaid component diagrams (zero application or scientific code changes).
+
 ### Documentation & Visualization - Milestone W2-CLOSE (2026-11-18)
 - **Public Clustering Visualization**: Captured genuine headless-browser PNG screenshot of the recorded Week 2 Los Angeles / Long Beach BallTree ST-DBSCAN spatial preview at `docs/assets/w2-balltree-clustering.png` (60.4 KB, no vessel identifiers or private paths) and embedded it in `README.md` with full exploratory methodology caveats.
 - **Week 2 Portfolio Finalization**: Recorded the pre-Week 3 BallTree reference baseline summary in `README.md` and finalized Week 2 closure records in `docs/04-development/milestones.md`, `docs/04-development/development-log.md`, and `CHANGELOG.md` (zero application or scientific code changes).

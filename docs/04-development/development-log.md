@@ -348,3 +348,42 @@ This log documents chronological engineering actions, commands executed, test re
   - Re-ran `uv sync --locked`, `uv run pytest -v`, `uv run ruff check .`, `uv run ruff format --check .`, and `uv run mypy src tests` (100% pass).
 - **Next Action:**
   - Commit `docs: finalize Week 2 clustering milestone and visualization`, push to `origin/main`, and pause before Week 3 (`W3-01` H3 optimization).
+
+---
+
+## Log Entry: 2026-11-22 — Task: Collaboration Foundation & ML Research Track Initialization
+
+- **Date:** 2026-11-22
+- **Task Identifier:** `Collaboration Foundation and ML Research Track Initialization`
+- **Scope:** Documentation, integration contract definition, and collaboration infrastructure; zero application or scientific code changes under `src/` or `tests/`.
+- **Summary of Changes:**
+  - Audited existing repository: verified clean `main` at `929e6a3`, 52 passing tests, 95% test coverage, and confirmed no contradictions with existing data contracts or documentation.
+  - Established dual-track collaborative research architecture between Lead Researcher NipunaBhanuka18 (AIS data engineering, BallTree reference ST-DBSCAN, Uber H3 optimization, stay-point/anchorage intelligence, platform integration) and proposed ML Research Collaborator Kishakya (vessel trajectory feature engineering, unsupervised kinematic anomaly detection, explainable incident generation, error analysis; participation and attribution prospective, pending review).
+  - Maintained intact eight-week solo roadmap (Weeks 1–8, 200 hours) for Track A while establishing Track B as an independent parallel research track with its own schedule and backlog (ML-01 to ML-04).
+  - Authored ML Research Proposal (`docs/03-research/vessel-behavior-ml.md`, marked `PROPOSAL — NOT FINALIZED`):
+    - Problem formulation, research questions (RQ-ML1, RQ-ML2), hypotheses ($H_{\text{ML1}}$, $H_{\text{ML2}}$).
+    - Detailed evaluation of 19 canonical AIS telemetry fields and sensor/reporting limitations.
+    - Trajectory reconstruction assumptions (MMSI partitioning, chronological sorting, gap segmentation $>2\text{ h}$, coordinate conflict isolation).
+    - Behavioral feature specifications (kinematic acceleration, angular ROT, course-heading drift angle, reporting intervals, tortuosity).
+    - Baseline models (rule-based kinematic heuristic, Isolation Forest, LOF, Mahalanobis distance, ST-DBSCAN density noise baseline).
+    - Crucial caveat documented: raw Isolation Forest scores are feature-isolation depths, never calibrated Bayesian probabilities.
+    - Evaluation protocol (70/30 vessel-disjoint holdouts, chronological holdouts, synthetic perturbation limitations).
+    - Open methodological decisions left for Kishakya to evaluate and decide.
+  - Authored Collaborator Onboarding Guide (`docs/05-guides/ml-research-onboarding.md`):
+    - Addressed all 15 required onboarding topics (problem domain, completed milestones, `uv` setup, running tests, canonical Parquet schema, reproducible data acquisition without committing raw data, reusable modules, independent ML boundaries in `src/aegismar/anomaly/`, Git branching `feat/ml-...`, PR workflow, AI assistant safety, experiment tracking, protected files, known limitations, and initial tasks ML-01 to ML-04).
+  - Defined Integration Contracts:
+    - Input contract: 19 canonical fields from `cleaned_ais.parquet` with canonical total order.
+    - Output contract: Versioned `vessel_anomaly_v1` GeoJSON Feature schema (`incident_id`, `mmsi`, timestamps, observation source rows, model id/version, non-probabilistic anomaly score, primary factor, factor contributions, data quality context).
+  - Added Collaboration Infrastructure:
+    - `CONTRIBUTING.md`: Branching, conventional commits, quality gates, strict data protection, research reproducibility, module ownership, co-authorship principles.
+    - `.github/pull_request_template.md`: Lightweight PR checklist covering track categorization, quality checks, data protection, and reproducibility tracking.
+    - `docs/01-project/collaboration-plan.md`: Track responsibilities, module ownership table, communication/review cycles, conflict resolution, academic attribution principles.
+  - Synchronized Project Documentation:
+    - `README.md`: Multi-engine vision, dual research tracks, updated Mermaid component architecture, links to onboarding and ML research proposal, accurate milestone table, collaborative attribution.
+    - `docs/01-project/vision.md`, `docs/01-project/scope.md`, `docs/01-project/roadmap.md`, `docs/02-architecture/system-architecture.md`, and `docs/03-research/research-plan.md`.
+    - `CHANGELOG.md` updated with milestone entry.
+- **Verification:**
+  - Zero modifications to working clustering, ingestion, or spatial logic (`src/aegismar/ingestion/`, `src/aegismar/clustering/`, `src/aegismar/spatial/`).
+  - Ran `uv sync --locked`, `uv run pytest -v`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src tests`. All passed 100% with exit code 0.
+- **Next Action:**
+  - Commit with message `docs: establish collaborative research tracks and ML onboarding`, push to `origin/main`, verify remote SHA, and deliver completion report.

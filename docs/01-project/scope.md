@@ -2,20 +2,26 @@
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
-**Document Version:** 2.1  
-**Status:** Controlled Scope Baseline  
-**Developer Capacity:** 1 Solo Undergraduate Engineer (20–30 hours/week, 200 total hours)  
-**Lifecycle Baseline:** Eight-Week Research & Engineering MVP  
+**Document Version:** 2.2  
+**Status:** Controlled Scope Baseline & Collaborative Governance  
+**Research Tracks & Capacity:**  
+- **Track A (Clustering & Platform Lead):** NipunaBhanuka18 (20–30 hours/week, 200 total hours across 8 weeks)  
+- **Track B (ML Anomaly Detection):** Kishakya *(proposed collaborator; independent schedule to be agreed)*  
+**Lifecycle Baseline:** Eight-Week Research & Engineering MVP with Parallel ML Track  
 
 ---
 
 ## 1. Scope Governance Principles
 
-To guarantee that Project AegisMar delivers both a defensible research contribution and a functioning engineering artifact within the eight-week solo timeline, all feature requests and architectural components are governed under three strict tiers:
+To guarantee that Project AegisMar delivers both defensible research contributions and a functioning software engineering artifact, scope is governed across two complementary, decoupled tracks:
 
-1. **Mandatory (P1)**: The core deliverables required for the undergraduate research thesis, empirical validation, and functional MVP. These receive priority engineering capacity.
-2. **Conditional (P2)**: High-value secondary capabilities that will be implemented if and only if all preceding Mandatory deliverables meet their quality gates ahead of schedule.
-3. **Deferred (Out of Scope)**: Capabilities that exceed the computational, architectural, or temporal constraints of a solo 8-week MVP. These are documented to prevent scope creep.
+1. **Track A (Clustering & Data Platform Lead: NipunaBhanuka18)**: Governed by the intact eight-week solo roadmap (200 hours). Mandatory P1 deliverables focus on the AIS data engineering foundation, BallTree ST-DBSCAN reference engine, Uber H3 candidate optimization, and stay-point/anchorage intelligence.
+2. **Track B (Vessel Behavior ML Track: Kishakya, *proposed*)**: Governed as an independent research track focusing on trajectory feature engineering, explainable rule-based scoring, and unsupervised anomaly detection (Isolation Forest / LOF). This track has its own flexible schedule (ML-01 to ML-04) and integrates into the platform strictly via defined data contracts without expanding the mandatory MVP scope of Track A.
+
+All deliverables within each track remain prioritized under three strict tiers:
+- **Mandatory (P1)**: Core deliverables required for the undergraduate research thesis, empirical validation, and functional MVP.
+- **Conditional (P2)**: High-value secondary capabilities implemented if preceding deliverables meet quality gates ahead of schedule.
+- **Deferred (Out of Scope)**: Capabilities exceeding the project constraints, documented to prevent scope creep.
 
 ---
 

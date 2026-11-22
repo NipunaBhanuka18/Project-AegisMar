@@ -2,9 +2,11 @@
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
-**Document Version:** 2.1  
-**Status:** Approved Research Plan  
-**Lead Researcher:** Solo Undergraduate AI Engineer  
+**Document Version:** 2.2  
+**Status:** Approved Research Plan (Collaborative Dual-Track Model)  
+**Research Tracks & Leadership:**  
+- **Track A (Geospatial Clustering Lead & Platform Architect):** NipunaBhanuka18  
+- **Track B (Vessel Behavior ML Track):** Kishakya *(proposed collaborator; participation pending review)*  
 **Academic Focus:** Geospatial Machine Learning, Spatial Indexing & Maritime Domain Awareness  
 
 ---
@@ -25,18 +27,18 @@ Furthermore, existing maritime anomaly detection literature frequently suffers f
 
 ## 2. Research Questions (RQ)
 
-- **Primary Research Question (RQ1)**: Can an H3-accelerated candidate neighbor generation mechanism for ST-DBSCAN achieve a statistically significant reduction in total execution time compared to a Haversine BallTree baseline while strictly preserving spatial neighborhood recall ($\ge 99.9\%$) across varying AIS density distributions?
-- **Secondary Research Question (RQ2)**: Does a trajectory-aware, explainable rule-based kinematic scoring engine achieve superior precision and reduced false alarm rates in identifying behavioral vessel anomalies compared to spatial point-density outlier baselines and unsupervised Isolation Forests?
+- **Primary Research Question (RQ1 — Track A Lead: NipunaBhanuka18)**: Can an H3-accelerated candidate neighbor generation mechanism for ST-DBSCAN achieve a statistically significant reduction in total execution time compared to a Haversine BallTree baseline while strictly preserving spatial neighborhood recall ($\ge 99.9\%$) across varying AIS density distributions?
+- **Secondary Research Question (RQ2 — Track B Proposed Lead: Kishakya)**: Does a trajectory-aware, explainable rule-based kinematic scoring engine achieve superior precision and reduced false alarm rates in identifying behavioral vessel anomalies compared to spatial point-density outlier baselines and unsupervised Isolation Forests? *(See detailed proposal in [vessel-behavior-ml.md](vessel-behavior-ml.md)).*
 
 ---
 
 ## 3. Formal Scientific Hypotheses
 
-### Hypothesis 1 (H1: Algorithmic Acceleration & Correctness)
+### Hypothesis 1 (H1: Algorithmic Acceleration & Correctness — Track A)
 - **Null Hypothesis ($H_{1,0}$)**: At equal spatial search radius $\varepsilon_{\text{spatial}}$ and temporal threshold $\Delta T_{\text{temporal}}$, the H3-accelerated ST-DBSCAN candidate search yields no reduction in execution latency compared to the Haversine BallTree baseline, or results in a loss of neighborhood recall exceeding $0.1\%$ ($< 99.9\%$).
 - **Alternative Hypothesis ($H_{1,A}$)**: An appropriately parameterized H3 candidate expansion ($k$-ring at resolution $R$) combined with geodesic haversine pruning achieves a statistically significant runtime reduction ($p < 0.05$ across 10 repeated benchmark trials) over the BallTree baseline on AIS datasets $\ge 50,000$ points while guaranteeing $\ge 99.9\%$ spatial neighbor recall against an independent brute-force oracle.
 
-### Hypothesis 2 (H2: Trajectory Kinematic Explainability)
+### Hypothesis 2 (H2: Trajectory Kinematic Explainability — Track B)
 - **Null Hypothesis ($H_{2,0}$)**: A multi-factor kinematic trajectory scoring model yields an $F_1$ score less than or equal to an unsupervised spatial density outlier baseline when evaluated against ground-truth and physically perturbed anomalous maritime trajectories.
 - **Alternative Hypothesis ($H_{2,A}$)**: A multi-factor kinematic trajectory scoring model (evaluating velocity jumps, abnormal drift angles, and transponder coverage gaps) achieves an $F_1$ score at least 15 percentage points higher than density-based outlier detection, while providing an exact physical breakdown for 100% of detected alerts.
 
