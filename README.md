@@ -111,7 +111,7 @@ flowchart TD
 | **Build Backend** | `hatchling` | `hatchling` | Standard, modern PEP 517 build backend. |
 | **Quality Gates** | `ruff`, `mypy`, `pytest` | `ruff`, `mypy`, `pytest` | Sub-second linting/formatting, strict static typing, rigorous unit testing. |
 | **Data Engine** | Implemented (`pyarrow`); `duckdb` planned (W6) | `duckdb`, `pyarrow` | Columnar Parquet I/O (`zstd`) implemented via PyArrow; in-process DuckDB planned for W6. |
-| **Spatial Indexing**| BallTree Implemented (W2-01); H3 Planned (W3) | `numpy`, `scikit-learn`, `h3` (4.x) | Haversine `BallTree` reference baseline verified; Uber H3 deferred to Week 3. |
+| **Spatial Indexing**| Implemented: BallTree (W2-01) & H3 (W3-01) | `numpy`, `scikit-learn`, `h3` (4.x) | Haversine `BallTree` reference baseline and verified H3 hexagonal candidate provider; zero missing neighbors. |
 | **Web Service** | *Planned (W6)* | `fastapi`, `uvicorn` | Lightweight, asynchronous, typed, read-only HTTP endpoints serving GeoJSON. |
 | **Geospatial UI** | *Planned (W7)* | Vanilla JS + Leaflet / MapLibre | Zero-build-step interactive geospatial visualization. |
 
@@ -140,7 +140,7 @@ The project is structured around an estimated 200 hours (25 h/week) across 8 mil
 | **W1-02A**| NOAA AIS Dataset Selection & Schema Investigation | Week 1 | **Completed** |
 | **W1-02B**| AIS Ingestion, Data Quality & Parquet Storage | Week 1 | **Completed** |
 | **W2-01** | Ingestion Corrections, BallTree ST-DBSCAN & Brute-Force Oracle | Week 2 | **Completed** |
-| **W3-01** | H3 Candidate Optimization & Completeness Verification | Week 3 | Planned |
+| **W3-01** | H3 Candidate Optimization & Completeness Verification | Week 3 | **Completed** |
 | **W3-02** | Comparative H1 Benchmarking (BallTree vs. H3) | Week 3 | Planned |
 | **W4-01** | Stay-Point Extraction & Anchorage Dwell Identification | Week 4 | Planned |
 | **W5-01** | Kinematic Anomaly Scoring & Evaluation Engine | Week 5 | Planned |
@@ -201,6 +201,9 @@ uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/pr
 
 # Run reference Haversine BallTree ST-DBSCAN on cleaned AIS Parquet
 uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w2_01_lalb_balltree --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
+
+# Run verified H3-accelerated ST-DBSCAN (Milestone W3-01)
+uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w3_01_lalb_h3 --provider h3 --h3-resolution 8 --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
 ```
 
 ---

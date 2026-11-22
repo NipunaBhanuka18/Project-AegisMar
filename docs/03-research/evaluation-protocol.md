@@ -33,8 +33,8 @@ To prevent circular reasoning between spatial indexing data structures:
   $$d_{\text{haversine}}(p, q) = 2 R_{\text{earth}} \arcsin \left( \sqrt{\sin^2\left(\frac{\Delta \phi}{2}\right) + \cos \phi_p \cos \phi_q \sin^2\left(\frac{\Delta \lambda}{2}\right)} \right)$$
 - The brute-force oracle defines ground-truth spatiotemporal neighbor sets:
   $$N_{\text{oracle}}(p) = \{ q \in D \mid d_{\text{haversine}}(p, q) \le \varepsilon_{\text{spatial}} \;\land\; |t_p - t_q| \le \Delta T_{\text{temporal}} \}$$
-- Both the `BallTreeNeighborhoodProvider` (verified in W2-01) and the planned `H3NeighborhoodProvider` (scheduled for Week 3; not yet implemented) are injected into the same deterministic core-first `run_st_dbscan` engine and compared against the oracle across neighborhoods, core/border/noise roles, and final cluster labels.
-- For the upcoming Week 3 H3 engine, every candidate set $N_{\text{H3}}(p)$ must satisfy $\text{Recall} \ge 0.999$ (target $1.0$ on exact correctness tests) including points within $\delta \le 10\text{ m}$ of H3 cell boundaries and pentagonal distortion zones.
+- Both the `BallTreeNeighborhoodProvider` (verified in W2-01) and the `H3NeighborhoodProvider` (implemented and verified in W3-01) are injected into the same deterministic core-first `run_st_dbscan` engine and compared against the oracle across neighborhoods, core/border/noise roles, and final cluster labels.
+- In Milestone W3-01, the H3 engine achieved $\text{Recall} = 1.0$ (zero missing neighbors) across all synthetic fixtures, cell boundaries ($\delta \le 10\text{ m}$), pentagonal distortion zones, high latitudes, dateline crossings, and all 143,116 real LA/LB observations (100% role and label parity with BallTree). Formal comparative performance benchmarking across dataset scales is scheduled for Milestone W3-02.
 
 ### 2.3 Benchmark Timing & Memory Procedure
 - **Warmup**: 1 warmup pass prior to timing collection to ensure JIT/cache stabilization.

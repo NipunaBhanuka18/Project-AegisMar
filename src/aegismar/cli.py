@@ -10,12 +10,15 @@ from aegismar import __version__
 from aegismar.clustering.config import (
     DEFAULT_EPS_SPATIAL_M,
     DEFAULT_EPS_TEMPORAL_S,
+    DEFAULT_H3_RESOLUTION,
     DEFAULT_MIN_SAMPLES,
+    PROVIDER_BALLTREE,
+    PROVIDER_H3,
     QualityFilterPolicy,
     STDBSCANConfig,
 )
 from aegismar.clustering.export import export_clustering_artifacts
-from aegismar.clustering.st_dbscan import run_balltree_st_dbscan
+from aegismar.clustering.st_dbscan import run_balltree_st_dbscan, run_h3_st_dbscan
 from aegismar.clustering.types import load_clustering_dataset_from_parquet
 from aegismar.common.constants import DEFAULT_IMPLIED_SPEED_THRESHOLD_KNOTS
 from aegismar.ingestion.pipeline import run_ingestion_pipeline
@@ -123,6 +126,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional deterministic row limit applied after canonical sorting",
     )
     cluster_parser.add_argument(
+        "--provider",
+        type=str,
+        default=PROVIDER_BALLTREE,
+        choices=[PROVIDER_BALLTREE, PROVIDER_H3, "balltree", "h3"],
+        help=(
+            f"Neighborhood provider engine: '{PROVIDER_BALLTREE}' or "
+            f"'{PROVIDER_H3}' (default: {PROVIDER_BALLTREE})"
+        ),
+    )
+    cluster_parser.add_argument(
+        "--h3-resolution",
+        type=int,
+        default=DEFAULT_H3_RESOLUTION,
+        help=f"H3 discrete grid resolution (default: {DEFAULT_H3_RESOLUTION}; supported: 7, 8, 9)",
+    )
+    cluster_parser.add_argument(
+        "--h3-k-ring",
+        type=int,
+        default=None,
+        help="Optional explicit H3 k-ring radius (default: auto-computed safe completeness bound)",
+    )
+    cluster_parser.add_argument(
         "--overwrite",
         action="store_true",
         default=False,
@@ -187,15 +212,26 @@ def handle_ingest(args: argparse.Namespace) -> int:
 
 
 def handle_cluster(args: argparse.Namespace) -> int:
-    """Execute the reference BallTree ST-DBSCAN clustering subcommand."""
+    """Execute the ST-DBSCAN clustering subcommand (BallTree reference or H3 accelerated)."""
+    provider_name = args.provider
+    if provider_name == "balltree":
+        provider_name = PROVIDER_BALLTREE
+    elif provider_name == "h3":
+        provider_name = PROVIDER_H3
+
     print("=================================================================")
-    print("Project AegisMar - BallTree ST-DBSCAN Reference Clustering")
+    print(f"Project AegisMar - ST-DBSCAN Clustering ({provider_name})")
     print("=================================================================")
     print(f"Input Parquet:    {args.input}")
     print(f"Output Dir:       {args.output}")
+    print(f"Provider:         {provider_name}")
     print(f"eps_spatial_m:    {args.eps_spatial_m} m")
     print(f"eps_temporal_s:   {args.eps_temporal_s} s")
     print(f"min_samples:      {args.min_samples}")
+    if provider_name == PROVIDER_H3:
+        print(f"H3 Resolution:    {args.h3_resolution}")
+        if args.h3_k_ring is not None:
+            print(f"H3 k-ring:        {args.h3_k_ring}")
     print("-----------------------------------------------------------------")
 
     try:
@@ -206,6 +242,9 @@ def handle_cluster(args: argparse.Namespace) -> int:
             eps_spatial_m=args.eps_spatial_m,
             eps_temporal_s=args.eps_temporal_s,
             min_samples=args.min_samples,
+            provider=provider_name,
+            h3_resolution=args.h3_resolution,
+            h3_k_ring=args.h3_k_ring,
             quality_filter=policy,
         )
         dataset = load_clustering_dataset_from_parquet(
@@ -213,11 +252,20 @@ def handle_cluster(args: argparse.Namespace) -> int:
             quality_filter=policy,
             max_rows=args.max_rows,
         )
-        result = run_balltree_st_dbscan(
-            dataset=dataset,
-            config=config,
-            measure_memory=True,
-        )
+        if provider_name == PROVIDER_H3:
+            result = run_h3_st_dbscan(
+                dataset=dataset,
+                config=config,
+                resolution=args.h3_resolution,
+                k_ring=args.h3_k_ring,
+                measure_memory=True,
+            )
+        else:
+            result = run_balltree_st_dbscan(
+                dataset=dataset,
+                config=config,
+                measure_memory=True,
+            )
         artifacts = export_clustering_artifacts(
             result=result,
             output_dir=args.output,
@@ -241,6 +289,10 @@ def handle_cluster(args: argparse.Namespace) -> int:
     print("\nClustering Completed Successfully!")
     print("-----------------------------------------------------------------")
     print(f"Provider:             {result.provider_name}")
+    if provider_name == PROVIDER_H3 and "h3_resolution" in result.provider_metrics:
+        print(f"H3 Resolution:        {result.provider_metrics['h3_resolution']}")
+        print(f"H3 k-ring:            {result.provider_metrics['h3_k_ring']}")
+        print(f"Fallback Count:       {result.provider_metrics['fallback_count']}")
     print(f"Total Input Rows:     {result.dataset.total_input_count:,}")
     print(f"Excluded Rows:        {result.dataset.excluded_count:,}")
     print(f"Analyzed Rows:        {result.dataset.num_points:,}")

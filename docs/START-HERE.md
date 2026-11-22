@@ -110,6 +110,7 @@ The repository has completed foundational data engineering and reference cluster
 - **Milestone W1-02B**: Production AIS ingestion pipeline (`aegismar ingest`), dual-format schema adapter (NOAA 2025 + legacy), sentinel nullification, duplicate consolidation, and columnar `zstd` Parquet storage.
 - **Milestone W2-01**: Ingestion hardening (strict integer MMSI sanitation, same-timestamp conflict preservation, ambiguous header rejection), reference Haversine `BallTree` ST-DBSCAN engine (`stdbscan-core-first-v1.0`), and independent brute-force $O(N^2)$ oracle (`BruteForceNeighborhoodOracle`). 52 automated tests passing with 95% total code coverage.
 - **Milestone W2-CLOSE**: Public exploratory clustering visualization published in `README.md` (`docs/assets/w2-balltree-clustering.png`).
+- **Milestone W3-01**: Uber H3 discrete hexagonal candidate neighborhood provider (`H3NeighborhoodProvider`) with safe $k$-ring coverage lower bounds, exact Haversine/temporal pruning, and pentagon fallback. Verified 100% recall (0 missing neighbors) against the brute-force oracle and 100% role/label identity with BallTree across 143,116 real LA/LB observations. 77 automated tests passing with 93% total code coverage.
 
 ---
 
@@ -118,15 +119,17 @@ The repository has completed foundational data engineering and reference cluster
 To ensure absolute transparency, our current measurements are categorized according to the [Research Evidence Register](03-research/evidence-register.md):
 
 1. **Automated Software Correctness**:
-   - 52 automated unit, oracle, and CLI regression tests pass 100% in local test suite verification (pre-commit quality gates executed via pytest).
-   - The reference `BallTreeNeighborhoodProvider` matches the independent brute-force oracle 100% on synthetic fixtures, dateline crossings, polar coordinates, and a 1,000-row real LA/LB subset.
+   - 77 automated unit, oracle, and CLI regression tests pass 100% in local test suite verification (pre-commit quality gates executed via pytest).
+   - Both the reference `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` match the independent brute-force oracle 100% (zero missing, zero extra neighbors) on synthetic fixtures, dateline crossings, polar coordinates, pentagonal cells, and randomized distributions.
 2. **Exploratory Real-Data Baseline (Single Workstation Run on LA/LB)**:
    - Input: 143,124 cleaned rows -> 8 position conflicts excluded -> **143,116 analyzed observations**.
    - Output: **241 spatiotemporal density clusters** (136,276 core, 934 border, 5,906 noise).
    - Accounting check: $136{,}276 + 934 + 5{,}906 = 143{,}116$ (exact match).
-   - Recorded uninstrumented wall time (reported in development log): **13.680 seconds** (0.077 s build, 13.341 s query, 0.262 s clustering).
-   - Recorded instrumented run under `tracemalloc` (persisted in `clustering_summary.json`): **38.014 seconds** total wall time (0.083 s build, 31.348 s query, 6.583 s clustering) with **225.83 MB peak heap memory**.
-   - *Note*: This is a single recorded exploratory run, not a statistically generalized multi-trial benchmark.
+   - **BallTree Parity**: `H3NeighborhoodProvider` matches `BallTreeNeighborhoodProvider` across all 143,116 observations with 100.0% label match and 100.0% role match on identical inputs.
+   - Recorded uninstrumented BallTree wall time (reported in development log): **13.680 seconds** (0.077 s build, 13.341 s query, 0.262 s clustering).
+   - Recorded instrumented BallTree run under `tracemalloc` (persisted in `w2_01_lalb_balltree/clustering_summary.json`): **38.014 seconds** total wall time (0.083 s build, 31.348 s query, 6.583 s clustering) with **225.83 MB peak heap memory**.
+   - Recorded instrumented H3 run under `tracemalloc` (persisted in `w3_01_lalb_h3/clustering_summary.json`): **55.668 seconds** total wall time (0.984 s build, 46.343 s query, 8.342 s clustering) with **233.82 MB peak heap memory** (798 occupied cells, 0 fallbacks).
+   - *Note*: These are single recorded exploratory workstation runs; formal multi-trial comparative benchmarking belongs to Milestone W3-02.
 
 ---
 
@@ -170,8 +173,19 @@ uv run python -m aegismar cluster `
   --min-samples 5 `
   --overwrite
 
-# 5. Inspect the generated clustering summary
-Get-Content experiments/outputs/w2_01_lalb_balltree/clustering_summary.json
+# 5. Run the verified H3-accelerated ST-DBSCAN clustering engine (W3-01)
+uv run python -m aegismar cluster `
+  --input data/processed/lalb_20250101/cleaned_ais.parquet `
+  --output experiments/outputs/w3_01_lalb_h3 `
+  --provider h3 `
+  --h3-resolution 8 `
+  --eps-spatial-m 300 `
+  --eps-temporal-s 900 `
+  --min-samples 5 `
+  --overwrite
+
+# 6. Inspect the generated clustering summary
+Get-Content experiments/outputs/w3_01_lalb_balltree/clustering_summary.json
 ```
 
 ---
@@ -181,12 +195,13 @@ Get-Content experiments/outputs/w2_01_lalb_balltree/clustering_summary.json
 - **Source Code**: [`src/aegismar/`](../src/aegismar/)
   - `ingestion/`: CSV parsing, sentinel nullification, schema adapter, Parquet writer.
   - `spatial/`: Spherical Haversine functions and the isolated $O(N^2)$ brute-force test oracle.
-  - `clustering/`: ST-DBSCAN core (`stdbscan-core-first-v1.0`), BallTree provider, configuration, and exporters.
+  - `clustering/`: ST-DBSCAN core (`stdbscan-core-first-v1.0`), BallTree provider, H3 hexagonal candidate provider (`h3_neighbors.py`), configuration, and exporters.
   - `common/`: Constants, ITU sentinels, quality flags, and dataclasses.
 - **Automated Tests**: [`tests/`](../tests/)
   - `unit/test_ingestion.py`: Schema mapping, duplicate consolidation, conflict flagging.
   - `unit/test_st_dbscan.py`: ST-DBSCAN fixtures, permutation invariance, boundary tie-breaking.
   - `unit/test_oracle.py`: Oracle vs. BallTree mathematical equivalence tests.
+  - `unit/test_h3_neighbors.py`: 20 H3 completeness and oracle parity fixture tests.
 - **Architecture Decisions**: [`docs/02-architecture/decisions/`](02-architecture/decisions/) (ADRs 001 through 010).
 - **Research Documentation**: [`docs/03-research/`](03-research/)
   - `evidence-register.md`: The official verification and claims register.
@@ -252,7 +267,7 @@ First-time contributors, academic evaluators, and research collaborators can fol
 ## 14. Next Research Milestones
 
 - **Track A (Maritime Traffic & Clustering)**:
-  - **Milestone W3-01**: Implement Uber H3 hexagonal candidate neighborhood provider (`H3NeighborhoodProvider`) and verify 100% neighbor recall against the oracle.
+  - **Milestone W3-01**: *(Completed)* Implemented Uber H3 hexagonal candidate neighborhood provider (`H3NeighborhoodProvider`) and verified 100% neighbor recall against oracle and BallTree reference.
   - **Milestone W3-02**: Execute comparative H1 benchmarks (BallTree vs. H3) measuring runtime, memory, and recall across dataset scales (10k, 50k, 100k, full LA/LB).
 - **Track B (Vessel Behavior ML)**:
   - **Milestone ML-01**: Review domain literature, AIS telemetry fields, and evaluation constraints.

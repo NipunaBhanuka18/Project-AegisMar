@@ -1,7 +1,7 @@
 # ADR-009: Uber H3 Discrete Hexagonal Grid as Correctness-Preserving Candidate Neighbor Generator
 
-**Status:** Accepted (Planned Design for Milestone W3-01)  
-**Date:** 2026-11-14 (Architecture Formalized: 2026-11-18)  
+**Status:** Implemented & Verified (Milestone W3-01)  
+**Date:** 2026-11-14 (Architecture Formalized: 2026-11-18; Implemented: 2026-11-22)  
 **Deciders:** NipunaBhanuka18 (Project Lead & Primary Researcher)  
 **Technical Scope:** Spatial Candidate Indexing & Primary Research Contribution (RQ1)  
 
@@ -65,15 +65,18 @@ We will implement an **H3-accelerated candidate neighbor provider** (`H3Neighbor
 
 ## 6. Implementation Status and Evidence Links
 
-- **Status**: Planned for Milestone W3-01 and W3-02 (Week 3).
-- **Protocol**: [docs/03-research/evaluation-protocol.md](../../03-research/evaluation-protocol.md)
+- **Status**: Implemented and verified in Milestone W3-01; formal benchmarking in W3-02.
+- **Provider Implementation**: [src/aegismar/clustering/h3_neighbors.py](../../../src/aegismar/clustering/h3_neighbors.py) (`H3NeighborhoodProvider`, `compute_safe_k_ring`).
+- **Engine Integration**: [src/aegismar/clustering/st_dbscan.py](../../../src/aegismar/clustering/st_dbscan.py) (`run_h3_st_dbscan`), [src/aegismar/cli.py](../../../src/aegismar/cli.py) (`--provider h3`, `--h3-resolution`, `--h3-k-ring`).
+- **Automated Verification Suite**: [tests/unit/test_h3_neighbors.py](../../../tests/unit/test_h3_neighbors.py) (20 fixture categories verifying zero missing neighbors against brute-force oracle and BallTree reference).
+- **Empirical Baseline Artifact**: `experiments/outputs/w3_01_lalb_h3/clustering_summary.json` (143,116 analyzed observations, 241 clusters, 100.00% label and role parity).
 - **Shared Provider Protocol**: [src/aegismar/clustering/types.py](../../../src/aegismar/clustering/types.py) (`NeighborhoodProvider`).
 
 ---
 
 ## 7. Known Limitations
 
-- Not yet implemented in the codebase (scheduled for Week 3). Claims of measured performance remain hypotheses subject to empirical validation.
+- Verification confirms mathematical correctness ($\text{Recall} = 1.0$) and exact clustering equivalence against the BallTree reference. Formal multi-trial comparative benchmarking across scales (10k, 50k, 100k, full LA/LB) evaluating Hypothesis H1 runtime and memory speedup belongs to Milestone W3-02.
 
 ---
 

@@ -27,7 +27,7 @@ from aegismar.clustering.config import STDBSCANConfig
 from aegismar.clustering.types import ClusteringInputDataset, NeighborhoodGraph
 from aegismar.spatial.haversine import EARTH_RADIUS_METERS
 
-# Tiny radian guard (~6.4 nanometers) applied ONLY to the BallTree candidate
+# Tiny radian guard (~6.4 micrometers) applied ONLY to the BallTree candidate
 # pre-query so 1-ULP floating-point rounding never drops a true boundary point
 # prior to exact Haversine pruning against `eps_spatial_m`.
 BALLTREE_QUERY_GUARD_RAD: float = 1e-12

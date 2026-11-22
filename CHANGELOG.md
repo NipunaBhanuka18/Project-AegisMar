@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Milestone W3-01: H3 Spatial Indexing, Neighborhood Completeness & Correctness Verification (2026-11-22)
+- **H3 Discrete Hexagonal Neighborhood Provider**:
+  - Implemented `H3NeighborhoodProvider` in `src/aegismar/clustering/h3_neighbors.py` conforming to the `NeighborhoodProvider` protocol.
+  - Implemented `compute_safe_k_ring(resolution, eps_spatial_m)` enforcing geometric candidate lower bounds ($\ge 988\text{ m}$ for Res 7, $\ge 395\text{ m}$ for Res 8, $\ge 371\text{ m}$ for Res 9 with $k=2$) guaranteeing zero missing spatial neighbors across cell boundaries.
+  - Implemented inclusive temporal candidate slicing per cell using `np.searchsorted` in $O(\log M_{\text{cell}})$, eliminating temporal edge effects.
+  - Pre-filtered active candidate cells present in the dataset using `h3.grid_disk(c, k)`.
+  - Added defense-in-depth fallback mechanism to `BallTreeNeighborhoodProvider` for pentagonal cells and query exceptions.
+- **Engine & CLI Integration**:
+  - Extended `STDBSCANConfig` with `provider` (`balltree_haversine` vs `h3_haversine`), `h3_resolution` (7, 8, 9; default 8), `h3_k_ring`, and `h3_enable_fallback`.
+  - Added `provider_metrics` tracking to `STDBSCANResult` and `summary_dict()`.
+  - Implemented `run_h3_st_dbscan(...)` convenience runner in `src/aegismar/clustering/st_dbscan.py`.
+  - Extended CLI `cluster` subcommand with `--provider`, `--h3-resolution`, and `--h3-k-ring` options with 100% backward compatibility.
+  - Pinned `h3>=4.0.0` in `pyproject.toml` and locked `h3==4.5.1` in `uv.lock`.
+- **Automated Verification & Real Data Parity**:
+  - Authored comprehensive test suite `tests/unit/test_h3_neighbors.py` with 20 fixture categories (same-cell, adjacent, multi-ring, cell boundaries $\delta \le 10\text{ m}$, exact thresholds, dense/sparse cells, pentagons, high latitudes, antimeridian crossing, randomized oracle parity, input permutation invariance, determinism, empty inputs, invalid configs, quality filters, and fallback logging).
+  - Validated 100.00% exact parity (143,116 / 143,116 label matches, 143,116 / 143,116 role matches) on the authentic NOAA San Pedro Bay dataset (241 clusters, 136,276 core, 934 border, 5,906 noise; 0 fallbacks).
+  - Raised automated test count to 77 tests passing at 93% total repository code coverage.
+
 ### Documentation & Quality - Milestone DOC-01A: Research Documentation Accuracy & Collaborator Readiness (2026-11-22)
 - **Evidence Register Claim Count Reconciliation**:
   - Audited `docs/03-research/evidence-register.md` to reconcile claim accounting, formally indexing all 15 claims across the evidentiary hierarchy (10 Tested by Automated Checks, 2 Experimentally Observed, 1 Reported by Development Assistant, 2 Planned or Hypothesized).

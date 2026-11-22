@@ -19,6 +19,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
+    "h3>=4.0.0",
     "numpy>=2.4.6",
     "pyarrow>=26.0.1",
     "scikit-learn>=1.9.1",
@@ -81,7 +82,7 @@ warn_no_return = true
 packages = ["aegismar"]
 
 [[tool.mypy.overrides]]
-module = ["pyarrow", "pyarrow.*", "sklearn.*"]
+module = ["pyarrow", "pyarrow.*", "sklearn.*", "h3"]
 ignore_missing_imports = true
 
 

@@ -164,16 +164,27 @@
   - [x] All 5 automated quality gates pass cleanly
 
 ### Milestone W3-01: H3 Candidate Optimization & Completeness Verification
-- **Goal:** Install Uber H3 (4.x), implement `H3NeighborhoodProvider` plugging into the shared `run_st_dbscan` engine, and verify 100% eligible-neighbor completeness against the brute-force oracle and BallTree reference across cell boundaries, pentagons, dateline, and high latitudes. *(Not yet started.)*
+- **Goal:** Install Uber H3 (4.x), implement `H3NeighborhoodProvider` plugging into the shared `run_st_dbscan` engine, and verify 100% eligible-neighbor completeness against the brute-force oracle and BallTree reference across cell boundaries, pentagons, dateline, and high latitudes.
 - **Estimated Hours:** 15 Hours
-- **Status:** Planned
+- **Status:** **Completed**
 - **Dependencies:** W2-01
-- **Planned Deliverables:**
-  - `src/aegismar/clustering/h3_neighbors.py` (`H3NeighborhoodProvider` implementing `NeighborhoodProvider`)
-  - Exact geodesic and temporal pruning over $k$-ring cell candidates
-  - Completeness tests targeting H3 cell edges ($\delta \le 10\text{ m}$) and pentagonal distortion zones
+- **Deliverables:**
+  - `src/aegismar/clustering/h3_neighbors.py`: `H3NeighborhoodProvider` implementing `NeighborhoodProvider` protocol with conservative mathematical $k$-ring coverage (`compute_safe_k_ring`), discrete cell grouping, active candidate cell precomputation (`grid_disk`), `np.searchsorted` temporal candidate slicing, exact spherical Haversine distance verification, and defense-in-depth pentagon fallback.
+  - `src/aegismar/clustering/config.py`: Extended `STDBSCANConfig` with `provider`, `h3_resolution` (7, 8, 9; default 8), `h3_k_ring`, and `h3_enable_fallback` with strict validation.
+  - `src/aegismar/clustering/types.py`: Added `provider_metrics` to `STDBSCANResult` and `summary_dict()`.
+  - `src/aegismar/clustering/st_dbscan.py`: Added `run_h3_st_dbscan` convenience runner and metric collection.
+  - `src/aegismar/cli.py`: Extended `cluster` CLI command with `--provider`, `--h3-resolution`, and `--h3-k-ring` options while preserving 100% backward compatibility.
+  - Dependency Management: Added `h3>=4.0.0` via `uv` (`h3==4.5.1` locked in `uv.lock`).
+  - Unit Test Suite: Authored `tests/unit/test_h3_neighbors.py` covering all 20 required fixture categories (boundaries, thresholds, pentagons, dateline, high latitudes, empty inputs, config errors, filter policies, fallback logging).
+  - Empirical Real-Data Parity: Clustered 143,116 real San Pedro Bay observations (`data/processed/lalb_20250101/cleaned_ais.parquet`), achieving 100.00% label and role identity with the BallTree reference (241 clusters, 136,276 core, 934 border, 5,906 noise).
 - **Acceptance Checks:**
-  - Zero missing neighbors against brute-force oracle ($\text{Recall} = 1.0$) and 100% label identity with BallTree reference
+  - [x] Zero missing neighbors against brute-force oracle ($\text{Recall} = 1.0$) across all synthetic, boundary, and extreme fixtures
+  - [x] 100% role and cluster label identity with BallTree reference on synthetic datasets and 143,116 real LA/LB observations
+  - [x] H3 resolutions 7, 8, and 9 verified with conservative safe $k$-ring candidate lower bounds
+  - [x] Inclusive temporal candidate windowing verified with `np.searchsorted`
+  - [x] Defense-in-depth pentagon fallback mechanism verified and instrumented with diagnostic logging
+  - [x] CLI `--provider h3` verified with backward compatibility for default BallTree behavior
+  - [x] Full quality gates pass: 77 tests pass, 93% total coverage (89% in `h3_neighbors.py`), ruff clean, mypy clean
 
 ### Milestone W3-02: Comparative H1 Benchmarking (BallTree vs. H3)
 - **Goal:** Formally benchmark runtime (build, query, pruning, clustering), peak memory, neighbor recall/precision, and Adjusted Rand Index between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` across dataset scales (10k, 50k, 100k, full LA/LB). *(Not yet started.)*
