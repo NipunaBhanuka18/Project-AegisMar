@@ -104,6 +104,7 @@ class STDBSCANConfig:
     h3_resolution: int = DEFAULT_H3_RESOLUTION
     h3_k_ring: int | None = None
     h3_enable_fallback: bool = True
+    h3_fallback_on_pentagons: bool = False
     quality_filter: QualityFilterPolicy = field(default_factory=QualityFilterPolicy)
     algorithm_version: str = ALGORITHM_VERSION
 
@@ -117,6 +118,15 @@ class STDBSCANConfig:
             raise ValueError(f"h3_resolution must be an integer, got {self.h3_resolution!r}")
         if not (0 <= self.h3_resolution <= 15):
             raise ValueError(f"h3_resolution must be between 0 and 15, got {self.h3_resolution}")
+
+        if not isinstance(self.h3_enable_fallback, bool):
+            raise ValueError(
+                f"h3_enable_fallback must be a boolean, got {self.h3_enable_fallback!r}"
+            )
+        if not isinstance(self.h3_fallback_on_pentagons, bool):
+            raise ValueError(
+                f"h3_fallback_on_pentagons must be a boolean, got {self.h3_fallback_on_pentagons!r}"
+            )
 
         if self.h3_k_ring is not None and (
             isinstance(self.h3_k_ring, bool)
@@ -176,6 +186,7 @@ class STDBSCANConfig:
             "h3_resolution": self.h3_resolution,
             "h3_k_ring": self.h3_k_ring,
             "h3_enable_fallback": self.h3_enable_fallback,
+            "h3_fallback_on_pentagons": self.h3_fallback_on_pentagons,
             "quality_filter": self.quality_filter.to_dict(),
             "algorithm_version": self.algorithm_version,
         }

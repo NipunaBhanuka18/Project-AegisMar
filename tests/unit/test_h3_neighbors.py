@@ -1,6 +1,6 @@
 """Comprehensive correctness and completeness verification tests for H3 neighborhood provider.
 
-Covers all 20 required test fixture categories from W3-01:
+Covers all 27 required and adversarial test fixture categories:
  1. Same-cell neighbors.
  2. Adjacent-cell neighbors.
  3. Eligible points separated by more than one H3 ring (e.g. resolution 9 with k=2).
@@ -21,6 +21,13 @@ Covers all 20 required test fixture categories from W3-01:
 18. Invalid configuration detection.
 19. Data-quality filtering compatibility.
 20. Fallback correctness and diagnostic logging.
+21. Undersized k-ring rejection.
+22. Forced grid_disk failure triggers fallback.
+23. Forced grid_disk failure raises when fallback is disabled.
+24. Near-pentagon hexagon fallback.
+25. Cell vertex and boundary adversarial pairs.
+26. Multi-region oracle parity (Equator, English Channel, Arctic).
+27. Spatial radii near clearance boundaries (k-ring transitions).
 """
 
 from __future__ import annotations
@@ -667,3 +674,271 @@ def test_20_fallback_correctness_and_metrics() -> None:
     # Fallback results must match BallTree 100%
     bt_prov = BallTreeNeighborhoodProvider(p_ds, cfg)
     _assert_h3_balltree_parity(p_ds, cfg, prov, bt_prov)
+
+
+# ---------------------------------------------------------------------------
+# Fixture 21: Undersized k-ring rejection
+# ---------------------------------------------------------------------------
+def test_21_undersized_k_ring_rejected() -> None:
+    """Fixture 21: Configured k_ring smaller than safe completeness bound raises ValueError."""
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27),
+        ObservationRecord(2, "222222222", BASE_TIME + timedelta(seconds=60), 33.7402, -118.2702),
+    ]
+    ds = build_clustering_dataset(records)
+
+    # Resolution 9 with eps_spatial 300m requires safe_k >= 2
+    cfg_safe = STDBSCANConfig(eps_spatial_m=300.0, h3_resolution=9)
+    assert compute_safe_k_ring(9, 300.0) >= 2
+
+    # Direct argument override with undersized k=1
+    with pytest.raises(ValueError, match="smaller than required safe completeness bound"):
+        H3NeighborhoodProvider(ds, cfg_safe, resolution=9, k_ring=1)
+
+    # Configuration object specifying undersized k=1
+    cfg_undersized = STDBSCANConfig(eps_spatial_m=300.0, h3_resolution=9, h3_k_ring=1)
+    with pytest.raises(ValueError, match="smaller than required safe completeness bound"):
+        H3NeighborhoodProvider(ds, cfg_undersized)
+
+
+# ---------------------------------------------------------------------------
+# Fixture 22: Forced grid_disk failure triggers fallback
+# ---------------------------------------------------------------------------
+def test_22_forced_grid_disk_failure_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fixture 22: Forced grid_disk failure marks cells for fallback, preserving 100% parity."""
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27),
+        ObservationRecord(2, "222222222", BASE_TIME + timedelta(seconds=60), 33.7401, -118.2701),
+    ]
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(eps_spatial_m=300.0, min_samples=2)
+
+    target_cell = h3.latlng_to_cell(33.74, -118.27, 8)
+    real_grid_disk = h3.grid_disk
+
+    def faulty_grid_disk(origin: str, k: int) -> set[str]:
+        if origin == target_cell:
+            raise RuntimeError("Simulated H3 grid_disk failure")
+        return set(real_grid_disk(origin, k))
+
+    monkeypatch.setattr(h3, "grid_disk", faulty_grid_disk)
+
+    # With fallback enabled (default), index builds cleanly and marks the cell for fallback
+    prov = H3NeighborhoodProvider(ds, cfg, resolution=8, enable_fallback=True)
+    assert target_cell in prov.cells_requiring_fallback
+
+    # Neighborhood graph queries route through fallback provider
+    _ = prov.build_neighborhood_graph()
+    metrics = prov.get_metrics()
+    assert metrics["fallback_count"] == 2
+    assert any("grid_disk_failed" in reason for reason in metrics["fallback_reasons"])
+
+    bt_prov = BallTreeNeighborhoodProvider(ds, cfg)
+    _assert_h3_balltree_parity(ds, cfg, prov, bt_prov)
+
+
+# ---------------------------------------------------------------------------
+# Fixture 23: Forced grid_disk failure raises when fallback is disabled
+# ---------------------------------------------------------------------------
+def test_23_forced_grid_disk_failure_disabled_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fixture 23: Simulated grid_disk failure raises RuntimeError when fallback is disabled."""
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27),
+    ]
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(eps_spatial_m=300.0, h3_enable_fallback=False)
+
+    def failing_grid_disk(_origin: str, _k: int) -> set[str]:
+        raise RuntimeError("Fatal grid_disk exception")
+
+    monkeypatch.setattr(h3, "grid_disk", failing_grid_disk)
+
+    with pytest.raises(RuntimeError, match="grid_disk expansion failed.*fallback is disabled"):
+        H3NeighborhoodProvider(ds, cfg, resolution=8, enable_fallback=False)
+
+
+# ---------------------------------------------------------------------------
+# Fixture 24: Near-pentagon hexagon fallback
+# ---------------------------------------------------------------------------
+def test_24_near_pentagon_hex_fallback() -> None:
+    """Fixture 24: Hexagons adjacent to pentagons trigger fallback when configured."""
+    pentagons = list(h3.get_pentagons(8))
+    pentagon_cell = pentagons[0]
+    disk = list(h3.grid_disk(pentagon_cell, 1))
+    # Pick a neighbor cell that is a regular hexagon (not a pentagon itself)
+    hex_nbr = next(nbr for nbr in disk if not h3.is_pentagon(nbr))
+
+    lat_hex, lon_hex = h3.cell_to_latlng(hex_nbr)
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, lat_hex, lon_hex),
+        ObservationRecord(
+            2,
+            "222222222",
+            BASE_TIME + timedelta(seconds=30),
+            lat_hex + 0.0001,
+            lon_hex + 0.0001,
+        ),
+    ]
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(min_samples=2)
+
+    # 1. Fallback on pentagons enabled: near-pentagon hex must trigger fallback
+    prov_fb = H3NeighborhoodProvider(
+        ds, cfg, resolution=8, enable_fallback=True, fallback_on_pentagons=True
+    )
+    assert hex_nbr in prov_fb.cells_requiring_fallback
+    _ = prov_fb.build_neighborhood_graph()
+    assert prov_fb.fallback_count == 2
+    assert prov_fb.fallback_reasons.get("pentagon_or_near_pentagon") == 2
+
+    bt_prov = BallTreeNeighborhoodProvider(ds, cfg)
+    _assert_h3_balltree_parity(ds, cfg, prov_fb, bt_prov)
+
+    # 2. Fallback on pentagons enabled but fallback disabled: must fail closed on __init__
+    with pytest.raises(RuntimeError, match="in or near an H3 pentagon and fallback is disabled"):
+        H3NeighborhoodProvider(
+            ds, cfg, resolution=8, enable_fallback=False, fallback_on_pentagons=True
+        )
+
+
+# ---------------------------------------------------------------------------
+# Fixture 25: Cell vertex and boundary adversarial pairs
+# ---------------------------------------------------------------------------
+def test_25_cell_vertex_and_boundary_adversarial_pairs() -> None:
+    """Fixture 25: Observations placed within sub-meter distances across cell vertices."""
+    c = h3.latlng_to_cell(33.7400, -118.2700, 8)
+    vertices = h3.cell_to_boundary(c)
+
+    records: list[ObservationRecord] = []
+    obs_id = 1
+    # For each vertex, place a pair of points across the vertex boundary separated by ~0.5m
+    for v_lat, v_lon in vertices:
+        records.append(
+            ObservationRecord(
+                obs_id,
+                f"3660000{obs_id:02d}",
+                BASE_TIME,
+                v_lat - 0.000004,
+                v_lon - 0.000004,
+            )
+        )
+        obs_id += 1
+        records.append(
+            ObservationRecord(
+                obs_id,
+                f"3660000{obs_id:02d}",
+                BASE_TIME + timedelta(seconds=10),
+                v_lat + 0.000004,
+                v_lon + 0.000004,
+            )
+        )
+        obs_id += 1
+
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(eps_spatial_m=50.0, eps_temporal_s=900.0, min_samples=2)
+
+    h3_prov = H3NeighborhoodProvider(ds, cfg, resolution=8)
+    bt_prov = BallTreeNeighborhoodProvider(ds, cfg)
+    _assert_h3_balltree_parity(ds, cfg, h3_prov, bt_prov)
+
+    oracle_report = verify_provider_against_oracle(ds, cfg, h3_prov)
+    _assert_oracle_parity(oracle_report)
+
+
+# ---------------------------------------------------------------------------
+# Fixture 26: Multi-region oracle parity
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("region_name", "base_lat", "base_lon"),
+    [
+        ("equator_singapore", 1.3521, 103.8198),
+        ("english_channel_dover", 51.1279, 1.3134),
+        ("arctic_tromso", 69.6492, 18.9553),
+    ],
+)
+def test_26_multi_region_oracle_parity(region_name: str, base_lat: float, base_lon: float) -> None:
+    """Fixture 26: Candidate coverage and oracle parity across geographically diverse regions."""
+    assert region_name is not None
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, base_lat, base_lon),
+        ObservationRecord(
+            2,
+            "222222222",
+            BASE_TIME + timedelta(seconds=60),
+            base_lat + 0.001,
+            base_lon + 0.001,
+        ),
+        ObservationRecord(
+            3,
+            "333333333",
+            BASE_TIME + timedelta(seconds=120),
+            base_lat - 0.001,
+            base_lon - 0.001,
+        ),
+        ObservationRecord(
+            4,
+            "444444444",
+            BASE_TIME + timedelta(seconds=180),
+            base_lat + 0.0005,
+            base_lon - 0.0005,
+        ),
+        ObservationRecord(
+            5,
+            "555555555",
+            BASE_TIME + timedelta(seconds=240),
+            base_lat + 0.05,
+            base_lon + 0.05,
+        ),  # Distant noise
+    ]
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(eps_spatial_m=300.0, eps_temporal_s=900.0, min_samples=2)
+
+    for res in (7, 8, 9):
+        prov = H3NeighborhoodProvider(ds, cfg, resolution=res)
+        oracle_report = verify_provider_against_oracle(ds, cfg, prov)
+        _assert_oracle_parity(oracle_report)
+
+        bt_prov = BallTreeNeighborhoodProvider(ds, cfg)
+        _assert_h3_balltree_parity(ds, cfg, prov, bt_prov)
+
+
+# ---------------------------------------------------------------------------
+# Fixture 27: Spatial radii near clearance boundaries
+# ---------------------------------------------------------------------------
+def test_27_spatial_radii_near_clearance_boundaries() -> None:
+    """Fixture 27: Verify ring transitions and candidate completeness near clearance boundaries."""
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27),
+        ObservationRecord(2, "222222222", BASE_TIME + timedelta(seconds=60), 33.742, -118.272),
+    ]
+    ds = build_clustering_dataset(records)
+
+    # Resolution 8 threshold between k=1 and k=2 is 395.0 m
+    # eps = 394.0 m -> safe_k == 1
+    cfg_394 = STDBSCANConfig(eps_spatial_m=394.0)
+    prov_394 = H3NeighborhoodProvider(ds, cfg_394, resolution=8)
+    assert prov_394.k_ring == 1
+    bt_prov_394 = BallTreeNeighborhoodProvider(ds, cfg_394)
+    _assert_h3_balltree_parity(ds, cfg_394, prov_394, bt_prov_394)
+
+    # eps = 396.0 m -> safe_k == 2
+    cfg_396 = STDBSCANConfig(eps_spatial_m=396.0)
+    prov_396 = H3NeighborhoodProvider(ds, cfg_396, resolution=8)
+    assert prov_396.k_ring == 2
+    bt_prov_396 = BallTreeNeighborhoodProvider(ds, cfg_396)
+    _assert_h3_balltree_parity(ds, cfg_396, prov_396, bt_prov_396)
+
+    # Resolution 9 threshold between k=1 and k=2 is 141.0 m
+    cfg_140 = STDBSCANConfig(eps_spatial_m=140.0)
+    prov_140 = H3NeighborhoodProvider(ds, cfg_140, resolution=9)
+    assert prov_140.k_ring == 1
+    bt_prov_140 = BallTreeNeighborhoodProvider(ds, cfg_140)
+    _assert_h3_balltree_parity(ds, cfg_140, prov_140, bt_prov_140)
+
+    cfg_142 = STDBSCANConfig(eps_spatial_m=142.0)
+    prov_142 = H3NeighborhoodProvider(ds, cfg_142, resolution=9)
+    assert prov_142.k_ring == 2
+    bt_prov_142 = BallTreeNeighborhoodProvider(ds, cfg_142)
+    _assert_h3_balltree_parity(ds, cfg_142, prov_142, bt_prov_142)

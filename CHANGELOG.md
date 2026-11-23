@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed & Hardened - Milestone W3-01A: H3 Completeness Audit & Correctness Hardening (2026-11-23)
+- **H3 Spherical Clearance Mathematics Audit**:
+  - Audited planar regular hexagon apothem formulas ($k \cdot 2 r_{\text{inscribed}} = k \sqrt{3} s$) against spherical Snyder equal-area icosahedron projections; clarified edge length variance ($\sim 1.4\times$) and 12 pentagonal face distortions.
+  - Eliminated unsupported global analytical theorems in favor of **Option B**: experimental H3 candidate acceleration supported by an observable, fail-closed reference fallback policy.
+  - Reconciled documentation in `src/aegismar/clustering/h3_neighbors.py`, `docs/02-architecture/decisions/ADR-009-planned-h3-candidate-acceleration.md`, `docs/03-research/evaluation-protocol.md`, and `docs/03-research/evidence-register.md`.
+- **Fail-Closed Safety & Validation Hardening**:
+  - Configured `H3NeighborhoodProvider` and `STDBSCANConfig` to strictly reject undersized $k$-rings (`k_ring < safe_k`) with `ValueError`, preventing silent candidate omissions.
+  - Hardened discrete expansion exception handling: `h3.grid_disk` failures mark cells for BallTree fallback when enabled; raise `RuntimeError` immediately when fallback is disabled. Silent self-cell downgrades eliminated.
+  - Hardened near-pentagon fallback: precomputes whether any cell in `grid_disk(c, k)` is a pentagon (`near_pentagon`); routes near-pentagon hexagons to BallTree fallback when `fallback_on_pentagons` is enabled, or fails closed with `RuntimeError` if fallback is disabled.
+  - Extended `STDBSCANConfig` with `h3_fallback_on_pentagons: bool = False` with strict boolean validation.
+  - Granular diagnostic instrumentation: separated `cell_mapping_time_seconds`, `candidate_precomputation_time_seconds`, `candidate_retrieval_time_seconds`, `temporal_filtering_time_seconds`, `distance_filtering_time_seconds`, and `fallback_reasons`.
+- **Adversarial Unit Test Suite**:
+  - Added 7 new adversarial test fixtures (fixtures 21–27) to `tests/unit/test_h3_neighbors.py` covering undersized $k$-ring rejection, forced `grid_disk` failures, disabled fallback exceptions, near-pentagon hexagon fallback, sub-meter cell vertex point pairs, multi-region oracle parity (Equator, English Channel, Arctic), and clearance boundary transitions.
+  - Test suite expanded to 86 tests passing at 93% total repository code coverage.
+- **Empirical Parity on Authentic NOAA AIS Data**:
+  - Evaluated full CSR graph parity between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` on all 143,116 analyzed observations (13,188,256 edges) of `data/processed/lalb_20250101/cleaned_ais.parquet`:
+    - Bit-for-bit identical CSR graphs: `indptr` (100.0000% degree identity) and `indices` (100.0000% neighbor identity across all 13,188,256 edges).
+    - Achieved 1.34x graph query speedup (31.28 s vs 41.98 s) with 0 fallbacks.
+
+
 ### Documentation & Governance - Dual-Track Roadmap & Milestone Harmonization (2026-11-23)
 - **Eliminated Week 5 Anomaly Detection Ambiguity**:
   - Reconciled milestone tracking across `README.md`, `docs/01-project/roadmap.md`, `docs/04-development/milestones.md`, `docs/01-project/scope.md`, and `docs/START-HERE.md`.

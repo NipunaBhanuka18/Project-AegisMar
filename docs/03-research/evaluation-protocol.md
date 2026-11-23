@@ -33,8 +33,12 @@ To prevent circular reasoning between spatial indexing data structures:
   $$d_{\text{haversine}}(p, q) = 2 R_{\text{earth}} \arcsin \left( \sqrt{\sin^2\left(\frac{\Delta \phi}{2}\right) + \cos \phi_p \cos \phi_q \sin^2\left(\frac{\Delta \lambda}{2}\right)} \right)$$
 - The brute-force oracle defines ground-truth spatiotemporal neighbor sets:
   $$N_{\text{oracle}}(p) = \{ q \in D \mid d_{\text{haversine}}(p, q) \le \varepsilon_{\text{spatial}} \;\land\; |t_p - t_q| \le \Delta T_{\text{temporal}} \}$$
-- Both the `BallTreeNeighborhoodProvider` (verified in W2-01) and the `H3NeighborhoodProvider` (implemented and verified in W3-01) are injected into the same deterministic core-first `run_st_dbscan` engine and compared against the oracle across neighborhoods, core/border/noise roles, and final cluster labels.
-- In Milestone W3-01, the H3 engine achieved $\text{Recall} = 1.0$ (zero missing neighbors) across all synthetic fixtures, cell boundaries ($\delta \le 10\text{ m}$), pentagonal distortion zones, high latitudes, dateline crossings, and all 143,116 real LA/LB observations (100% role and label parity with BallTree). Formal comparative performance benchmarking across dataset scales is scheduled for Milestone W3-02.
+- Both the `BallTreeNeighborhoodProvider` (verified in W2-01) and the `H3NeighborhoodProvider` (hardened in W3-01A) are injected into the same deterministic core-first `run_st_dbscan` engine and compared against the oracle across neighborhoods, core/border/noise roles, and final cluster labels.
+- In Milestone W3-01A, the H3 engine was hardened under **Option B (Experimental H3 Candidate Acceleration with Observable, Fail-Closed Reference Fallback)**:
+  - Candidates are generated via empirical minimum clearance bounds (`compute_safe_k_ring`) evaluated across tested regional cells, high-latitude zones, and pentagons.
+  - Undersized user-configured $k$-rings are strictly rejected with `ValueError`.
+  - Discrete expansion failures (`grid_disk`) and near-pentagon encounters route to BallTree fallback (with recorded `fallback_reasons`) or raise `RuntimeError` if fallback is disabled. Silent self-cell downgrades are eliminated.
+  - The H3 engine achieved $\text{Recall} = 1.0$ (zero missing neighbors) across all 27 unit test fixture categories (including cell boundaries $\delta \le 10\text{ m}$, sub-meter vertex pairs, pentagons, near-pentagons, high latitudes, dateline crossings, and multi-region coordinates) and bit-for-bit identical CSR neighborhood graphs (13,188,256 edges, identical `indptr` and `indices`) on all 143,116 real LA/LB observations against the BallTree reference. Formal comparative performance benchmarking across dataset scales is scheduled for Milestone W3-02.
 
 ### 2.3 Benchmark Timing & Memory Procedure
 - **Warmup**: 1 warmup pass prior to timing collection to ensure JIT/cache stabilization.

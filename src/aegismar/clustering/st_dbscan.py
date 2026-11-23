@@ -282,8 +282,8 @@ def run_h3_st_dbscan(
     config: STDBSCANConfig,
     resolution: int | None = None,
     k_ring: int | None = None,
-    enable_fallback: bool = True,
-    fallback_on_pentagons: bool = False,
+    enable_fallback: bool | None = None,
+    fallback_on_pentagons: bool | None = None,
     measure_memory: bool = False,
 ) -> STDBSCANResult:
     """Convenience runner executing accelerated H3-backed ST-DBSCAN on a dataset."""

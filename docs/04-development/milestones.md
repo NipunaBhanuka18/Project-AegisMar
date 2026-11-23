@@ -25,7 +25,8 @@
 | **DOC-01** | Week 2+ | Evidence-Backed Research & Engineering Documentation | 10 h | **Completed** | W2-01 |
 | **DOC-01A** | Week 2+ | Research Documentation Accuracy & Collaborator Readiness | 4 h | **Completed** | DOC-01 |
 | **W3-01** | Week 3 | H3 Candidate Optimization & Completeness Verification | 15 h | **Completed** | W2-01 |
-| **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01 |
+| **W3-01A** | Week 3 | H3 Completeness Audit, Correctness Hardening & PR Preparation | 6 h | **Completed** | W3-01 |
+| **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01A |
 | **W4-01** | Week 4 | Stay-Point Extraction & Berth Polygon Exclusion | 15 h | Planned | W3-02 |
 | **W4-02** | Week 4 | Anchorage Dwell Metrics & Utilization Analytics | 10 h | Planned | W4-01 |
 | **W5-01** | Week 5 | DuckDB In-Process Analytics & Contract Integration | 15 h | Planned | W3-02, W4-02 |
@@ -204,6 +205,30 @@
   - [x] Defense-in-depth pentagon fallback mechanism verified and instrumented with diagnostic logging
   - [x] CLI `--provider h3` verified with backward compatibility for default BallTree behavior
   - [x] Full quality gates pass: 77 tests pass, 93% total coverage (89% in `h3_neighbors.py`), ruff clean, mypy clean
+
+### Milestone W3-01A: H3 Completeness Audit, Correctness Hardening & Pull Request Preparation
+- **Goal:** Audit H3 spherical clearance geometry, eliminate unsupported global analytical claims in favor of Option B (empirical candidate lower bounds with observable, fail-closed fallback), reject unsafe user $k$-ring configurations, harden discrete expansion and pentagon fallback semantics, author 7 new adversarial test fixtures, verify bit-for-bit graph parity on the authentic NOAA San Pedro Bay dataset, and prepare feature branch pull request.
+- **Estimated Hours:** 6 Hours
+- **Status:** **Completed**
+- **Dependencies:** W3-01
+- **Deliverables:**
+  - Audited clearance geometry: clarified Snyder projection distortion, edge length variance ($\sim 1.4\times$), pentagon face distortion, and formulated Option B support policy in `src/aegismar/clustering/h3_neighbors.py` and `ADR-009`.
+  - Rejection of undersized $k$-rings: `H3NeighborhoodProvider` and `STDBSCANConfig` raise `ValueError` when user-configured `k_ring < safe_k`.
+  - Fail-closed discrete expansion: `h3.grid_disk` failures mark cells for BallTree fallback with recorded `fallback_reasons` when fallback is enabled; raise `RuntimeError` immediately when fallback is disabled. Silent self-cell downgrades eliminated.
+  - Hardened near-pentagon fallback: precomputes whether any cell in `grid_disk(c, k)` is a pentagon (`near_pentagon`); routes near-pentagon cells to BallTree fallback when `fallback_on_pentagons` is enabled, or fails closed with `RuntimeError` if fallback is disabled.
+  - Sub-timing instrumentation: separated `cell_mapping_time_seconds`, `candidate_precomputation_time_seconds`, `candidate_retrieval_time_seconds`, `temporal_filtering_time_seconds`, `distance_filtering_time_seconds`, and `fallback_reasons`.
+  - 7 new adversarial unit test fixtures in `tests/unit/test_h3_neighbors.py` (fixtures 21–27): undersized $k$-ring rejection, forced `grid_disk` failure fallback, forced failure with disabled fallback, near-pentagon hexagon fallback, sub-meter vertex boundary pairs, multi-region oracle parity (Equator, English Channel, Arctic), and clearance boundary transitions.
+  - Verified 100% bit-for-bit CSR graph parity (`indptr` and `indices`) across all 143,116 analyzed observations (13,188,256 edges) of `data/processed/lalb_20250101/cleaned_ais.parquet` against BallTree reference, observing 1.34x graph query speedup and 0 fallbacks.
+  - Quality gates: 86 passing tests in 5.71 s, 93% total repository coverage, ruff clean, mypy clean (27 source files).
+- **Acceptance Checks:**
+  - [x] Clearance mathematics and planar regular hexagon apothem claims audited; Option B formalized
+  - [x] Undersized user $k$-ring overrides strictly rejected with `ValueError`
+  - [x] Fail-closed `grid_disk` exception handling verified; silent self-cell downgrades eliminated
+  - [x] Near-pentagon fallback logic verified on regular hexagons adjacent to pentagons
+  - [x] Performance instrumentation audited and sub-timings separated
+  - [x] 7 adversarial test fixtures pass (fixtures 21–27; 34 tests in module, 86 in repository)
+  - [x] 100% bit-for-bit CSR graph parity verified on 143,116 authentic NOAA AIS observations (13,188,256 edges)
+  - [x] All quality gates (pytest, ruff, mypy) pass cleanly in local workspace
 
 ### Milestone W3-02: Comparative H1 Benchmarking (BallTree vs. H3)
 - **Goal:** Formally benchmark runtime (build, query, pruning, clustering), peak memory, neighbor recall/precision, and Adjusted Rand Index between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` across dataset scales (10k, 50k, 100k, full LA/LB). *(Not yet started.)*
