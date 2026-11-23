@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation & Governance - Dual-Track Roadmap & Milestone Harmonization (2026-11-23)
+- **Eliminated Week 5 Anomaly Detection Ambiguity**:
+  - Reconciled milestone tracking across `README.md`, `docs/01-project/roadmap.md`, `docs/04-development/milestones.md`, `docs/01-project/scope.md`, and `docs/START-HERE.md`.
+  - Reassigned Track A Week 5 to **Platform Analytical Storage & Contract Integration** (`W5-01`), focusing on in-process DuckDB query layer integration and validation of the provisional `vessel_anomaly_v1` GeoJSON contract.
+  - Fully transitioned Behavioral Trajectory Anomaly Detection to **Track B (Lead: Kishakya)**, governed by dedicated milestones `ML-01` through `ML-05` on an independent, flexible schedule without artificial week-number deadlines.
+  - Decoupled `W6-01` (FastAPI serving) and DuckDB storage from blocking on ML model completion.
+  - Updated the official Milestone Tracking Board in `milestones.md` into distinct Track A and Track B tables with explicit capacities, deliverables, and acceptance criteria.
+
 ### Added - Milestone W3-01: H3 Spatial Indexing, Neighborhood Completeness & Correctness Verification (2026-11-22)
 - **H3 Discrete Hexagonal Neighborhood Provider**:
   - Implemented `H3NeighborhoodProvider` in `src/aegismar/clustering/h3_neighbors.py` conforming to the `NeighborhoodProvider` protocol.

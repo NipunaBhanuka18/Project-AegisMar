@@ -117,22 +117,30 @@ flowchart TD
 
 ---
 
-## 8. Eight-Week Development Roadmap
+## 8. Development Roadmap & Dual-Track Architecture
 
-The project is structured around an estimated 200 hours (25 h/week) across 8 milestone weeks:
+The project is structured across two complementary, decoupled research tracks:
 
+### Track A: Maritime Traffic & Platform Foundation (Lead: NipunaBhanuka18)
+Estimated 200 hours (25 h/week) across an 8-week engineering baseline:
 - **Week 1**: Repository initialization, doc tree, AIS data ingestion, and sentinel masking.
 - **Week 2**: Ingestion hardening, Haversine `BallTree` reference ST-DBSCAN, and independent brute-force oracle verification.
 - **Week 3**: Uber H3 candidate optimization, boundary/pentagon completeness testing, and comparative H1 benchmarks.
 - **Week 4**: Vessel-aware stay-point extraction and anchorage dwell analysis (with berth exclusion).
-- **Week 5**: Trajectory anomaly detection engine (rule-based kinematics and optional Isolation Forest).
-- **Week 6**: Analytical storage integration (DuckDB/Parquet) and read-only FastAPI service.
+- **Week 5**: Analytical storage integration (DuckDB/Parquet) and ML anomaly contract ingestion.
+- **Week 6**: Read-only FastAPI service implementation serving precomputed clusters, anchorages, and anomalies.
 - **Week 7**: Geospatial dashboard implementation and end-to-end analytical validation.
 - **Week 8**: Performance benchmarking, reproducibility report, and research paper completion.
+
+### Track B: Vessel Behavior ML & Anomaly Detection (Proposed Lead: Kishakya)
+Independent parallel research track with its own flexible milestone backlog (`ML-01` to `ML-05`):
+- Trajectory kinematic feature engineering, rule-based explainability scoring, unsupervised Isolation Forest/LOF baselines, and `vessel_anomaly_v1` GeoJSON contract export. Operates on an independent schedule decoupled from Track A's critical path.
 
 ---
 
 ## 9. Current Milestones & Progress
+
+### Track A Milestones (Platform & Clustering — NipunaBhanuka18)
 
 | Milestone | Title | Target Week | Status |
 |---|---|---|---|
@@ -140,13 +148,26 @@ The project is structured around an estimated 200 hours (25 h/week) across 8 mil
 | **W1-02A**| NOAA AIS Dataset Selection & Schema Investigation | Week 1 | **Completed** |
 | **W1-02B**| AIS Ingestion, Data Quality & Parquet Storage | Week 1 | **Completed** |
 | **W2-01** | Ingestion Corrections, BallTree ST-DBSCAN & Brute-Force Oracle | Week 2 | **Completed** |
+| **DOC-01** | Evidence-Backed Research & Engineering Documentation | Week 2+ | **Completed** |
+| **DOC-01A**| Research Documentation Accuracy & Collaborator Readiness | Week 2+ | **Completed** |
 | **W3-01** | H3 Candidate Optimization & Completeness Verification | Week 3 | **Completed** |
 | **W3-02** | Comparative H1 Benchmarking (BallTree vs. H3) | Week 3 | Planned |
 | **W4-01** | Stay-Point Extraction & Anchorage Dwell Identification | Week 4 | Planned |
-| **W5-01** | Kinematic Anomaly Scoring & Evaluation Engine | Week 5 | Planned |
-| **W6-01** | DuckDB Analytical Query Layer & Read-Only API | Week 6 | Planned |
+| **W4-02** | Anchorage Basin Dwell & Utilization Analytics | Week 4 | Planned |
+| **W5-01** | DuckDB In-Process Analytics & Contract Integration | Week 5 | Planned |
+| **W6-01** | Read-Only FastAPI Service Implementation | Week 6 | Planned |
 | **W7-01** | Geospatial Incident Dashboard & End-to-End Demo | Week 7 | Planned |
 | **W8-01** | Benchmark Execution, Reproducibility & Research Report | Week 8 | Planned |
+
+### Track B Milestones (Behavioral ML & Anomaly Detection — Kishakya, *proposed*)
+
+| Milestone | Title | Target Phase | Status |
+|---|---|---|---|
+| **ML-01** | Domain Literature, AIS Schema & Telemetry Review | Phase 1 | Planned |
+| **ML-02** | Vessel Trajectory Kinematic Feature Specification | Phase 2 | Planned |
+| **ML-03** | Baseline Models & Evaluation Protocol Freezing | Phase 3 | Planned |
+| **ML-04** | Feature Engineering Module & Baseline Experiments | Phase 4 | Planned |
+| **ML-05** | Anomaly Model Evaluation & `vessel_anomaly_v1` Export | Phase 5 | Planned |
 
 ### Week 2 Reference Clustering Baseline & Exploratory Visualization
 

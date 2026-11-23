@@ -2,16 +2,21 @@
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
-**Document Version:** 2.1  
-**Total Development Baseline:** 200 Hours across 8 Weeks (25 Hours/Week)  
-**Developer:** Solo Undergraduate AI Engineer  
+**Document Version:** 2.3  
+**Status:** Collaborative Dual-Track Milestone Architecture  
+**Research Tracks & Capacity:**  
+- **Track A (Maritime Traffic & Geospatial Clustering Lead):** NipunaBhanuka18 (200 Hours across 8 Weeks, 25 Hours/Week)  
+- **Track B (Vessel Behavior ML Track Lead):** Kishakya *(participation pending review; independent parallel schedule)*  
 **Status Key:** `Planned` | `In Progress` | `Completed` | `Deferred`  
 
 ---
 
-## Milestone Tracking Board
+## 1. Track A Milestone Tracking Board (Maritime Traffic & Platform Foundation)
 
-| Milestone ID | Week | Target Deliverable | Est. Hours | Status | Dependencies |
+**Lead:** NipunaBhanuka18  
+**Scope:** AIS Data Engineering, BallTree/H3 ST-DBSCAN Clustering, Stay-Point & Anchorage Intelligence, Analytical Storage, FastAPI Serving, Web Map UI, and Benchmarking.
+
+| Milestone ID | Target Week | Target Deliverable | Est. Hours | Status | Dependencies |
 |---|---|---|---|---|---|
 | **W1-01** | Week 1 | Repository Initialization & Documentation Foundation | 10 h | **Completed** | None |
 | **W1-02A** | Week 1 | NOAA AIS Dataset Selection & Schema Investigation | 5 h | **Completed** | W1-01 |
@@ -19,22 +24,36 @@
 | **W2-01** | Week 2 | Ingestion Corrections, BallTree Reference ST-DBSCAN & Brute-Force Oracle | 15 h | **Completed** | W1-02B |
 | **DOC-01** | Week 2+ | Evidence-Backed Research & Engineering Documentation | 10 h | **Completed** | W2-01 |
 | **DOC-01A** | Week 2+ | Research Documentation Accuracy & Collaborator Readiness | 4 h | **Completed** | DOC-01 |
-| **W3-01** | Week 3 | H3 Candidate Optimization & Completeness Verification | 15 h | Planned | W2-01 |
+| **W3-01** | Week 3 | H3 Candidate Optimization & Completeness Verification | 15 h | **Completed** | W2-01 |
 | **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01 |
 | **W4-01** | Week 4 | Stay-Point Extraction & Berth Polygon Exclusion | 15 h | Planned | W3-02 |
 | **W4-02** | Week 4 | Anchorage Dwell Metrics & Utilization Analytics | 10 h | Planned | W4-01 |
-| **W5-01** | Week 5 | Kinematic Trajectory Anomaly Detector (Rule-based) | 15 h | Planned | W1-02, W4-01 |
-| **W5-02** | Week 5 | Anomaly Evaluation & *(Conditional)* Isolation Forest | 10 h | Planned | W5-01 |
-| **W6-01** | Week 6 | DuckDB In-Process Analytics & GeoJSON Generation | 15 h | Planned | W3-02, W4-02, W5-01 |
-| **W6-02** | Week 6 | Read-Only FastAPI Service Implementation | 10 h | Planned | W6-01 |
-| **W7-01** | Week 7 | Interactive Geospatial Web Map Dashboard | 15 h | Planned | W6-02 |
+| **W5-01** | Week 5 | DuckDB In-Process Analytics & Contract Integration | 15 h | Planned | W3-02, W4-02 |
+| **W6-01** | Week 6 | Read-Only FastAPI Service Implementation | 10 h | Planned | W5-01 |
+| **W7-01** | Week 7 | Interactive Geospatial Web Map Dashboard | 15 h | Planned | W6-01 |
 | **W7-02** | Week 7 | End-to-End Pipeline Integration & Verification | 10 h | Planned | W7-01 |
 | **W8-01** | Week 8 | Automated Benchmark Execution (10k, 50k, 100k) | 15 h | Planned | W7-02 |
 | **W8-02** | Week 8 | Reproducibility Package, Final Audit & Thesis Report | 10 h | Planned | W8-01 |
 
 ---
 
-## Milestone Detail Specifications
+## 2. Track B Milestone Tracking Board (Vessel Behavior ML & Anomaly Detection)
+
+**Proposed Lead:** Kishakya *(participation pending review)*  
+**Scope:** Vessel Trajectory Feature Engineering, Explainable Rule-Based Kinematic Scoring, Unsupervised Anomaly Modeling (Isolation Forest / LOF), Controlled Perturbation Evaluation, and Explainable GeoJSON Incident Export.  
+**Schedule Governance:** Independent parallel schedule; milestones advance based on Kishakya's availability without hard week-number deadlines.
+
+| Milestone ID | Target Phase | Target Deliverable | Est. Hours | Status | Dependencies |
+|---|---|---|---|---|---|
+| **ML-01** | Phase 1 | Domain Literature, AIS Schema & Telemetry Review | 10 h | Planned | None (Cleaned Parquet available) |
+| **ML-02** | Phase 2 | Vessel Trajectory Kinematic Feature Specification | 15 h | Planned | ML-01 |
+| **ML-03** | Phase 3 | Baseline Models & Evaluation Protocol Freezing | 15 h | Planned | ML-02 |
+| **ML-04** | Phase 4 | Feature Engineering Module & Baseline Experiments | 20 h | Planned | ML-03, `cleaned_ais.parquet` |
+| **ML-05** | Phase 5 | Anomaly Model Evaluation & `vessel_anomaly_v1` Export | 20 h | Planned | ML-04 |
+
+---
+
+## 3. Milestone Detail Specifications — Track A (Platform & Clustering)
 
 ### Milestone W1-01: Repository Initialization & Documentation Foundation
 - **Goal:** Establish a robust, reproducible Git repository, CPython 3.11 environment, testing/linting/typing quality gates, and exhaustive documentation architecture.
@@ -219,48 +238,27 @@
 - **Acceptance Checks:**
   - Anchorage dwell hours and vessel counts are accurately aggregated by `MMSI`
 
-### Milestone W5-01: Kinematic Trajectory Anomaly Detector (Rule-Based)
-- **Goal:** Implement multi-factor kinematic anomaly detection on vessel trajectories.
+### Milestone W5-01: DuckDB In-Process Analytics & Contract Integration
+- **Goal:** Integrate in-process DuckDB analytical query layer over Parquet partitions, generate precomputed GeoJSON layers, and establish contract ingestion validation for the provisional `vessel_anomaly_v1` GeoJSON schema.
 - **Estimated Hours:** 15 Hours
 - **Status:** Planned
-- **Dependencies:** W1-02, W4-01
+- **Dependencies:** W3-02, W4-02
 - **Planned Deliverables:**
-  - `src/aegismar/anomaly/kinematics.py`
-  - `src/aegismar/anomaly/rules.py`
-  - Explainable JSON factor payload generator
+  - `src/aegismar/storage/duckdb_engine.py` (DuckDB connection manager, Parquet view registration, analytical aggregation queries)
+  - Precomputed GeoJSON export pipelines for clusters and anchorages
+  - Contract validator and loader for `vessel_anomaly_v1` GeoJSON FeatureCollections
 - **Acceptance Checks:**
-  - Anomaly scorer flags speed discontinuities, unpowered drift, and transponder dropouts with explicit factor explanations
+  - Analytical queries execute in $< 50\text{ ms}$ over 100k precomputed records
+  - Storage layer ingests spatial layers and validates `vessel_anomaly_v1` contract payloads seamlessly
 
-### Milestone W5-02: Anomaly Evaluation & (Conditional) Isolation Forest
-- **Goal:** Benchmark rule-based anomaly detector against synthetic perturbations and optional Isolation Forest baseline.
+### Milestone W6-01: Read-Only FastAPI Service Implementation
+- **Goal:** Implement stateless, read-only HTTP API serving precomputed analytical layers from DuckDB.
 - **Estimated Hours:** 10 Hours
 - **Status:** Planned
 - **Dependencies:** W5-01
 - **Planned Deliverables:**
-  - Anomaly benchmark harness with synthetic perturbation injection
-  - *(Conditional)* `src/aegismar/anomaly/isolation_forest.py`
-- **Acceptance Checks:**
-  - Rule-based detector achieves target $F_1$ improvement over density noise baseline
-
-### Milestone W6-01: DuckDB In-Process Analytics & GeoJSON Generation
-- **Goal:** Integrate in-process DuckDB analytical query layer over Parquet partitions.
-- **Estimated Hours:** 15 Hours
-- **Status:** Planned
-- **Dependencies:** W3-02, W4-02, W5-01
-- **Planned Deliverables:**
-  - `src/aegismar/storage/duckdb_engine.py`
-  - Precomputed GeoJSON export pipelines
-- **Acceptance Checks:**
-  - Analytical queries execute in $< 50\text{ ms}$ over 100k precomputed records
-
-### Milestone W6-02: Read-Only FastAPI Service Implementation
-- **Goal:** Implement stateless, read-only HTTP API serving precomputed analytical layers.
-- **Estimated Hours:** 10 Hours
-- **Status:** Planned
-- **Dependencies:** W6-01
-- **Planned Deliverables:**
   - `src/aegismar/api/main.py`
-  - Endpoints for `/health`, `/clusters`, `/anchorages`, `/anomalies`
+  - Endpoints for `/health`, `/api/v1/clusters`, `/api/v1/anchorages`, `/api/v1/anomalies`
 - **Acceptance Checks:**
   - API returns valid GeoJSON FeatureCollections; zero state mutation endpoints exist
 
@@ -268,12 +266,110 @@
 - **Goal:** Build the browser-based map interface for geospatial layer inspection and anomaly triage.
 - **Estimated Hours:** 15 Hours
 - **Status:** Planned
-- **Dependencies:** W6-02
+- **Dependencies:** W6-01
 - **Planned Deliverables:**
   - `src/aegismar/ui/` (HTML/JS Leaflet dashboard)
   - Interactive layer toggle (clusters, anchorages, vessel tracks, anomaly markers)
   - Anomaly incident inspection modal with factor breakdown
 - **Acceptance Checks:**
+  - Map renders 100k+ points smoothly using pre-filtered GeoJSON layers; incident review modal displays factor decompositions
+
+### Milestone W7-02: End-to-End Pipeline Integration & Verification
+- **Goal:** Verify seamless data flow from raw AIS CSV through Parquet, clustering, stay-points, DuckDB, FastAPI, and UI dashboard.
+- **Estimated Hours:** 10 Hours
+- **Status:** Planned
+- **Dependencies:** W7-01
+- **Planned Deliverables:**
+  - End-to-end integration test suite (`tests/integration/test_pipeline.py`)
+  - Verification checklist and offline static map artifact validation
+- **Acceptance Checks:**
+  - Pipeline executes end-to-end deterministically; UI renders correctly from local API
+
+### Milestone W8-01: Automated Benchmark Execution (10k, 50k, 100k)
+- **Goal:** Execute automated multi-trial performance benchmarks evaluating Hypothesis H1 across standardized dataset scales.
+- **Estimated Hours:** 15 Hours
+- **Status:** Planned
+- **Dependencies:** W7-02
+- **Planned Deliverables:**
+  - Multi-trial automated benchmark harness emitting structured JSON records
+  - Empirical tables and charts comparing BallTree vs. H3 runtime, memory, and indexing overhead
+- **Acceptance Checks:**
+  - 10 deterministic trials executed per scale; p-values and confidence intervals recorded; zero fabricated numbers
+
+### Milestone W8-02: Reproducibility Package, Final Audit & Thesis Report
+- **Goal:** Package the complete repository for one-command independent verification, conduct code audit, and finalize thesis documentation.
+- **Estimated Hours:** 10 Hours
+- **Status:** Planned
+- **Dependencies:** W8-01
+- **Planned Deliverables:**
+  - One-command reproduction script
+  - Final research thesis and empirical evaluation report
+  - Clean working tree verification and GitHub release tag
+- **Acceptance Checks:**
+  - External reviewer can reproduce all research results from scratch with `uv sync --locked`
+
+---
+
+## 4. Milestone Detail Specifications — Track B (Vessel Behavior ML & Anomaly Detection)
+
+**Proposed Lead:** Kishakya *(participation pending review)*  
+**Governance:** Track B operates on an independent parallel schedule with flexible pacing. Milestones advance based on Kishakya's availability and research goals without rigid week-number constraints.
+
+### Milestone ML-01: Domain Literature & AIS Telemetry Review
+- **Goal:** Review maritime anomaly detection literature and existing `docs/03-research/vessel-behavior-ml.md`. Profile canonical AIS telemetry fields (`cleaned_ais.parquet`) and understand sensor sentinels/limits.
+- **Estimated Hours:** 10 Hours
+- **Status:** Planned
+- **Dependencies:** Cleaned Parquet available (`data/processed/lalb_20250101/cleaned_ais.parquet`)
+- **Planned Deliverables:**
+  - Literature review notes and telemetry field profiling summary
+  - Confirmed kinematic feature candidate list
+- **Acceptance Checks:**
+  - Telemetry limits, sentinels, and reception gap realities clearly documented
+
+### Milestone ML-02: Vessel Trajectory Kinematic Feature Specification
+- **Goal:** Formulate mathematical definitions for kinematic acceleration, angular course rates, drift angles, and transponder reporting intervals. Define windowing parameters (sliding time window vs. fixed-ping strides).
+- **Estimated Hours:** 15 Hours
+- **Status:** Planned
+- **Dependencies:** ML-01
+- **Planned Deliverables:**
+  - Trajectory feature extraction specification document
+  - Mathematical formulation of windowing and kinematic delta calculations
+- **Acceptance Checks:**
+  - Windowing parameters and feature formulas physically grounded in commercial vessel dynamics
+
+### Milestone ML-03: Baseline Models & Evaluation Protocol Freezing
+- **Goal:** Formalize rule-based heuristic scoring thresholds and Isolation Forest architecture. Specify vessel-disjoint (70/30 MMSI) and chronological holdout splits. Parameterize synthetic perturbation types (speed jumps, crabbing, coverage dropouts).
+- **Estimated Hours:** 15 Hours
+- **Status:** Planned
+- **Dependencies:** ML-02
+- **Planned Deliverables:**
+  - Evaluation protocol document and perturbation configuration schema
+  - Baseline model definitions and hyperparameter search space
+- **Acceptance Checks:**
+  - Data leakage strictly prevented via vessel-disjoint splitting; perturbations bounded by maritime physics
+
+### Milestone ML-04: Feature Engineering Module & Baseline Experiments
+- **Goal:** Implement `src/aegismar/anomaly/features.py` with comprehensive unit tests (`tests/unit/test_anomaly.py`). Extract feature representations across test partitions and log reproducible experiment artifacts.
+- **Estimated Hours:** 20 Hours
+- **Status:** Planned
+- **Dependencies:** ML-03
+- **Planned Deliverables:**
+  - `src/aegismar/anomaly/features.py` and `tests/unit/test_anomaly.py`
+  - Baseline feature extraction experiment logged under `experiments/outputs/anomaly/`
+- **Acceptance Checks:**
+  - Unit tests pass with $\ge 90\%$ code coverage; feature vectors conform to expected dimensions
+
+### Milestone ML-05: Anomaly Model Evaluation & `vessel_anomaly_v1` Export
+- **Goal:** Implement rule-based scorer and Isolation Forest model. Evaluate PR-AUC, precision, recall, and false alarm rates against density noise baselines. Export explainable incident GeoJSON adhering to `vessel_anomaly_v1`.
+- **Estimated Hours:** 20 Hours
+- **Status:** Planned
+- **Dependencies:** ML-04
+- **Planned Deliverables:**
+  - `src/aegismar/anomaly/rules.py` and `src/aegismar/anomaly/models.py`
+  - `src/aegismar/anomaly/evaluation.py`
+  - Exported `vessel_anomaly_v1` GeoJSON artifacts ready for DuckDB ingestion
+- **Acceptance Checks:**
+  - Rule-based and ML models evaluated on held-out splits; incident outputs validate against `vessel_anomaly_v1` schema; factor attributions provide physical explanations for 100% of alerts
   - Smooth client-side rendering without build steps; clicks on anomaly markers show full physical justification
 
 ### Milestone W7-02: End-to-End Pipeline Integration & Verification

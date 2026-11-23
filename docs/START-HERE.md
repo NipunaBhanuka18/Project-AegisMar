@@ -266,11 +266,15 @@ First-time contributors, academic evaluators, and research collaborators can fol
 
 ## 14. Next Research Milestones
 
-- **Track A (Maritime Traffic & Clustering)**:
+- **Track A (Maritime Traffic & Clustering — Lead: NipunaBhanuka18)**:
   - **Milestone W3-01**: *(Completed)* Implemented Uber H3 hexagonal candidate neighborhood provider (`H3NeighborhoodProvider`) and verified 100% neighbor recall against oracle and BallTree reference.
   - **Milestone W3-02**: Execute comparative H1 benchmarks (BallTree vs. H3) measuring runtime, memory, and recall across dataset scales (10k, 50k, 100k, full LA/LB).
-- **Track B (Vessel Behavior ML)**:
+  - **Milestone W4-01 / W4-02**: Stay-point extraction, berth polygon exclusion, and anchorage dwell analytics.
+  - **Milestone W5-01 / W6-01**: DuckDB analytical storage, `vessel_anomaly_v1` contract integration, and read-only FastAPI service.
+  - **Milestone W7-01 / W8-01**: Interactive geospatial web dashboard and multi-trial benchmark reproducibility package.
+- **Track B (Vessel Behavior ML & Anomaly Detection — Proposed Lead: Kishakya)**:
   - **Milestone ML-01**: Review domain literature, AIS telemetry fields, and evaluation constraints.
   - **Milestone ML-02**: Define mathematical specifications for trajectory windowing and kinematic features.
   - **Milestone ML-03**: Freeze baseline models and synthetic perturbation evaluation protocol.
   - **Milestone ML-04**: Implement first reproducible feature engineering experiment.
+  - **Milestone ML-05**: Anomaly model evaluation and `vessel_anomaly_v1` GeoJSON contract export.

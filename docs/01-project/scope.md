@@ -29,18 +29,18 @@ All deliverables within each track remain prioritized under three strict tiers:
 
 | Component | Scope Tier | Category | Rationale & Success Condition |
 |---|---|---|---|
-| **AIS Validation & Profiling** | **Mandatory** | Ingestion | Required to prevent sensor sentinels from corrupting spatial clustering and anomaly scoring. |
-| **Parquet / Columnar Storage** | **Mandatory** | Data Layer | High-performance, compressed, analytical file format enabling local out-of-core processing. |
-| **Haversine BallTree Baseline** | **Mandatory** | Core Research | Ground-truth spatial indexing baseline needed to scientifically benchmark H3 acceleration. |
-| **H3 Candidate Generation & Correctness Validation** | **Mandatory** | Core Research | Primary research contribution; must prove $\ge 99.9\%$ neighbor recall against brute force. |
-| **Deterministic ST-DBSCAN Engine** | **Mandatory** | Core Research | Required to segment spatiotemporal traffic patterns into clusters and identify noise. |
-| **Stay-Point & Anchorage Analysis** | **Mandatory** | Analytics | Extracts vessel stops; groups dwell areas into anchorages using unique vessel metrics. |
-| **Berth Polygon Exclusion** | **Mandatory** | Analytics | Necessary to prevent docked terminal vessels from falsely inflating anchorage metrics. |
-| **Kinematic Anomaly Scoring** | **Mandatory** | Analytics | Multi-factor rule-based trajectory scoring (speed jump, drift, transponder outage). |
-| **Research Evaluation & Benchmarks** | **Mandatory** | Research | Rigorous evaluation measuring runtime, memory, recall, and F1 across dataset scales. |
-| **Minimal Map & Incident Inspector** | **Mandatory** | Presentation | Essential for visual verification of clusters, anchorage polygons, and vessel anomalies. |
-| **Reproducible Installation (`uv`)** | **Mandatory** | Engineering | Single-command deterministic setup ensuring anyone can verify the research. |
-| **Isolation Forest Comparison** | **Conditional** | Analytics | Secondary research baseline comparing machine learning outlier detection to rule-based scoring. |
+| **AIS Validation & Profiling** | **Mandatory** | Ingestion (Track A) | Required to prevent sensor sentinels from corrupting spatial clustering and anomaly scoring. |
+| **Parquet / Columnar Storage** | **Mandatory** | Data Layer (Track A) | High-performance, compressed, analytical file format enabling local out-of-core processing. |
+| **Haversine BallTree Baseline** | **Mandatory** | Core Research (Track A) | Ground-truth spatial indexing baseline needed to scientifically benchmark H3 acceleration. |
+| **H3 Candidate Generation & Correctness Validation** | **Mandatory** | Core Research (Track A) | Primary research contribution; must prove $\ge 99.9\%$ neighbor recall against brute force. |
+| **Deterministic ST-DBSCAN Engine** | **Mandatory** | Core Research (Track A) | Required to segment spatiotemporal traffic patterns into clusters and identify noise. |
+| **Stay-Point & Anchorage Analysis** | **Mandatory** | Analytics (Track A) | Extracts vessel stops; groups dwell areas into anchorages using unique vessel metrics. |
+| **Berth Polygon Exclusion** | **Mandatory** | Analytics (Track A) | Necessary to prevent docked terminal vessels from falsely inflating anchorage metrics. |
+| **Kinematic Anomaly Scoring** | **Mandatory** | Analytics (Track B) | Multi-factor rule-based trajectory scoring (speed jump, drift, transponder outage; owned by Kishakya). |
+| **Research Evaluation & Benchmarks** | **Mandatory** | Research (Track A/B) | Rigorous evaluation measuring runtime, memory, recall, and F1 across dataset scales. |
+| **Minimal Map & Incident Inspector** | **Mandatory** | Presentation (Track A) | Essential for visual verification of clusters, anchorage polygons, and vessel anomalies. |
+| **Reproducible Installation (`uv`)** | **Mandatory** | Engineering (Track A) | Single-command deterministic setup ensuring anyone can verify the research. |
+| **Isolation Forest Comparison** | **Conditional** | Analytics (Track B) | Secondary research baseline comparing machine learning outlier detection to rule-based scoring. |
 | **Advanced Incident Review Panel** | **Conditional** | Presentation | Deep-dive trajectory timeline inspector and sub-score drill-down in UI. |
 | **Docker Compose Packaging** | **Conditional** | Deployment | Containerized single-node setup for non-Python environments (if time permits in Week 8). |
 | **Live AIS Stream Ingestion (NMEA)** | **Deferred** | Ingestion | Real-time UDP/TCP decoding introduces unnecessary network complexity for historical research. |

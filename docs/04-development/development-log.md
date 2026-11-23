@@ -522,4 +522,27 @@ This log documents chronological engineering actions, commands executed, test re
   - `uv run mypy src tests`
   - `uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w3_01_lalb_h3 --provider h3 --h3-resolution 8 --overwrite`
 - **Next Action:**
-  - Commit changes to branch `feat/clu-h3-neighborhood`, push to GitHub, open Pull Request targeting `main`, and prepare for Milestone W3-02 (Comparative H1 Benchmarking).
+  - Proceed with Milestone W3-02 (Comparative H1 Benchmarking).
+
+---
+
+## Log Entry: 2026-11-23 — Governance: Dual-Track Roadmap & Milestone Harmonization
+
+- **Date:** 2026-11-23
+- **Scope:** Complete documentation reconciliation of the dual-track milestone roadmap to eliminate ambiguity regarding Trajectory Anomaly Detection ownership and scheduling.
+- **Summary of Changes:**
+  - **Reconciled Track A vs. Track B Milestones**:
+    - Updated `docs/04-development/milestones.md` by splitting the tracking board into two distinct tables: Track A (Weeks 1–8, Lead: NipunaBhanuka18) and Track B (Phases ML-01 to ML-05, Lead: Kishakya).
+    - Reassigned Track A Week 5 to **Platform Analytical Storage & Contract Integration** (`W5-01`), focusing on in-process DuckDB query layer integration and validation of the provisional `vessel_anomaly_v1` GeoJSON contract.
+    - Decoupled `W6-01` (FastAPI service) and DuckDB storage from blocking on ML model completion.
+    - Added explicit milestone specifications for `ML-01` through `ML-05` under Track B with clear deliverables, capacities, and acceptance checks.
+  - **Updated Project Roadmap (`docs/01-project/roadmap.md`)**:
+    - Aligned Section 1 and Section 2 to reflect Track A's Week 5 storage focus and Section 3's independent parallel ML track (`ML-01`–`ML-05`).
+  - **Aligned README (`README.md`) & Onboarding Guides**:
+    - Updated Section 8 and Section 9 in `README.md` to reflect distinct Track A and Track B milestone boards.
+    - Updated `docs/START-HERE.md` Section 14 to reflect the harmonized milestone sequence.
+    - Updated `docs/01-project/scope.md` to explicitly assign scope items to Track A and Track B.
+- **Verification:**
+  - Verified zero occurrences of legacy "Week 5: Trajectory Anomaly Detection" across the repository.
+  - Verified all relative markdown links remain valid.
+  - Confirmed 77 unit tests pass cleanly.
