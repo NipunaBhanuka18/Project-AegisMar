@@ -10,6 +10,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed & Hardened - Milestone W3-01B: H3 Correctness Contract Finalization (2026-11-23)
+- **H3 Correctness Contract Finalization**:
+  - Removed all statements claiming unconditional global mathematical completeness for H3 discrete hexagonal candidate generation.
+  - Formalized two-tier empirical support contract: calibrated regional indexing on resolutions 7, 8, 9 within documented clearance tables vs fail-closed rejection or BallTree fallback for uncalibrated configurations.
+- **Fail-Closed Unsupported Configuration Handling**:
+  - Replaced unproven ring extrapolations and approximations in `compute_safe_k_ring` with strict fail-closed validation: uncalibrated resolutions or radii exceeding empirical clearance tables raise `ValueError` unless `allow_uncalibrated=True` is explicitly specified.
+  - Configured `H3NeighborhoodProvider` to route unsupported configurations cleanly to `BallTreeNeighborhoodProvider` when fallback is enabled, or fail closed with `ValueError` when fallback is disabled.
+  - Added explicit experimental opt-in via `allow_uncalibrated=True` (and `STDBSCANConfig(h3_allow_uncalibrated=True)`), logging clear warnings and marking execution metadata as `completeness_contract = "experimental_uncalibrated"`.
+- **Dataset-Scoped Parity Verification Command (`aegismar verify-parity`)**:
+  - Implemented `verify_dataset_h3_balltree_parity` and the `aegismar verify-parity` CLI subcommand with dataset SHA-256 verification and comprehensive bit-for-bit parity reporting.
+  - Validated full CSR graph parity (`indptr`, `indices`) and clustering parity across all 143,116 observations of `cleaned_ais.parquet` (SHA-256: `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b`) with 0 fallbacks and identical cluster accounting.
+- **Targeted Test Suite Expansion**:
+  - Added test fixtures 28–32 in `tests/unit/test_h3_neighbors.py` covering unsupported resolutions, radii limits, experimental opt-in, contract metadata, and parity verification.
+  - Added `test_cli_verify_parity_command` in `tests/unit/test_cli.py`.
+  - Expanded automated test suite to 92 passing tests at 94% repository coverage (98% in `h3_neighbors.py`).
+
+
+### Fixed & Hardened - Milestone W3-01A: H3 Completeness Audit & Correctness Hardening (2026-11-23)
+- **H3 Spherical Clearance Mathematics Audit**:
+  - Audited planar regular hexagon apothem formulas ($k \cdot 2 r_{\text{inscribed}} = k \sqrt{3} s$) against spherical Snyder equal-area icosahedron projections; clarified edge length variance ($\sim 1.4\times$) and 12 pentagonal face distortions.
+  - Eliminated unsupported global analytical theorems in favor of **Option B**: experimental H3 candidate acceleration supported by an observable, fail-closed reference fallback policy.
+  - Reconciled documentation in `src/aegismar/clustering/h3_neighbors.py`, `docs/02-architecture/decisions/ADR-009-planned-h3-candidate-acceleration.md`, `docs/03-research/evaluation-protocol.md`, and `docs/03-research/evidence-register.md`.
+- **Fail-Closed Safety & Validation Hardening**:
+  - Configured `H3NeighborhoodProvider` and `STDBSCANConfig` to strictly reject undersized $k$-rings (`k_ring < safe_k`) with `ValueError`, preventing silent candidate omissions.
+  - Hardened discrete expansion exception handling: `h3.grid_disk` failures mark cells for BallTree fallback when enabled; raise `RuntimeError` immediately when fallback is disabled. Silent self-cell downgrades eliminated.
+  - Hardened near-pentagon fallback: precomputes whether any cell in `grid_disk(c, k)` is a pentagon (`near_pentagon`); routes near-pentagon hexagons to BallTree fallback when `fallback_on_pentagons` is enabled, or fails closed with `RuntimeError` if fallback is disabled.
+  - Extended `STDBSCANConfig` with `h3_fallback_on_pentagons: bool = False` with strict boolean validation.
+  - Granular diagnostic instrumentation: separated `cell_mapping_time_seconds`, `candidate_precomputation_time_seconds`, `candidate_retrieval_time_seconds`, `temporal_filtering_time_seconds`, `distance_filtering_time_seconds`, and `fallback_reasons`.
+- **Adversarial Unit Test Suite**:
+  - Added 7 new adversarial test fixtures (fixtures 21–27) to `tests/unit/test_h3_neighbors.py` covering undersized $k$-ring rejection, forced `grid_disk` failures, disabled fallback exceptions, near-pentagon hexagon fallback, sub-meter cell vertex point pairs, multi-region oracle parity (Equator, English Channel, Arctic), and clearance boundary transitions.
+  - Test suite expanded to 86 tests passing at 93% total repository code coverage.
+- **Empirical Parity on Authentic NOAA AIS Data**:
+  - Evaluated full CSR graph parity between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` on all 143,116 analyzed observations (13,188,256 edges) of `data/processed/lalb_20250101/cleaned_ais.parquet`:
+    - Bit-for-bit identical CSR graphs: `indptr` (100.0000% degree identity) and `indices` (100.0000% neighbor identity across all 13,188,256 edges).
+    - Achieved 1.34x graph query speedup (31.28 s vs 41.98 s) with 0 fallbacks.
+
+
+### Documentation & Governance - Dual-Track Roadmap & Milestone Harmonization (2026-11-23)
+- **Eliminated Week 5 Anomaly Detection Ambiguity**:
+  - Reconciled milestone tracking across `README.md`, `docs/01-project/roadmap.md`, `docs/04-development/milestones.md`, `docs/01-project/scope.md`, and `docs/START-HERE.md`.
+  - Reassigned Track A Week 5 to **Platform Analytical Storage & Contract Integration** (`W5-01`), focusing on in-process DuckDB query layer integration and validation of the provisional `vessel_anomaly_v1` GeoJSON contract.
+  - Fully transitioned Behavioral Trajectory Anomaly Detection to **Track B (Lead: Kishakya)**, governed by dedicated milestones `ML-01` through `ML-05` on an independent, flexible schedule without artificial week-number deadlines.
+  - Decoupled `W6-01` (FastAPI serving) and DuckDB storage from blocking on ML model completion.
+  - Updated the official Milestone Tracking Board in `milestones.md` into distinct Track A and Track B tables with explicit capacities, deliverables, and acceptance criteria.
+
+### Added - Milestone W3-01: H3 Spatial Indexing, Neighborhood Completeness & Correctness Verification (2026-11-22)
+- **H3 Discrete Hexagonal Neighborhood Provider**:
+  - Implemented `H3NeighborhoodProvider` in `src/aegismar/clustering/h3_neighbors.py` conforming to the `NeighborhoodProvider` protocol.
+  - Implemented `compute_safe_k_ring(resolution, eps_spatial_m)` enforcing geometric candidate lower bounds ($\ge 988\text{ m}$ for Res 7, $\ge 395\text{ m}$ for Res 8, $\ge 371\text{ m}$ for Res 9 with $k=2$) guaranteeing zero missing spatial neighbors across cell boundaries.
+  - Implemented inclusive temporal candidate slicing per cell using `np.searchsorted` in $O(\log M_{\text{cell}})$, eliminating temporal edge effects.
+  - Pre-filtered active candidate cells present in the dataset using `h3.grid_disk(c, k)`.
+  - Added defense-in-depth fallback mechanism to `BallTreeNeighborhoodProvider` for pentagonal cells and query exceptions.
+- **Engine & CLI Integration**:
+  - Extended `STDBSCANConfig` with `provider` (`balltree_haversine` vs `h3_haversine`), `h3_resolution` (7, 8, 9; default 8), `h3_k_ring`, and `h3_enable_fallback`.
+  - Added `provider_metrics` tracking to `STDBSCANResult` and `summary_dict()`.
+  - Implemented `run_h3_st_dbscan(...)` convenience runner in `src/aegismar/clustering/st_dbscan.py`.
+  - Extended CLI `cluster` subcommand with `--provider`, `--h3-resolution`, and `--h3-k-ring` options with 100% backward compatibility.
+  - Pinned `h3>=4.0.0` in `pyproject.toml` and locked `h3==4.5.1` in `uv.lock`.
+- **Automated Verification & Real Data Parity**:
+  - Authored comprehensive test suite `tests/unit/test_h3_neighbors.py` with 20 fixture categories (same-cell, adjacent, multi-ring, cell boundaries $\delta \le 10\text{ m}$, exact thresholds, dense/sparse cells, pentagons, high latitudes, antimeridian crossing, randomized oracle parity, input permutation invariance, determinism, empty inputs, invalid configs, quality filters, and fallback logging).
+  - Validated 100.00% exact parity (143,116 / 143,116 label matches, 143,116 / 143,116 role matches) on the authentic NOAA San Pedro Bay dataset (241 clusters, 136,276 core, 934 border, 5,906 noise; 0 fallbacks).
+  - Raised automated test count to 77 tests passing at 93% total repository code coverage.
+
 ### Documentation & Quality - Milestone DOC-01A: Research Documentation Accuracy & Collaborator Readiness (2026-11-22)
 - **Evidence Register Claim Count Reconciliation**:
   - Audited `docs/03-research/evidence-register.md` to reconcile claim accounting, formally indexing all 15 claims across the evidentiary hierarchy (10 Tested by Automated Checks, 2 Experimentally Observed, 1 Reported by Development Assistant, 2 Planned or Hypothesized).

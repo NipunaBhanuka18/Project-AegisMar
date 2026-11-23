@@ -111,28 +111,36 @@ flowchart TD
 | **Build Backend** | `hatchling` | `hatchling` | Standard, modern PEP 517 build backend. |
 | **Quality Gates** | `ruff`, `mypy`, `pytest` | `ruff`, `mypy`, `pytest` | Sub-second linting/formatting, strict static typing, rigorous unit testing. |
 | **Data Engine** | Implemented (`pyarrow`); `duckdb` planned (W6) | `duckdb`, `pyarrow` | Columnar Parquet I/O (`zstd`) implemented via PyArrow; in-process DuckDB planned for W6. |
-| **Spatial Indexing**| BallTree Implemented (W2-01); H3 Planned (W3) | `numpy`, `scikit-learn`, `h3` (4.x) | Haversine `BallTree` reference baseline verified; Uber H3 deferred to Week 3. |
+| **Spatial Indexing**| Implemented: BallTree (W2-01) & H3 (W3-01B) | `numpy`, `scikit-learn`, `h3` (4.x) | Haversine `BallTree` reference engine and empirical H3 hexagonal candidate provider (calibrated Res 7–9) with fail-closed fallback; bit-for-bit graph parity verified on authentic NOAA AIS. |
 | **Web Service** | *Planned (W6)* | `fastapi`, `uvicorn` | Lightweight, asynchronous, typed, read-only HTTP endpoints serving GeoJSON. |
 | **Geospatial UI** | *Planned (W7)* | Vanilla JS + Leaflet / MapLibre | Zero-build-step interactive geospatial visualization. |
 
 ---
 
-## 8. Eight-Week Development Roadmap
+## 8. Development Roadmap & Dual-Track Architecture
 
-The project is structured around an estimated 200 hours (25 h/week) across 8 milestone weeks:
+The project is structured across two complementary, decoupled research tracks:
 
+### Track A: Maritime Traffic & Platform Foundation (Lead: NipunaBhanuka18)
+Estimated 200 hours (25 h/week) across an 8-week engineering baseline:
 - **Week 1**: Repository initialization, doc tree, AIS data ingestion, and sentinel masking.
 - **Week 2**: Ingestion hardening, Haversine `BallTree` reference ST-DBSCAN, and independent brute-force oracle verification.
 - **Week 3**: Uber H3 candidate optimization, boundary/pentagon completeness testing, and comparative H1 benchmarks.
 - **Week 4**: Vessel-aware stay-point extraction and anchorage dwell analysis (with berth exclusion).
-- **Week 5**: Trajectory anomaly detection engine (rule-based kinematics and optional Isolation Forest).
-- **Week 6**: Analytical storage integration (DuckDB/Parquet) and read-only FastAPI service.
+- **Week 5**: Analytical storage integration (DuckDB/Parquet) and ML anomaly contract ingestion.
+- **Week 6**: Read-only FastAPI service implementation serving precomputed clusters, anchorages, and anomalies.
 - **Week 7**: Geospatial dashboard implementation and end-to-end analytical validation.
 - **Week 8**: Performance benchmarking, reproducibility report, and research paper completion.
+
+### Track B: Vessel Behavior ML & Anomaly Detection (Proposed Lead: Kishakya)
+Independent parallel research track with its own flexible milestone backlog (`ML-01` to `ML-05`):
+- Trajectory kinematic feature engineering, rule-based explainability scoring, unsupervised Isolation Forest/LOF baselines, and `vessel_anomaly_v1` GeoJSON contract export. Operates on an independent schedule decoupled from Track A's critical path.
 
 ---
 
 ## 9. Current Milestones & Progress
+
+### Track A Milestones (Platform & Clustering — NipunaBhanuka18)
 
 | Milestone | Title | Target Week | Status |
 |---|---|---|---|
@@ -140,13 +148,28 @@ The project is structured around an estimated 200 hours (25 h/week) across 8 mil
 | **W1-02A**| NOAA AIS Dataset Selection & Schema Investigation | Week 1 | **Completed** |
 | **W1-02B**| AIS Ingestion, Data Quality & Parquet Storage | Week 1 | **Completed** |
 | **W2-01** | Ingestion Corrections, BallTree ST-DBSCAN & Brute-Force Oracle | Week 2 | **Completed** |
-| **W3-01** | H3 Candidate Optimization & Completeness Verification | Week 3 | Planned |
+| **DOC-01** | Evidence-Backed Research & Engineering Documentation | Week 2+ | **Completed** |
+| **DOC-01A**| Research Documentation Accuracy & Collaborator Readiness | Week 2+ | **Completed** |
+| **W3-01** | H3 Candidate Optimization & Completeness Verification | Week 3 | **Completed** |
+| **W3-01A**| H3 Completeness Audit, Correctness Hardening & PR Prep | Week 3 | **Completed** |
+| **W3-01B**| H3 Correctness Contract Finalization | Week 3 | **Completed** |
 | **W3-02** | Comparative H1 Benchmarking (BallTree vs. H3) | Week 3 | Planned |
 | **W4-01** | Stay-Point Extraction & Anchorage Dwell Identification | Week 4 | Planned |
-| **W5-01** | Kinematic Anomaly Scoring & Evaluation Engine | Week 5 | Planned |
-| **W6-01** | DuckDB Analytical Query Layer & Read-Only API | Week 6 | Planned |
+| **W4-02** | Anchorage Basin Dwell & Utilization Analytics | Week 4 | Planned |
+| **W5-01** | DuckDB In-Process Analytics & Contract Integration | Week 5 | Planned |
+| **W6-01** | Read-Only FastAPI Service Implementation | Week 6 | Planned |
 | **W7-01** | Geospatial Incident Dashboard & End-to-End Demo | Week 7 | Planned |
 | **W8-01** | Benchmark Execution, Reproducibility & Research Report | Week 8 | Planned |
+
+### Track B Milestones (Behavioral ML & Anomaly Detection — Kishakya, *proposed*)
+
+| Milestone | Title | Target Phase | Status |
+|---|---|---|---|
+| **ML-01** | Domain Literature, AIS Schema & Telemetry Review | Phase 1 | Planned |
+| **ML-02** | Vessel Trajectory Kinematic Feature Specification | Phase 2 | Planned |
+| **ML-03** | Baseline Models & Evaluation Protocol Freezing | Phase 3 | Planned |
+| **ML-04** | Feature Engineering Module & Baseline Experiments | Phase 4 | Planned |
+| **ML-05** | Anomaly Model Evaluation & `vessel_anomaly_v1` Export | Phase 5 | Planned |
 
 ### Week 2 Reference Clustering Baseline & Exploratory Visualization
 
@@ -201,6 +224,12 @@ uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/pr
 
 # Run reference Haversine BallTree ST-DBSCAN on cleaned AIS Parquet
 uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w2_01_lalb_balltree --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
+
+# Run verified H3-accelerated ST-DBSCAN (Milestone W3-01)
+uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w3_01_lalb_h3 --provider h3 --h3-resolution 8 --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
+
+# Verify bit-for-bit graph and clustering parity between BallTree and H3 (Milestone W3-01B)
+uv run python -m aegismar verify-parity --input data/processed/lalb_20250101/cleaned_ais.parquet --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --h3-resolution 8
 ```
 
 ---
@@ -208,7 +237,7 @@ uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_a
 ## 11. Research Methodology Overview
 
 1. **Independent Verification Oracle**: A brute-force $O(N^2)$ geodesic distance comparator serves as the ground-truth test oracle in automated unit testing.
-2. **Correctness Guarantee**: H3 candidate neighbor sets must prove zero false negatives against the BallTree reference ($\text{Recall} = 1.0$).
+2. **Correctness Contract (Option B)**: H3 candidate neighbor sets operate under an empirical correctness contract backed by conservative clearance tables on calibrated resolutions (7, 8, 9) and fail-closed BallTree fallback, verified bit-for-bit against the BallTree reference on the San Pedro Bay research sector ($\text{Recall} = 1.0$). Uncalibrated resolutions require explicit experimental opt-in.
 3. **Vessel-Aware Metrics**: Anchorage utilization and dwell times are computed per unique vessel (`MMSI`), avoiding raw ping density bias.
 4. **Leakage-Free Anomaly Evaluation**: Trajectory anomaly detectors are evaluated using chronological and vessel-disjoint splits with physically plausible synthetic perturbations.
 

@@ -469,4 +469,198 @@ This log documents chronological engineering actions, commands executed, test re
   - Re-ran quality gates: `uv sync --locked`, `uv run pytest -v` (52 passed), `uv run ruff check .` (clean), `uv run ruff format --check .` (clean), `uv run mypy src tests` (strict mode clean).
   - Verified 100% relative markdown links across all documentation.
 - **Next Action:**
-  - Commit documentation changes with message `docs: correct research evidence and collaborator onboarding claims`, push to `origin/main`, verify remote SHA, and deliver completion report.
+  - Proceed to Milestone W3-01: H3 Spatial Indexing, Neighborhood Completeness & Correctness Verification.
+
+---
+
+## Log Entry: 2026-11-22 — Milestone W3-01
+
+- **Date:** 2026-11-22
+- **Task Identifier:** `W3-01: H3 Spatial Indexing, Neighborhood Completeness & Correctness Verification`
+- **Branch:** `feat/clu-h3-neighborhood`
+- **Scope:** Implementation and correctness verification of the H3 hexagonal neighborhood candidate generator (`H3NeighborhoodProvider`) as a pluggable alternative to `BallTreeNeighborhoodProvider` preserving 100% ST-DBSCAN clustering semantics.
+- **Summary of Changes:**
+  - **Dependency Addition**: Installed `h3>=4.0.0` via `uv add "h3>=4.0.0"`. Locked `h3==4.5.1` in `uv.lock` and added `h3` typing override in `pyproject.toml`.
+  - **Mathematical Clearance & Safe $k$-Ring Lower Bounds (`src/aegismar/clustering/h3_neighbors.py`)**:
+    - Formulated conservative candidate lower bound: any point within distance $\varepsilon_s$ of an observation in cell $c$ cannot cross past its $k$-ring if the minimum clearance to cells outside the $k$-ring is $\ge \varepsilon_s$.
+    - Implemented `compute_safe_k_ring(resolution, eps_spatial_m)` using exact geometric lower bounds:
+      - Res 7 ($k=1$): $\ge 988.13\text{ m} \ge 300\text{ m}$ (safe for $\varepsilon_s \le 988\text{ m}$)
+      - Res 8 ($k=1$): $\ge 395.60\text{ m} \ge 300\text{ m}$ (safe for $\varepsilon_s \le 395\text{ m}$)
+      - Res 9 ($k=1$): $\ge 141.12\text{ m} < 300\text{ m}$ (insufficient for 300 m); automatic $k=2$ expansion yields $\ge 371.74\text{ m} \ge 300\text{ m}$ (safe)
+    - Validated all 12 icosahedral pentagonal cells satisfy the same clearance bounds at Res 8, and provided defense-in-depth pentagon and exception fallback to `BallTreeNeighborhoodProvider`.
+  - **H3 Neighborhood Provider Implementation (`src/aegismar/clustering/h3_neighbors.py`)**:
+    - Grouped observations by H3 cell index preserving non-decreasing canonical timestamp order.
+    - Precomputed active candidate cells present in dataset via `h3.grid_disk(c, k)`.
+    - Implemented $O(\log M_{\text{cell}})$ inclusive temporal candidate slicing per cell using `np.searchsorted` (`left = np.searchsorted(times, t_i - eps_t, side='left')`, `right = np.searchsorted(times, t_i + eps_t, side='right')`).
+    - Implemented exact spherical Haversine candidate pruning matching `BallTreeNeighborhoodProvider`.
+    - Added comprehensive diagnostic metrics (`candidate_generation_time_seconds`, `temporal_filtering_time_seconds`, `distance_filtering_time_seconds`, `fallback_count`, `total_candidates_evaluated`).
+  - **Clustering Engine & Configuration Updates (`src/aegismar/clustering/`)**:
+    - `config.py`: Extended `STDBSCANConfig` with `provider` (`balltree_haversine` or `h3_haversine`), `h3_resolution` (7, 8, 9; default 8), `h3_k_ring`, and `h3_enable_fallback` with strict parameter validation.
+    - `types.py`: Added `provider_metrics` to `STDBSCANResult` and `summary_dict()`.
+    - `st_dbscan.py`: Added `run_h3_st_dbscan(...)` convenience runner and collected provider metrics into `STDBSCANResult`.
+    - `cli.py`: Added `--provider`, `--h3-resolution`, and `--h3-k-ring` arguments to `cluster` subcommand with full backward compatibility.
+  - **Unit Test Suite Authoring (`tests/unit/test_h3_neighbors.py`)**:
+    - Created 20 dedicated fixture tests covering: same-cell neighbors, adjacent cells, multi-ring candidate completeness (Res 9, $k=2$), points on opposite sides of cell boundaries ($\delta \le 10\text{ m}$), exact spatial/temporal threshold equality, temporal window traversals, dense cells, sparse isolated cells, pentagonal cells & fallback, high latitudes, antimeridian crossing ($\pm 180^\circ$), multiple resolutions (7, 8, 9), randomized oracle comparisons (seeds 101, 202, 303, 404), input permutation invariance, determinism, empty inputs, invalid configurations, data-quality filter policies, and fallback logging.
+  - **Empirical Real-Data Parity on San Pedro Bay Baseline**:
+    - Clustered 143,116 analyzed observations (`data/processed/lalb_20250101/cleaned_ais.parquet`) using `H3NeighborhoodProvider` at Resolution 8 ($k=1$):
+      - 241 clusters, 136,276 core, 934 border, 5,906 noise
+      - Exact parity with BallTree reference: 143,116 / 143,116 label matches (100.0000%), 143,116 / 143,116 role matches (100.0000%)
+      - 798 unique occupied cells, 0 pentagons, 0 fallbacks
+      - Build time: 0.984 s (uninstrumented: 0.140 s); query time: 46.343 s (uninstrumented: 13.310 s)
+  - **Quality Gates Verification**:
+    - Pytest: 77 passed in 2.19 s (52 previous + 25 new tests/parameters, 100% pass)
+    - Code Coverage: 93% total repository coverage (89% in `h3_neighbors.py`)
+    - Ruff: 0 lint errors, 60 files formatted
+    - Mypy: 0 errors in 27 source files
+- **Verification Commands Executed:**
+  - `uv add "h3>=4.0.0"`
+  - `uv sync --locked`
+  - `uv run pytest -v`
+  - `uv run pytest --cov=aegismar --cov-report=term-missing`
+  - `uv run ruff format .`
+  - `uv run ruff check .`
+  - `uv run mypy src tests`
+  - `uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w3_01_lalb_h3 --provider h3 --h3-resolution 8 --overwrite`
+- **Next Action:**
+  - Proceed with Milestone W3-02 (Comparative H1 Benchmarking).
+
+---
+
+## Log Entry: 2026-11-23 — Governance: Dual-Track Roadmap & Milestone Harmonization
+
+- **Date:** 2026-11-23
+- **Scope:** Complete documentation reconciliation of the dual-track milestone roadmap to eliminate ambiguity regarding Trajectory Anomaly Detection ownership and scheduling.
+- **Summary of Changes:**
+  - **Reconciled Track A vs. Track B Milestones**:
+    - Updated `docs/04-development/milestones.md` by splitting the tracking board into two distinct tables: Track A (Weeks 1–8, Lead: NipunaBhanuka18) and Track B (Phases ML-01 to ML-05, Lead: Kishakya).
+    - Reassigned Track A Week 5 to **Platform Analytical Storage & Contract Integration** (`W5-01`), focusing on in-process DuckDB query layer integration and validation of the provisional `vessel_anomaly_v1` GeoJSON contract.
+    - Decoupled `W6-01` (FastAPI service) and DuckDB storage from blocking on ML model completion.
+    - Added explicit milestone specifications for `ML-01` through `ML-05` under Track B with clear deliverables, capacities, and acceptance checks.
+  - **Updated Project Roadmap (`docs/01-project/roadmap.md`)**:
+    - Aligned Section 1 and Section 2 to reflect Track A's Week 5 storage focus and Section 3's independent parallel ML track (`ML-01`–`ML-05`).
+  - **Aligned README (`README.md`) & Onboarding Guides**:
+    - Updated Section 8 and Section 9 in `README.md` to reflect distinct Track A and Track B milestone boards.
+    - Updated `docs/START-HERE.md` Section 14 to reflect the harmonized milestone sequence.
+    - Updated `docs/01-project/scope.md` to explicitly assign scope items to Track A and Track B.
+- **Verification:**
+  - Verified zero occurrences of legacy "Week 5: Trajectory Anomaly Detection" across the repository.
+  - Verified all relative markdown links remain valid.
+  - Confirmed 77 unit tests pass cleanly.
+
+---
+
+## Log Entry: 2026-11-23 — Task: Milestone W3-01A (H3 Completeness Audit, Correctness Hardening & Pull Request Preparation)
+
+- **Date:** 2026-11-23
+- **Task Identifier:** `W3-01A: H3 Completeness Audit, Correctness Hardening & Pull Request Preparation`
+- **Branch:** `feat/clu-h3-neighborhood`
+- **Scope:** Technical audit of H3 clearance geometry, implementation of Option B fail-closed fallback policy, rejection of undersized $k$-rings, elimination of silent downgrades on `grid_disk` errors, hardening of near-pentagon fallback, performance sub-timing instrumentation, authoring 7 new adversarial test fixtures, verifying 100% bit-for-bit graph parity on authentic NOAA AIS data, and preparing pull request.
+- **Summary of Changes:**
+  - **Audit of H3 Clearance Mathematics & Geometry**:
+    - Investigated planar regular hexagon apothem formulas ($k \cdot 2 r_{\text{inscribed}} = k \sqrt{3} s$) versus spherical H3 cells projected from an icosahedron via Snyder equal-area projection.
+    - Clarified that Snyder projection induces non-uniform hexagon edge lengths (varying by $\sim 1.4\times$ across each icosahedral face) and introduces 12 pentagonal faces per resolution.
+    - Concluded that planar apothem formulas cannot analytically prove global spherical completeness across arbitrary coordinates. Formulated and adopted **Option B**: experimental H3 candidate acceleration supported by an observable, fail-closed BallTree fallback policy for unproven or anomalous conditions.
+    - Reconciled documentation in `src/aegismar/clustering/h3_neighbors.py`, `ADR-009`, `evaluation-protocol.md`, and `evidence-register.md` (`CLM-CLU-06`).
+  - **Rejection of Undersized $k$-Ring Configurations**:
+    - Updated `H3NeighborhoodProvider.__init__`: if user configures `k_ring < safe_k` (either via constructor argument or `STDBSCANConfig`), strictly raise `ValueError` explaining that configured $k$ is smaller than the required completeness bound, preventing silent candidate omissions.
+  - **Fail-Closed Discrete Expansion Exception Handling**:
+    - Updated `H3NeighborhoodProvider.__init__`: if `h3.grid_disk(c, k)` raises an exception, the cell is marked for fallback in `_cells_requiring_fallback` and recorded in `_fallback_reasons` if fallback is enabled (`enable_fallback=True`).
+    - If fallback is disabled (`enable_fallback=False`), the constructor immediately raises `RuntimeError`.
+    - Completely eliminated previous silent downgrade behavior where failed expansions defaulted to self-cell `active_candidates[c] = [c]`.
+  - **Hardening of Pentagon & Near-Pentagon Fallback**:
+    - Precomputed whether any cell in `grid_disk(c, k)` is a pentagon (`near_pentagon`).
+    - If `fallback_on_pentagons` is enabled, any cell that is a pentagon or is adjacent to a pentagon in its disk is routed to BallTree fallback (reason: `"pentagon_or_near_pentagon"`).
+    - If `fallback_on_pentagons` is enabled but fallback is disabled, index construction immediately fails closed with `RuntimeError`.
+  - **Observable Fallback Routing & Sub-Timing Instrumentation**:
+    - In `_query_single_index`, cells requiring fallback route to `BallTreeNeighborhoodProvider.query_neighbors`, tracking `fallback_count`, `fallback_time_seconds`, and incrementing `fallback_reasons` distribution counters.
+    - Granular performance counters added to `get_metrics()`: `cell_mapping_time_seconds`, `candidate_precomputation_time_seconds`, `candidate_retrieval_time_seconds`, `temporal_filtering_time_seconds`, `distance_filtering_time_seconds`, and `fallback_reasons` dict.
+  - **Configuration Extensions (`src/aegismar/clustering/config.py` & `st_dbscan.py`)**:
+    - Extended `STDBSCANConfig` with `h3_fallback_on_pentagons: bool = False` with type validation and dictionary serialization.
+    - Updated `run_h3_st_dbscan` parameter defaults to `enable_fallback=None, fallback_on_pentagons=None` so config-level values propagate cleanly.
+  - **Adversarial Unit Test Suite (`tests/unit/test_h3_neighbors.py`)**:
+    - Authored 7 new dedicated adversarial test fixtures (fixtures 21–27; 34 tests in module, 86 in repository):
+      - `test_21_undersized_k_ring_rejected`: verifies `ValueError` on direct parameter and config overrides.
+      - `test_22_forced_grid_disk_failure_fallback`: mocks `grid_disk` failure, confirms cell marks for fallback, records `grid_disk_failed` reason, and achieves 100% parity with BallTree.
+      - `test_23_forced_grid_disk_failure_disabled_fallback`: confirms `RuntimeError` raised when fallback disabled.
+      - `test_24_near_pentagon_hex_fallback`: verifies hexagons adjacent to pentagons trigger fallback and match BallTree.
+      - `test_25_cell_vertex_and_boundary_adversarial_pairs`: tests sub-meter point pairs across cell vertices against oracle and BallTree.
+      - `test_26_multi_region_oracle_parity`: verifies candidate completeness and oracle parity across Equator (Singapore), English Channel (Dover), and Arctic (Tromsø) across resolutions 7, 8, 9.
+      - `test_27_spatial_radii_near_clearance_boundaries`: tests $\varepsilon_s$ values immediately below and above clearance thresholds (e.g. 394 m vs 396 m at Res 8, 140 m vs 142 m at Res 9), verifying correct $k$-ring transition and candidate completeness.
+  - **Empirical Full-Graph Parity Verification on Authentic NOAA AIS Data**:
+    - Evaluated full CSR graph parity between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` on all 143,116 analyzed observations (13,188,256 edges) of `data/processed/lalb_20250101/cleaned_ais.parquet` at $\varepsilon_s = 300\text{ m}, \Delta T = 900\text{ s}$:
+      - `CSR indptr match: True` (100.0000% degree identity)
+      - `CSR indices match: True` (100.0000% exact neighbor index identity across all 13,188,256 edges)
+      - `BallTree build: 0.2748 s, graph query: 41.9774 s`
+      - `H3 build: 0.5340 s, graph query: 31.2847 s`
+      - `Graph query speedup: 1.34x`
+      - `Fallback count: 0` (0 pentagons in San Pedro Bay study sector; zero grid disk errors)
+  - **Quality Gates Verification**:
+    - `pytest`: 86 passed in 5.71 s (100% pass)
+    - Code Coverage: 93% total repository coverage
+    - `ruff`: 0 lint errors; 60 files formatted
+    - `mypy`: 0 errors across 27 source files in strict mode
+- **Next Action:**
+  - Execute Milestone W3-01B: H3 Correctness Contract Finalization.
+
+---
+
+## Log Entry: 2026-11-23 — Task: Milestone W3-01B (H3 Correctness Contract Finalization)
+
+- **Date:** 2026-11-23
+- **Task Identifier:** `W3-01B: H3 Correctness Contract Finalization`
+- **Branch:** `feat/clu-h3-neighborhood`
+- **Scope:** Resolution of the mismatch between empirically tested H3 candidate coverage and claims of guaranteed completeness; replacing unsupported extrapolations/approximations with fail-closed rejection or fallback; requiring explicit opt-in for experimental uncalibrated configurations; establishing dataset-scoped parity verification tools; and updating research documentation.
+- **Summary of Changes:**
+  - **Correctness Contract & Empirical Bounds Audit**:
+    - Removed all claims of "guaranteed candidate completeness" or unconditional global mathematical theorems.
+    - Formalized the two-tier support policy:
+      1. Calibrated regional candidate search on resolutions 7, 8, 9 within empirically tested search radii.
+      2. Fail-closed rejection or fallback for uncalibrated resolutions, radii exceeding empirical tables, or expansion anomalies.
+  - **Replaced Unsupported Extrapolation with Fail-Closed Configuration Handling**:
+    - Updated `compute_safe_k_ring(resolution, eps_spatial_m, allow_uncalibrated=False)`:
+      - If resolution is not in `H3_MIN_CLEARANCE_METERS` (calibrated: 7, 8, 9) and `allow_uncalibrated=False`, raises `ValueError`.
+      - If `eps_spatial_m` exceeds the maximum empirical clearance in the table and `allow_uncalibrated=False`, raises `ValueError`.
+    - Updated `H3NeighborhoodProvider.__init__`:
+      - If an unsupported configuration is supplied without opt-in (`allow_uncalibrated=False`):
+        * If `enable_fallback=False`: raises `ValueError` immediately.
+        * If `enable_fallback=True`: routes all queries cleanly to `BallTreeNeighborhoodProvider` with `completeness_contract = "full_balltree_fallback"`, recording `fallback_reasons["unsupported_configuration..."]`.
+      - If explicit experimental opt-in (`allow_uncalibrated=True`) is provided:
+        * Emits clear logger warnings.
+        * Flags metadata `is_calibrated = False`, `completeness_contract = "experimental_uncalibrated"`.
+  - **Configuration Model Extension (`src/aegismar/clustering/config.py`)**:
+    - Added `SUPPORTED_CALIBRATED_H3_RESOLUTIONS: tuple[int, ...] = (7, 8, 9)`.
+    - Added `h3_allow_uncalibrated: bool = False` to `STDBSCANConfig` with boolean type validation and JSON serialization.
+    - Updated `run_h3_st_dbscan` to accept `allow_uncalibrated: bool | None = None`.
+  - **Dataset-Scoped Parity Verification Command (`aegismar verify-parity`)**:
+    - Created `verify_dataset_h3_balltree_parity` function and `ParityVerificationResult` dataclass in `h3_neighbors.py`.
+    - Added `verify-parity` subcommand to `src/aegismar/cli.py` and exported from `src/aegismar/clustering/__init__.py`.
+    - Computes input Parquet SHA-256, runs full CSR graph build and ST-DBSCAN for both BallTree and H3, verifies `indptr`, `indices`, cluster count, role counts, and cluster labels, and prints a formatted verification report.
+  - **Targeted Unit Test Suite Additions (`tests/unit/`)**:
+    - Added fixtures 28–32 in `tests/unit/test_h3_neighbors.py`:
+      - `test_28_unsupported_resolution_handling`: verifies `ValueError` in strict mode and full BallTree fallback when enabled.
+      - `test_29_radius_exceeding_calibrated_table_handling`: verifies `ValueError` on excessive radii and fallback when enabled.
+      - `test_30_experimental_uncalibrated_mode`: verifies opt-in approximate ring estimation, warnings, and contract metadata.
+      - `test_31_parity_verification_helper`: verifies `verify_dataset_h3_balltree_parity` helper.
+      - `test_32_contract_semantics_and_metadata`: verifies calibrated contract reporting.
+    - Added `test_cli_verify_parity_command` in `tests/unit/test_cli.py`.
+    - Total test count expanded to 92 tests passing at 94% repository code coverage (98% in `h3_neighbors.py`).
+  - **Full-Dataset Parity Execution**:
+    - Executed `verify-parity` on canonical NOAA San Pedro Bay dataset (`data/processed/lalb_20250101/cleaned_ais.parquet`, SHA-256: `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b`):
+      - 143,116 analyzed observations, 13,188,256 total CSR edges.
+      - `CSR indptr Match: PASS (Identical degrees)`
+      - `CSR indices Match: PASS (Identical neighbors across all 13.1M edges)`
+      - `Cluster Count Match: PASS` (241 clusters)
+      - `Core/Border/Noise Match: PASS` (136,276 core, 934 border, 5,906 noise)
+      - `Cluster Labels Match: PASS`
+      - `Fallback Count: 0`
+      - `Completeness Contract: empirical_regional_calibrated`
+  - **Documentation Updates**:
+    - Updated `README.md`, `ADR-009`, `evidence-register.md` (`CLM-CLU-06`), `evaluation-protocol.md`, `milestones.md`, and `CHANGELOG.md`.
+- **Quality Gates Verification**:
+  - `pytest`: 92 passed in 5.98 s (100% pass)
+  - Code Coverage: 94% total repository coverage (98% in `h3_neighbors.py`)
+  - `ruff`: 0 lint errors; 60 files formatted
+  - `mypy`: 0 errors across 27 source files in strict mode
+  - Markdown link check: 50 markdown files checked, 0 broken links
+- **Next Action:**
+  - Commit on feature branch `feat/clu-h3-neighborhood` with authorized message, push to origin, and prepare completion report.

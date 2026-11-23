@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -157,10 +157,11 @@ class STDBSCANResult:
     clustering_time_seconds: float
     total_time_seconds: float
     peak_tracemalloc_bytes: int
+    provider_metrics: dict[str, Any] = field(default_factory=dict)
 
     def summary_dict(self) -> dict[str, Any]:
         """Return JSON-serializable summary of clustering configuration, counts, and timings."""
-        return {
+        summary: dict[str, Any] = {
             "provider_name": self.provider_name,
             "config": self.config.to_dict(),
             "input_summary": {
@@ -190,6 +191,9 @@ class STDBSCANResult:
                 "peak_tracemalloc_mb": round(self.peak_tracemalloc_bytes / (1024 * 1024), 3),
             },
         }
+        if self.provider_metrics:
+            summary["provider_metrics"] = self.provider_metrics
+        return summary
 
 
 def _sort_and_pack_dataset(

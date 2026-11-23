@@ -11,19 +11,20 @@
 
 ## 1. Roadmap Architecture
 
-The development lifecycle operates across two complementary research tracks:
-- **Track A (Intact Eight-Week Solo Baseline — NipunaBhanuka18)**:
+The development lifecycle operates across two complementary, decoupled research tracks:
+- **Track A (Platform, Clustering & Spatial Intelligence — Lead: NipunaBhanuka18)**:
   1. **Foundations (Weeks 1–2)**: Ingestion, sentinel filtering, spatial indexing, and test oracles.
   2. **Core Research Algorithms (Weeks 3–4)**: ST-DBSCAN clustering, H3 candidate acceleration, stay-points, and anchorages.
-  3. **Behavioral Analytics & Serving (Weeks 5–6)**: Kinematic anomaly detection, DuckDB analytical storage, and read-only API.
-  4. **Integration, Geospatial UI & Research Defense (Weeks 7–8)**: Interactive map, benchmarking, reproducibility package, and final thesis documentation.
-- **Track B (Parallel ML Anomaly Research Track — Kishakya, *proposed*)**:
+  3. **Platform Storage & Serving (Weeks 5–6)**: DuckDB in-process analytics, contract integration, and read-only FastAPI service.
+  4. **Geospatial UI & Research Defense (Weeks 7–8)**: Interactive map, benchmarking, reproducibility package, and final thesis documentation.
+- **Track B (Parallel Behavioral ML Anomaly Research Track — Lead: Kishakya, *proposed*)**:
   - Operates on an independent schedule decoupled from Track A's critical path.
   - Consumes cleaned Parquet datasets via the canonical schema and exports incident predictions via the `vessel_anomaly_v1` GeoJSON contract.
+  - Governed by milestones `ML-01` through `ML-05` with flexible pacing.
 
 ---
 
-## 2. Weekly Milestone Breakdown
+## 2. Weekly Milestone Breakdown — Track A (Platform & Clustering)
 
 ### Week 1: Repository Setup, Data Architecture & Ingestion Engine
 - **Capacity**: 25 Hours
@@ -62,24 +63,22 @@ The development lifecycle operates across two complementary research tracks:
 - **Dependencies**: Week 3 clustering engine.
 - **Acceptance Gate**: Docked vessels inside berth polygons are strictly excluded from anchorage statistics; unique vessel counts are decoupled from ping counts.
 
-### Week 5: Kinematic Trajectory Anomaly Detection
+### Week 5: Platform Analytical Storage & Contract Integration
 - **Capacity**: 25 Hours
-- **Primary Goal**: Implement explainable multi-factor anomaly scoring for vessel trajectories.
+- **Primary Goal**: Integrate in-process DuckDB analytical storage, generate precomputed GeoJSON layers for clusters and anchorages, and establish contract ingestion validation for the provisional `vessel_anomaly_v1` schema.
 - **Key Deliverables**:
-  - `W5-01`: Trajectory kinematic feature extractor (acceleration, angular turn rate, drift angle, coverage gaps).
-  - `W5-02`: Explainable rule-based anomaly scoring engine with factor breakdown JSON.
-  - `W5-03` *(Conditional)*: Secondary Isolation Forest anomaly baseline.
-- **Dependencies**: Week 1 trajectory assembly.
-- **Acceptance Gate**: Synthetic trajectory perturbations (speed jumps, GPS dropouts, unnatural drifting) are correctly flagged with appropriate factor attributions.
+  - `W5-01`: DuckDB integration querying Parquet partitions and generating GeoJSON outputs.
+  - `W5-02`: Contract validation and ingestion pipeline for `vessel_anomaly_v1` GeoJSON FeatureCollections.
+- **Dependencies**: Weeks 3 and 4 spatial clustering and anchorage outputs.
+- **Acceptance Gate**: Sub-50ms analytical aggregations over Parquet via DuckDB; clean schema validation of anomaly contract payloads.
 
-### Week 6: Analytical Storage & Read-Only API
+### Week 6: Read-Only FastAPI Service Implementation
 - **Capacity**: 25 Hours
-- **Primary Goal**: Integrate in-process DuckDB storage and expose precomputed results via FastAPI.
+- **Primary Goal**: Implement stateless, read-only HTTP API serving precomputed spatial layers and anomaly incidents from DuckDB.
 - **Key Deliverables**:
-  - `W6-01`: DuckDB integration querying Parquet partitions and generating GeoJSON outputs.
-  - `W6-02`: Lightweight, read-only FastAPI service providing endpoints for clusters, anchorages, and anomalies.
-  - `W6-03`: Integration test suite validating API response schemas and performance.
-- **Dependencies**: Weeks 3, 4, and 5 analytical outputs.
+  - `W6-01`: Lightweight, read-only FastAPI service providing endpoints for clusters, anchorages, and anomalies.
+  - `W6-02`: Integration test suite validating API response schemas and performance.
+- **Dependencies**: Week 5 DuckDB analytical storage layer.
 - **Acceptance Gate**: Sub-50ms API response times on localhost for precomputed GeoJSON layers; zero mutable endpoints.
 
 ### Week 7: Geospatial Dashboard & End-to-End Validation
@@ -126,4 +125,9 @@ The machine learning anomaly detection research track proceeds in parallel with 
   - Implement `src/aegismar/anomaly/features.py` with comprehensive unit tests (`tests/unit/test_anomaly.py`).
   - Extract feature representations across San Pedro Bay test partition and log reproducible experiment artifacts under `experiments/outputs/anomaly/`.
   - *Deliverable*: Feature extractor module and baseline experiment summary JSON.
+- **ML-05: Anomaly Model Evaluation & `vessel_anomaly_v1` Export**:
+  - Implement rule-based scoring engine and Isolation Forest model.
+  - Evaluate PR-AUC, precision, recall, and false alarm rates on held-out splits.
+  - Export explainable incident GeoJSON conforming to the `vessel_anomaly_v1` contract for DuckDB ingestion.
+  - *Deliverable*: Anomaly scoring modules, evaluation benchmark logs, and verified incident GeoJSON.
 

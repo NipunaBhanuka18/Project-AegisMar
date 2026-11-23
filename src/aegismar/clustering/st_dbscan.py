@@ -38,6 +38,7 @@ from __future__ import annotations
 import time
 import tracemalloc
 from collections import Counter, deque
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -110,6 +111,7 @@ def run_st_dbscan(
             _, peak_bytes = tracemalloc.get_traced_memory()
             if started_tracemalloc:
                 tracemalloc.stop()
+        prov_metrics: dict[str, Any] = getattr(provider, "get_metrics", lambda: {})()
         return STDBSCANResult(
             dataset=dataset,
             config=config,
@@ -126,6 +128,7 @@ def run_st_dbscan(
             clustering_time_seconds=clustering_time_s,
             total_time_seconds=provider.build_time_seconds + query_time_s + clustering_time_s,
             peak_tracemalloc_bytes=peak_bytes,
+            provider_metrics=prov_metrics,
         )
 
     # Step 2: Determine core status from full eligible neighborhood (including self)
@@ -218,6 +221,8 @@ def run_st_dbscan(
     )
     cluster_member_counts = {cid: member_counter[cid] for cid in sorted(member_counter)}
 
+    prov_metrics = getattr(provider, "get_metrics", lambda: {})()
+
     return STDBSCANResult(
         dataset=dataset,
         config=config,
@@ -234,6 +239,7 @@ def run_st_dbscan(
         clustering_time_seconds=clustering_time_s,
         total_time_seconds=provider.build_time_seconds + query_time_s + clustering_time_s,
         peak_tracemalloc_bytes=peak_bytes,
+        provider_metrics=prov_metrics,
     )
 
 
@@ -257,6 +263,48 @@ def run_balltree_st_dbscan(
         config=config,
         leaf_size=leaf_size,
         query_batch_size=query_batch_size,
+    )
+    result = run_st_dbscan(
+        dataset=dataset,
+        config=config,
+        provider=provider,
+        measure_memory=measure_memory,
+    )
+    if started_tracemalloc and tracemalloc.is_tracing():
+        _, peak_bytes = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        result.peak_tracemalloc_bytes = max(result.peak_tracemalloc_bytes, peak_bytes)
+    return result
+
+
+def run_h3_st_dbscan(
+    dataset: ClusteringInputDataset,
+    config: STDBSCANConfig,
+    resolution: int | None = None,
+    k_ring: int | None = None,
+    enable_fallback: bool | None = None,
+    fallback_on_pentagons: bool | None = None,
+    allow_uncalibrated: bool | None = None,
+    measure_memory: bool = False,
+) -> STDBSCANResult:
+    """Convenience runner executing accelerated H3-backed ST-DBSCAN on a dataset."""
+    from aegismar.clustering.h3_neighbors import H3NeighborhoodProvider
+
+    started_tracemalloc = False
+    if measure_memory and not tracemalloc.is_tracing():
+        tracemalloc.start()
+        started_tracemalloc = True
+    elif measure_memory:
+        tracemalloc.reset_peak()
+
+    provider = H3NeighborhoodProvider(
+        dataset=dataset,
+        config=config,
+        resolution=resolution,
+        k_ring=k_ring,
+        enable_fallback=enable_fallback,
+        fallback_on_pentagons=fallback_on_pentagons,
+        allow_uncalibrated=allow_uncalibrated,
     )
     result = run_st_dbscan(
         dataset=dataset,
