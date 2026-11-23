@@ -28,6 +28,11 @@ Covers all 27 required and adversarial test fixture categories:
 25. Cell vertex and boundary adversarial pairs.
 26. Multi-region oracle parity (Equator, English Channel, Arctic).
 27. Spatial radii near clearance boundaries (k-ring transitions).
+28. Unsupported resolution rejection and fallback.
+29. Radii exceeding documented empirical coverage.
+30. Experimental uncalibrated mode opt-in and metadata.
+31. Dataset-scoped parity verification helper.
+32. Contract semantics and metadata reporting.
 """
 
 from __future__ import annotations
@@ -45,7 +50,11 @@ from aegismar.clustering.config import (
     QualityFilterPolicy,
     STDBSCANConfig,
 )
-from aegismar.clustering.h3_neighbors import H3NeighborhoodProvider, compute_safe_k_ring
+from aegismar.clustering.h3_neighbors import (
+    H3NeighborhoodProvider,
+    compute_safe_k_ring,
+    verify_dataset_h3_balltree_parity,
+)
 from aegismar.clustering.st_dbscan import run_h3_st_dbscan, run_st_dbscan
 from aegismar.clustering.types import (
     ClusteringInputDataset,
@@ -942,3 +951,146 @@ def test_27_spatial_radii_near_clearance_boundaries() -> None:
     assert prov_142.k_ring == 2
     bt_prov_142 = BallTreeNeighborhoodProvider(ds, cfg_142)
     _assert_h3_balltree_parity(ds, cfg_142, prov_142, bt_prov_142)
+
+
+# ---------------------------------------------------------------------------
+# Fixture 28: Unsupported resolution rejection and fallback
+# ---------------------------------------------------------------------------
+def test_28_unsupported_resolution_handling() -> None:
+    """Fixture 28: Uncalibrated resolutions raise in strict mode or route to BallTree fallback."""
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27),
+        ObservationRecord(2, "222222222", BASE_TIME + timedelta(seconds=60), 33.7401, -118.2701),
+    ]
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(eps_spatial_m=300.0, min_samples=2)
+
+    # 1. compute_safe_k_ring raises ValueError on uncalibrated resolution in strict mode
+    with pytest.raises(ValueError, match="no empirically calibrated clearance table"):
+        compute_safe_k_ring(resolution=5, eps_spatial_m=300.0, allow_uncalibrated=False)
+
+    # 2. H3NeighborhoodProvider raises ValueError when fallback is disabled
+    with pytest.raises(ValueError, match="Unsupported H3 configuration and fallback is disabled"):
+        H3NeighborhoodProvider(
+            ds, cfg, resolution=5, enable_fallback=False, allow_uncalibrated=False
+        )
+
+    # 3. With fallback enabled, routes cleanly to BallTree fallback with 100% parity
+    prov_fb = H3NeighborhoodProvider(
+        ds, cfg, resolution=5, enable_fallback=True, allow_uncalibrated=False
+    )
+    assert prov_fb.is_calibrated is False
+    assert prov_fb.completeness_contract == "full_balltree_fallback"
+    bt_prov = BallTreeNeighborhoodProvider(ds, cfg)
+    _assert_h3_balltree_parity(ds, cfg, prov_fb, bt_prov)
+    assert prov_fb.fallback_count == 4  # 2 points queried during graph build + 2 during ST-DBSCAN
+    assert any("unsupported_configuration" in r for r in prov_fb.fallback_reasons)
+
+
+# ---------------------------------------------------------------------------
+# Fixture 29: Radii exceeding documented empirical coverage
+# ---------------------------------------------------------------------------
+def test_29_radius_exceeding_calibrated_table_handling() -> None:
+    """Fixture 29: Radii exceeding empirical tables raise in strict mode or route to fallback."""
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27),
+        ObservationRecord(2, "222222222", BASE_TIME + timedelta(seconds=60), 33.7401, -118.2701),
+    ]
+    ds = build_clustering_dataset(records)
+    # Resolution 8 calibrated table max clearance is 2160.0 m (k=4)
+    cfg_large = STDBSCANConfig(eps_spatial_m=5000.0, min_samples=2)
+
+    # 1. compute_safe_k_ring raises ValueError without opt-in
+    with pytest.raises(ValueError, match="exceeds maximum empirically calibrated clearance"):
+        compute_safe_k_ring(resolution=8, eps_spatial_m=5000.0, allow_uncalibrated=False)
+
+    # 2. Provider raises when fallback is disabled
+    with pytest.raises(ValueError, match="Unsupported H3 configuration and fallback is disabled"):
+        H3NeighborhoodProvider(
+            ds, cfg_large, resolution=8, enable_fallback=False, allow_uncalibrated=False
+        )
+
+    # 3. Provider routes to fallback when enabled
+    prov_fb = H3NeighborhoodProvider(
+        ds, cfg_large, resolution=8, enable_fallback=True, allow_uncalibrated=False
+    )
+    bt_prov = BallTreeNeighborhoodProvider(ds, cfg_large)
+    _assert_h3_balltree_parity(ds, cfg_large, prov_fb, bt_prov)
+    assert prov_fb.fallback_count == 4
+
+
+# ---------------------------------------------------------------------------
+# Fixture 30: Experimental uncalibrated mode opt-in and metadata
+# ---------------------------------------------------------------------------
+def test_30_experimental_uncalibrated_mode() -> None:
+    """Fixture 30: allow_uncalibrated=True permits approximate estimation with metadata."""
+    # 1. Uncalibrated resolution allows approximate estimation
+    k_res5 = compute_safe_k_ring(resolution=5, eps_spatial_m=300.0, allow_uncalibrated=True)
+    assert k_res5 >= 1
+
+    # 2. Large radius extrapolation
+    k_extrap = compute_safe_k_ring(resolution=8, eps_spatial_m=3000.0, allow_uncalibrated=True)
+    assert k_extrap >= 5
+
+    # 3. Provider reflects experimental contract in metadata
+    records = [ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27)]
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(eps_spatial_m=300.0)
+
+    prov = H3NeighborhoodProvider(
+        ds, cfg, resolution=5, allow_uncalibrated=True, enable_fallback=False
+    )
+    metrics = prov.get_metrics()
+    assert metrics["is_calibrated"] is False
+    assert metrics["completeness_contract"] == "experimental_uncalibrated"
+    assert metrics["h3_allow_uncalibrated"] is True
+
+
+# ---------------------------------------------------------------------------
+# Fixture 31: Dataset-scoped parity verification helper
+# ---------------------------------------------------------------------------
+def test_31_parity_verification_helper() -> None:
+    """Fixture 31: verify_dataset_h3_balltree_parity confirms 100% graph and clustering parity."""
+    records = [
+        ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27),
+        ObservationRecord(2, "222222222", BASE_TIME + timedelta(seconds=60), 33.7401, -118.2701),
+        ObservationRecord(3, "333333333", BASE_TIME + timedelta(seconds=120), 33.7402, -118.2702),
+        ObservationRecord(4, "444444444", BASE_TIME, 34.0, -119.0),  # Isolated noise
+    ]
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(eps_spatial_m=300.0, eps_temporal_s=900.0, min_samples=2)
+
+    res = verify_dataset_h3_balltree_parity(
+        dataset=ds,
+        config=cfg,
+        resolution=8,
+        dataset_sha256="test-sha256",
+    )
+    assert res.is_perfect_parity is True
+    assert res.csr_indptr_match is True
+    assert res.csr_indices_match is True
+    assert res.clusters_match is True
+    assert res.roles_match is True
+    assert res.labels_match is True
+    assert res.total_edges_balltree == res.total_edges_h3
+    assert res.h3_metrics["is_calibrated"] is True
+    assert res.h3_metrics["completeness_contract"] == "empirical_regional_calibrated"
+
+
+# ---------------------------------------------------------------------------
+# Fixture 32: Contract semantics and metadata reporting
+# ---------------------------------------------------------------------------
+def test_32_contract_semantics_and_metadata() -> None:
+    """Fixture 32: Calibrated configuration emits empirical_regional_calibrated contract."""
+    records = [ObservationRecord(1, "111111111", BASE_TIME, 33.74, -118.27)]
+    ds = build_clustering_dataset(records)
+    cfg = STDBSCANConfig(eps_spatial_m=300.0)
+
+    prov = H3NeighborhoodProvider(ds, cfg, resolution=8)
+    assert prov.is_calibrated is True
+    assert prov.completeness_contract == "empirical_regional_calibrated"
+    assert prov.allow_uncalibrated is False
+
+    metrics = prov.get_metrics()
+    assert metrics["is_calibrated"] is True
+    assert metrics["completeness_contract"] == "empirical_regional_calibrated"

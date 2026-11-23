@@ -111,7 +111,7 @@ flowchart TD
 | **Build Backend** | `hatchling` | `hatchling` | Standard, modern PEP 517 build backend. |
 | **Quality Gates** | `ruff`, `mypy`, `pytest` | `ruff`, `mypy`, `pytest` | Sub-second linting/formatting, strict static typing, rigorous unit testing. |
 | **Data Engine** | Implemented (`pyarrow`); `duckdb` planned (W6) | `duckdb`, `pyarrow` | Columnar Parquet I/O (`zstd`) implemented via PyArrow; in-process DuckDB planned for W6. |
-| **Spatial Indexing**| Implemented: BallTree (W2-01) & H3 (W3-01) | `numpy`, `scikit-learn`, `h3` (4.x) | Haversine `BallTree` reference baseline and verified H3 hexagonal candidate provider; zero missing neighbors. |
+| **Spatial Indexing**| Implemented: BallTree (W2-01) & H3 (W3-01B) | `numpy`, `scikit-learn`, `h3` (4.x) | Haversine `BallTree` reference engine and empirical H3 hexagonal candidate provider (calibrated Res 7–9) with fail-closed fallback; bit-for-bit graph parity verified on authentic NOAA AIS. |
 | **Web Service** | *Planned (W6)* | `fastapi`, `uvicorn` | Lightweight, asynchronous, typed, read-only HTTP endpoints serving GeoJSON. |
 | **Geospatial UI** | *Planned (W7)* | Vanilla JS + Leaflet / MapLibre | Zero-build-step interactive geospatial visualization. |
 
@@ -151,6 +151,8 @@ Independent parallel research track with its own flexible milestone backlog (`ML
 | **DOC-01** | Evidence-Backed Research & Engineering Documentation | Week 2+ | **Completed** |
 | **DOC-01A**| Research Documentation Accuracy & Collaborator Readiness | Week 2+ | **Completed** |
 | **W3-01** | H3 Candidate Optimization & Completeness Verification | Week 3 | **Completed** |
+| **W3-01A**| H3 Completeness Audit, Correctness Hardening & PR Prep | Week 3 | **Completed** |
+| **W3-01B**| H3 Correctness Contract Finalization | Week 3 | **Completed** |
 | **W3-02** | Comparative H1 Benchmarking (BallTree vs. H3) | Week 3 | Planned |
 | **W4-01** | Stay-Point Extraction & Anchorage Dwell Identification | Week 4 | Planned |
 | **W4-02** | Anchorage Basin Dwell & Utilization Analytics | Week 4 | Planned |
@@ -225,6 +227,9 @@ uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_a
 
 # Run verified H3-accelerated ST-DBSCAN (Milestone W3-01)
 uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w3_01_lalb_h3 --provider h3 --h3-resolution 8 --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
+
+# Verify bit-for-bit graph and clustering parity between BallTree and H3 (Milestone W3-01B)
+uv run python -m aegismar verify-parity --input data/processed/lalb_20250101/cleaned_ais.parquet --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --h3-resolution 8
 ```
 
 ---
@@ -232,7 +237,7 @@ uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_a
 ## 11. Research Methodology Overview
 
 1. **Independent Verification Oracle**: A brute-force $O(N^2)$ geodesic distance comparator serves as the ground-truth test oracle in automated unit testing.
-2. **Correctness Guarantee**: H3 candidate neighbor sets must prove zero false negatives against the BallTree reference ($\text{Recall} = 1.0$).
+2. **Correctness Contract (Option B)**: H3 candidate neighbor sets operate under an empirical correctness contract backed by conservative clearance tables on calibrated resolutions (7, 8, 9) and fail-closed BallTree fallback, verified bit-for-bit against the BallTree reference on the San Pedro Bay research sector ($\text{Recall} = 1.0$). Uncalibrated resolutions require explicit experimental opt-in.
 3. **Vessel-Aware Metrics**: Anchorage utilization and dwell times are computed per unique vessel (`MMSI`), avoiding raw ping density bias.
 4. **Leakage-Free Anomaly Evaluation**: Trajectory anomaly detectors are evaluated using chronological and vessel-disjoint splits with physically plausible synthetic perturbations.
 

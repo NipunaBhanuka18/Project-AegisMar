@@ -284,6 +284,7 @@ def run_h3_st_dbscan(
     k_ring: int | None = None,
     enable_fallback: bool | None = None,
     fallback_on_pentagons: bool | None = None,
+    allow_uncalibrated: bool | None = None,
     measure_memory: bool = False,
 ) -> STDBSCANResult:
     """Convenience runner executing accelerated H3-backed ST-DBSCAN on a dataset."""
@@ -303,6 +304,7 @@ def run_h3_st_dbscan(
         k_ring=k_ring,
         enable_fallback=enable_fallback,
         fallback_on_pentagons=fallback_on_pentagons,
+        allow_uncalibrated=allow_uncalibrated,
     )
     result = run_st_dbscan(
         dataset=dataset,

@@ -1,53 +1,48 @@
-"""Correctness-preserving H3 discrete hexagonal spatiotemporal neighborhood provider.
+"""H3 discrete hexagonal spatiotemporal neighborhood candidate provider.
 
-Coordinate, Resolution, and Completeness Semantics
---------------------------------------------------
+Correctness Contract and Empirical Support Policy
+-------------------------------------------------
 - Coordinates: WGS 84 decimal degrees ``latitudes_deg`` in ``[-90.0, 90.0]`` and
   ``longitudes_deg`` in ``[-180.0, 180.0]``.
 - Discrete Global Grid: Coordinates are projected into discrete hexagonal H3 cells
-  at a configurable resolution (default: 8; supported: 7, 8, 9).
-- Candidate Coverage Invariant: For any query observation ``p`` in cell ``c_p``,
-  every observation ``q`` in cell ``c_q`` satisfying ``haversine_distance(p, q) <= eps_spatial_m``
-  MUST have ``c_q in candidate_cells(c_p)``.
+  at a configurable resolution (calibrated: 7, 8, 9; default: 8).
 - Geometry and Clearance Mathematics:
-  H3 cells are projected onto the sphere via Snyder equal-area polyhedral projection
-  of an icosahedron. Hexagon edge lengths are not globally uniform (varying by ~1.4x
-  across each icosahedron face), and each resolution contains exactly 12 pentagonal
-  cells. Planar regular hexagon formulas (such as apothem k * 2 * r_inscribed) cannot
-  analytically prove global spherical bounds due to Snyder projection distortion and
-  pentagonal faces. Therefore, the clearance values in ``H3_MIN_CLEARANCE_METERS``
-  represent empirical minimum clearances observed across tested regional cells,
-  high-latitude zones, and pentagons.
-- Honest Support Policy (Option B):
-  To eliminate unproven global theorems while preserving high throughput, AegisMar
-  adopts Option B: experimental H3 candidate acceleration supported by an observable,
-  fail-closed reference fallback policy. Any unproven condition, near-pentagon cell
-  (when fallback is configured), or discrete expansion anomaly routes directly and
-  transparently to the reference Haversine BallTree provider, recording exact metrics
-  and reasons for complete auditability.
-- Safe Ring Radius Selection:
-  Candidate cells are generated via ``h3.grid_disk(c, k)`` where ``k`` is chosen to
-  strictly exceed the query radius based on empirical minimum clearance thresholds:
-    - Res 7: k=1 supports eps_spatial_m <= 988.0 m.
-    - Res 8: k=1 supports eps_spatial_m <= 395.0 m;
-             k=2 supports eps_spatial_m <= 987.0 m.
-    - Res 9: k=1 supports eps_spatial_m <= 141.0 m;
-             k=2 supports eps_spatial_m <= 371.0 m;
-             k=3 supports eps_spatial_m <= 601.0 m.
-  If an explicit user-configured ``k_ring`` is smaller than ``safe_k``, the provider
-  strictly rejects the configuration with a ``ValueError`` rather than allowing
-  incomplete candidate sets.
-- Temporal Candidate Pruning: For each candidate cell, observations are pre-ordered
-  chronologically in canonical dataset order. Temporal candidate bounds are determined
-  via binary search (``numpy.searchsorted``), ensuring zero observations are missed
-  across temporal intervals without bin boundary edge effects.
-- Exact Haversine Distance Verification: All spatiotemporal candidates surviving
-  temporal pruning are verified against ``eps_spatial_m`` using exact spherical
-  Haversine distance matching the reference BallTree engine to machine precision.
-- Fail-Closed Fallback Mechanism: If ``grid_disk`` expansion fails, or if an observation
-  lies in or near an H3 pentagon (when configured), the provider transparently executes
-  exact fallback evaluation via ``BallTreeNeighborhoodProvider``. If fallback is disabled
-  and an unsafe cell is encountered, the provider fails closed by raising a ``RuntimeError``.
+  H3 partitions the Earth using Snyder equal-area polyhedral projection of an
+  icosahedron. Hexagon edge lengths are not uniform (varying by ~1.4x across each
+  icosahedral face), and each resolution contains exactly 12 pentagonal cells where
+  5 cells meet. Planar regular hexagon formulas (such as apothem k * 2 * r_inscribed)
+  do not analytically prove global spherical completeness across arbitrary coordinates.
+  Therefore, the clearance values in ``H3_MIN_CLEARANCE_METERS`` represent empirical
+  minimum clearances observed across tested regional cells, high-latitude zones, and
+  pentagons.
+- Empirical Support Policy (Option B):
+  AegisMar does not claim an unproven global analytical completeness theorem for H3.
+  Instead, correctness is preserved through a two-tier contract:
+    1. Calibrated Regional Candidate Search: For calibrated resolutions (7, 8, 9) and
+       search radii within documented empirical clearance tables, ``compute_safe_k_ring``
+       selects conservative ring coverage k. All candidates surviving discrete expansion
+       undergo exact spherical Haversine distance verification matching BallTree precision.
+    2. Fail-Closed Fallback Architecture: For uncalibrated resolutions, search radii
+       exceeding empirical tables, discrete API failures (e.g. ``grid_disk`` errors),
+       or configured pentagon encounters, the provider falls closed. If fallback is
+       enabled (default), queries route transparently to the reference
+       ``BallTreeNeighborhoodProvider``. If fallback is disabled, the provider fails
+       closed immediately with a ``ValueError`` or ``RuntimeError``.
+- Unsupported Configurations:
+  Uncalibrated resolutions or radii exceeding empirical tables are strictly rejected
+  unless explicit experimental opt-in (``allow_uncalibrated=True``) is granted. In
+  experimental mode, ring estimation is approximate, clear warnings are logged, and
+  diagnostics flag ``completeness_contract = "experimental_uncalibrated"``.
+- Fallback Triggers vs. Omission Detection:
+  The provider does NOT possess runtime oracle knowledge of candidates omitted outside
+  a chosen ring. Fallback is triggered explicitly by:
+    a) H3 API exceptions during ``grid_disk`` expansion.
+    b) Pentagon or near-pentagon cell encounters (when ``fallback_on_pentagons=True``).
+    c) Unsupported/uncalibrated configurations (when fallback is enabled).
+- Dataset-Specific Parity Verification:
+  Complete mathematical equivalence to the BallTree reference is verified offline
+  per-dataset via ``verify_dataset_h3_balltree_parity``, comparing full CSR neighborhood
+  graphs (``indptr`` and ``indices``) bit-for-bit.
 """
 
 from __future__ import annotations
@@ -56,6 +51,7 @@ import logging
 import math
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 
 import h3
@@ -66,7 +62,11 @@ from aegismar.clustering.balltree_neighbors import (
     BallTreeNeighborhoodProvider,
     _exact_haversine_to_candidates_m,
 )
-from aegismar.clustering.config import DEFAULT_H3_RESOLUTION, STDBSCANConfig
+from aegismar.clustering.config import (
+    DEFAULT_H3_RESOLUTION,
+    SUPPORTED_CALIBRATED_H3_RESOLUTIONS,
+    STDBSCANConfig,
+)
 from aegismar.clustering.types import (
     ClusteringInputDataset,
     NeighborhoodGraph,
@@ -87,12 +87,16 @@ H3_MIN_CLEARANCE_METERS: dict[int, dict[int, float]] = {
     9: {1: 141.0, 2: 371.0, 3: 601.0, 4: 831.0, 5: 1060.0},
 }
 
-# Conservative width estimate per ring for resolutions outside the clearance table
+# Conservative width estimate per ring for experimental estimation outside clearance tables
 _APPROX_RING_WIDTH_FACTOR: float = 0.44
 
 
-def compute_safe_k_ring(resolution: int, eps_spatial_m: float) -> int:
-    """Compute the minimum H3 grid_disk ring count k guaranteeing candidate completeness.
+def compute_safe_k_ring(
+    resolution: int,
+    eps_spatial_m: float,
+    allow_uncalibrated: bool = False,
+) -> int:
+    """Compute the minimum H3 grid_disk ring count k based on empirical clearance tables.
 
     Parameters
     ----------
@@ -100,26 +104,52 @@ def compute_safe_k_ring(resolution: int, eps_spatial_m: float) -> int:
         H3 discrete grid resolution (e.g. 7, 8, 9).
     eps_spatial_m : float
         Spatial neighborhood radius in meters.
+    allow_uncalibrated : bool, optional
+        If True, allow approximate estimation for uncalibrated resolutions or radii
+        exceeding documented empirical clearance tables. Defaults to False (strict mode).
 
     Returns
     -------
     int
-        Conservative ring count k >= 1 such that the empirical clearance distance to
-        ring k+1 is strictly >= eps_spatial_m.
+        Ring count k >= 1 such that the empirical clearance distance to
+        ring k+1 is >= eps_spatial_m.
+
+    Raises
+    ------
+    ValueError
+        If resolution is uncalibrated or eps_spatial_m exceeds documented clearance tables
+        and allow_uncalibrated is False.
     """
     if resolution in H3_MIN_CLEARANCE_METERS:
         table = H3_MIN_CLEARANCE_METERS[resolution]
         for k in sorted(table):
             if table[k] >= eps_spatial_m:
                 return k
-        # If radius exceeds predefined table, extrapolate conservatively from the largest entry
+
         max_k = max(table)
         max_dist = table[max_k]
+        if not allow_uncalibrated:
+            raise ValueError(
+                f"Requested eps_spatial_m ({eps_spatial_m:.1f} m) exceeds maximum empirically "
+                f"calibrated clearance ({max_dist:.1f} m) for H3 resolution {resolution}. "
+                f"Set allow_uncalibrated=True to extrapolate ring order experimentally "
+                f"without empirical completeness guarantees."
+            )
+
+        # Explicit uncalibrated extrapolation:
         step = max_dist / max_k
         extra_k = math.ceil((eps_spatial_m - max_dist) / step)
         return max_k + extra_k
 
-    # For other resolutions, estimate using mean edge length scaled by conservative factor
+    if not allow_uncalibrated:
+        raise ValueError(
+            f"H3 resolution {resolution} has no empirically calibrated clearance table "
+            f"(calibrated resolutions: {tuple(sorted(H3_MIN_CLEARANCE_METERS))}). "
+            f"Set allow_uncalibrated=True to estimate ring order experimentally "
+            f"without empirical completeness guarantees."
+        )
+
+    # Explicit uncalibrated approximation:
     avg_edge_m = float(h3.average_hexagon_edge_length(resolution, unit="m"))
     min_width_m = avg_edge_m * _APPROX_RING_WIDTH_FACTOR
     k_est = math.ceil(eps_spatial_m / min_width_m)
@@ -127,7 +157,7 @@ def compute_safe_k_ring(resolution: int, eps_spatial_m: float) -> int:
 
 
 class H3NeighborhoodProvider(NeighborhoodProvider):
-    """Correctness-preserving H3 discrete hexagonal spatiotemporal neighborhood engine.
+    """H3 discrete hexagonal spatiotemporal neighborhood provider with fail-closed fallback.
 
     Never materializes an N x N distance matrix. Spatial candidate cells are retrieved
     via H3 discrete grid indexing with conservative ring coverage, filtered temporally
@@ -143,13 +173,14 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
         k_ring: int | None = None,
         enable_fallback: bool | None = None,
         fallback_on_pentagons: bool | None = None,
+        allow_uncalibrated: bool | None = None,
     ) -> None:
         self._dataset = dataset
         self._config = config
         self._eps_spatial_m = float(config.eps_spatial_m)
         self._eps_temporal_us = float(config.eps_temporal_us)
 
-        # Resolution: explicit override > config > default (8)
+        # Resolution resolution: explicit override > config > default (8)
         self._resolution = (
             resolution
             if resolution is not None
@@ -157,24 +188,6 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
         )
         if not (0 <= self._resolution <= 15):
             raise ValueError(f"H3 resolution must be between 0 and 15, got {self._resolution}")
-
-        # Conservative k-ring calculation & validation
-        safe_k = compute_safe_k_ring(self._resolution, self._eps_spatial_m)
-        configured_k = k_ring if k_ring is not None else getattr(config, "h3_k_ring", None)
-
-        if configured_k is not None:
-            if configured_k < 1:
-                raise ValueError(f"H3 k_ring must be >= 1, got {configured_k}")
-            if configured_k < safe_k:
-                raise ValueError(
-                    f"Configured H3 k_ring ({configured_k}) is smaller than required safe "
-                    f"completeness bound ({safe_k}) for resolution {self._resolution} and "
-                    f"eps_spatial {self._eps_spatial_m:.1f} m. Undersized k_ring produces "
-                    f"incomplete neighborhoods. Set k_ring >= {safe_k} or omit it."
-                )
-            self._k_ring = configured_k
-        else:
-            self._k_ring = safe_k
 
         self._enable_fallback = (
             enable_fallback
@@ -186,6 +199,72 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
             if fallback_on_pentagons is not None
             else getattr(config, "h3_fallback_on_pentagons", False)
         )
+        self._allow_uncalibrated = (
+            allow_uncalibrated
+            if allow_uncalibrated is not None
+            else getattr(config, "h3_allow_uncalibrated", False)
+        )
+
+        # Calibration & safe k-ring determination
+        self._all_fallback = False
+        self._unsupported_reason: str | None = None
+        configured_k = k_ring if k_ring is not None else getattr(config, "h3_k_ring", None)
+
+        try:
+            safe_k = compute_safe_k_ring(
+                self._resolution,
+                self._eps_spatial_m,
+                allow_uncalibrated=self._allow_uncalibrated,
+            )
+        except ValueError as exc:
+            if not self._enable_fallback:
+                raise ValueError(
+                    f"Unsupported H3 configuration and fallback is disabled: {exc}"
+                ) from exc
+            logger.warning(
+                "Unsupported H3 configuration (%s); routing all queries to BallTree fallback.",
+                exc,
+            )
+            self._all_fallback = True
+            self._unsupported_reason = f"unsupported_configuration: {exc}"
+            safe_k = 1
+
+        if not self._all_fallback:
+            if configured_k is not None:
+                if configured_k < 1:
+                    raise ValueError(f"H3 k_ring must be >= 1, got {configured_k}")
+                if configured_k < safe_k:
+                    raise ValueError(
+                        f"Configured H3 k_ring ({configured_k}) is smaller than required safe "
+                        f"completeness bound ({safe_k}) for resolution {self._resolution} and "
+                        f"eps_spatial {self._eps_spatial_m:.1f} m. Undersized k_ring produces "
+                        f"incomplete neighborhoods. Set k_ring >= {safe_k} or omit it."
+                    )
+                self._k_ring = configured_k
+            else:
+                self._k_ring = safe_k
+        else:
+            self._k_ring = configured_k if configured_k is not None else 1
+
+        # Establish contract metadata
+        if self._all_fallback:
+            self._is_calibrated = False
+            self._completeness_contract = "full_balltree_fallback"
+        elif self._allow_uncalibrated and (
+            self._resolution not in SUPPORTED_CALIBRATED_H3_RESOLUTIONS
+            or self._eps_spatial_m > max(H3_MIN_CLEARANCE_METERS[self._resolution].values())
+        ):
+            self._is_calibrated = False
+            self._completeness_contract = "experimental_uncalibrated"
+            logger.warning(
+                "H3 provider operating in experimental uncalibrated mode (resolution %d, "
+                "eps_spatial %.1f m). No empirical completeness guarantee is established.",
+                self._resolution,
+                self._eps_spatial_m,
+            )
+        else:
+            self._is_calibrated = True
+            self._completeness_contract = "empirical_regional_calibrated"
 
         # Diagnostics & performance counters
         self._fallback_count = 0
@@ -207,7 +286,7 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
         t0 = time.perf_counter()
         n = dataset.num_points
 
-        if n > 0:
+        if n > 0 and not self._all_fallback:
             lats_deg = dataset.latitudes_deg
             lons_deg = dataset.longitudes_deg
             self._lats_deg = lats_deg
@@ -225,9 +304,6 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
             self._point_cells = cells
 
             # 2. Build inverted index mapping each cell to its constituent observation indices.
-            # Because dataset observations are already sorted canonically by
-            # (timestamp_us, mmsi, lat, lon, source_row), the grouped indices within each
-            # cell are automatically ordered chronologically in non-decreasing timestamp order.
             t_pre_0 = time.perf_counter()
             cell_to_obs: dict[str, list[int]] = defaultdict(list)
             for i, c in enumerate(cells):
@@ -241,8 +317,6 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
             }
 
             # 3. Precompute active candidate cells for each unique occupied cell.
-            # Only candidate cells that actually contain observations in the dataset
-            # need to be considered during neighborhood queries.
             active_candidates: dict[str, list[str]] = {}
             cell_is_pentagon: dict[str, bool] = {}
             cell_near_pentagon: dict[str, bool] = {}
@@ -284,6 +358,18 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
             self._cell_is_pentagon = cell_is_pentagon
             self._cell_near_pentagon = cell_near_pentagon
             self._candidate_precomputation_time_s = time.perf_counter() - t_pre_0
+        elif n > 0 and self._all_fallback:
+            # All observations will route directly to BallTree fallback
+            self._lats_deg = dataset.latitudes_deg
+            self._lons_deg = dataset.longitudes_deg
+            self._lats_rad = np.deg2rad(dataset.latitudes_deg)
+            self._timestamps_us = dataset.timestamps_us
+            self._point_cells = ["fallback"] * n
+            self._cell_indices = {}
+            self._cell_timestamps = {}
+            self._active_candidates = {}
+            self._cell_is_pentagon = {}
+            self._cell_near_pentagon = {}
         else:
             self._lats_deg = np.empty(0, dtype=np.float64)
             self._lons_deg = np.empty(0, dtype=np.float64)
@@ -320,8 +406,23 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
 
     @property
     def k_ring(self) -> int:
-        """Conservative ring expansion radius used for spatial candidate sets."""
+        """Ring expansion radius used for spatial candidate sets."""
         return self._k_ring
+
+    @property
+    def is_calibrated(self) -> bool:
+        """Whether this provider operates within empirically calibrated bounds."""
+        return self._is_calibrated
+
+    @property
+    def completeness_contract(self) -> str:
+        """Classification of the active completeness contract."""
+        return self._completeness_contract
+
+    @property
+    def allow_uncalibrated(self) -> bool:
+        """Whether experimental uncalibrated configurations are permitted."""
+        return self._allow_uncalibrated
 
     @property
     def fallback_count(self) -> int:
@@ -339,10 +440,13 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
         return frozenset(self._cells_requiring_fallback)
 
     def get_metrics(self) -> dict[str, Any]:
-        """Return granular diagnostics and performance counters."""
+        """Return granular diagnostics, contract status, and performance counters."""
         return {
             "h3_resolution": self._resolution,
             "h3_k_ring": self._k_ring,
+            "is_calibrated": self._is_calibrated,
+            "completeness_contract": self._completeness_contract,
+            "h3_allow_uncalibrated": self._allow_uncalibrated,
             "unique_occupied_cells": len(self._cell_indices),
             "fallback_count": self._fallback_count,
             "fallback_time_seconds": round(self._fallback_time_s, 6),
@@ -369,6 +473,16 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
 
     def _query_single_index(self, index: int) -> NDArray[np.int64]:
         """Execute complete neighborhood query for a single observation index."""
+        if self._all_fallback:
+            t_fb_0 = time.perf_counter()
+            fb_provider = self._get_fallback_provider()
+            res = fb_provider.query_neighbors(index)
+            self._fallback_time_s += time.perf_counter() - t_fb_0
+            self._fallback_count += 1
+            reason = self._unsupported_reason or "unsupported_configuration"
+            self._fallback_reason_counts[reason] += 1
+            return res
+
         c = self._point_cells[index]
 
         # Fail-closed fallback evaluation for pentagons, near-pentagons, or grid_disk failures
@@ -463,3 +577,111 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
 
         indices = np.concatenate(chunks) if chunks else np.empty(0, dtype=np.int64)
         return NeighborhoodGraph(indptr=indptr, indices=indices)
+
+
+@dataclass(frozen=True, slots=True)
+class ParityVerificationResult:
+    """Detailed results of bit-for-bit neighborhood and clustering parity verification."""
+
+    dataset_sha256: str
+    num_points: int
+    eps_spatial_m: float
+    eps_temporal_s: float
+    min_samples: int
+    h3_resolution: int
+    h3_k_ring: int
+    csr_indptr_match: bool
+    csr_indices_match: bool
+    total_edges_balltree: int
+    total_edges_h3: int
+    clusters_match: bool
+    roles_match: bool
+    labels_match: bool
+    balltree_build_time_s: float
+    balltree_query_time_s: float
+    h3_build_time_s: float
+    h3_query_time_s: float
+    graph_query_speedup: float
+    h3_metrics: dict[str, Any]
+
+    @property
+    def is_perfect_parity(self) -> bool:
+        """Return True if all graph edges, roles, and cluster labels match 100% exactly."""
+        return (
+            self.csr_indptr_match
+            and self.csr_indices_match
+            and self.clusters_match
+            and self.roles_match
+            and self.labels_match
+        )
+
+
+def verify_dataset_h3_balltree_parity(
+    dataset: ClusteringInputDataset,
+    config: STDBSCANConfig,
+    resolution: int | None = None,
+    k_ring: int | None = None,
+    dataset_sha256: str = "unspecified",
+) -> ParityVerificationResult:
+    """Verify bit-for-bit CSR graph and clustering parity between BallTree and H3 on a dataset."""
+    from aegismar.clustering.st_dbscan import run_st_dbscan
+
+    # 1. Build BallTree graph
+    t0 = time.perf_counter()
+    bt_prov = BallTreeNeighborhoodProvider(dataset=dataset, config=config)
+    bt_build_s = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    bt_graph = bt_prov.build_neighborhood_graph()
+    bt_query_s = time.perf_counter() - t0
+
+    # 2. Build H3 graph
+    t0 = time.perf_counter()
+    h3_prov = H3NeighborhoodProvider(
+        dataset=dataset,
+        config=config,
+        resolution=resolution,
+        k_ring=k_ring,
+    )
+    h3_build_s = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    h3_graph = h3_prov.build_neighborhood_graph()
+    h3_query_s = time.perf_counter() - t0
+
+    # 3. Graph comparisons
+    indptr_match = bool(np.array_equal(bt_graph.indptr, h3_graph.indptr))
+    indices_match = bool(np.array_equal(bt_graph.indices, h3_graph.indices))
+
+    # 4. Clustering executions
+    bt_res = run_st_dbscan(dataset=dataset, config=config, provider=bt_prov)
+    h3_res = run_st_dbscan(dataset=dataset, config=config, provider=h3_prov)
+
+    clusters_match = bool(bt_res.num_clusters == h3_res.num_clusters)
+    roles_match = bool(bt_res.roles == h3_res.roles)
+    labels_match = bool(np.array_equal(bt_res.labels, h3_res.labels))
+
+    speedup = bt_query_s / max(h3_query_s, 1e-9)
+
+    return ParityVerificationResult(
+        dataset_sha256=dataset_sha256,
+        num_points=dataset.num_points,
+        eps_spatial_m=float(config.eps_spatial_m),
+        eps_temporal_s=float(config.eps_temporal_s),
+        min_samples=config.min_samples,
+        h3_resolution=h3_prov.resolution,
+        h3_k_ring=h3_prov.k_ring,
+        csr_indptr_match=indptr_match,
+        csr_indices_match=indices_match,
+        total_edges_balltree=bt_graph.total_edges,
+        total_edges_h3=h3_graph.total_edges,
+        clusters_match=clusters_match,
+        roles_match=roles_match,
+        labels_match=labels_match,
+        balltree_build_time_s=round(bt_build_s, 6),
+        balltree_query_time_s=round(bt_query_s, 6),
+        h3_build_time_s=round(h3_build_s, 6),
+        h3_query_time_s=round(h3_query_s, 6),
+        graph_query_speedup=round(speedup, 2),
+        h3_metrics=h3_prov.get_metrics(),
+    )

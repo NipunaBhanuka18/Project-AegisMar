@@ -148,10 +148,65 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional explicit H3 k-ring radius (default: auto-computed safe completeness bound)",
     )
     cluster_parser.add_argument(
+        "--allow-uncalibrated-h3",
+        action="store_true",
+        default=False,
+        help="Permit experimental uncalibrated H3 resolutions or ring extrapolations",
+    )
+    cluster_parser.add_argument(
         "--overwrite",
         action="store_true",
         default=False,
         help="Allow overwriting existing clustering output artifacts",
+    )
+
+    # Parity verification subcommand
+    parity_parser = subparsers.add_parser(
+        "verify-parity",
+        help="Verify bit-for-bit neighborhood and clustering parity between BallTree and H3",
+    )
+    parity_parser.add_argument(
+        "--input",
+        "-i",
+        type=str,
+        required=True,
+        help="Path to cleaned Parquet dataset file",
+    )
+    parity_parser.add_argument(
+        "--eps-spatial-m",
+        type=float,
+        default=DEFAULT_EPS_SPATIAL_M,
+        help=f"Spatial neighborhood radius in meters (default: {DEFAULT_EPS_SPATIAL_M})",
+    )
+    parity_parser.add_argument(
+        "--eps-temporal-s",
+        type=float,
+        default=DEFAULT_EPS_TEMPORAL_S,
+        help=f"Temporal neighborhood threshold in seconds (default: {DEFAULT_EPS_TEMPORAL_S})",
+    )
+    parity_parser.add_argument(
+        "--min-samples",
+        type=int,
+        default=DEFAULT_MIN_SAMPLES,
+        help=f"Minimum samples for core point status (default: {DEFAULT_MIN_SAMPLES})",
+    )
+    parity_parser.add_argument(
+        "--h3-resolution",
+        type=int,
+        default=DEFAULT_H3_RESOLUTION,
+        help=f"H3 discrete grid resolution (default: {DEFAULT_H3_RESOLUTION}; calibrated: 7, 8, 9)",
+    )
+    parity_parser.add_argument(
+        "--h3-k-ring",
+        type=int,
+        default=None,
+        help="Optional explicit H3 k-ring radius override",
+    )
+    parity_parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=None,
+        help="Optional deterministic row limit",
     )
 
     return parser
@@ -245,6 +300,7 @@ def handle_cluster(args: argparse.Namespace) -> int:
             provider=provider_name,
             h3_resolution=args.h3_resolution,
             h3_k_ring=args.h3_k_ring,
+            h3_allow_uncalibrated=args.allow_uncalibrated_h3,
             quality_filter=policy,
         )
         dataset = load_clustering_dataset_from_parquet(
@@ -292,6 +348,9 @@ def handle_cluster(args: argparse.Namespace) -> int:
     if provider_name == PROVIDER_H3 and "h3_resolution" in result.provider_metrics:
         print(f"H3 Resolution:        {result.provider_metrics['h3_resolution']}")
         print(f"H3 k-ring:            {result.provider_metrics['h3_k_ring']}")
+        print(
+            f"Contract:             {result.provider_metrics.get('completeness_contract', 'N/A')}"
+        )
         print(f"Fallback Count:       {result.provider_metrics['fallback_count']}")
     print(f"Total Input Rows:     {result.dataset.total_input_count:,}")
     print(f"Excluded Rows:        {result.dataset.excluded_count:,}")
@@ -314,6 +373,82 @@ def handle_cluster(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_verify_parity(args: argparse.Namespace) -> int:
+    """Handle the verify-parity CLI command."""
+    import hashlib
+
+    from aegismar.clustering.h3_neighbors import verify_dataset_h3_balltree_parity
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"Error: Input file not found: {input_path}", file=sys.stderr)
+        return 1
+
+    sha256 = hashlib.sha256(input_path.read_bytes()).hexdigest()
+
+    policy = QualityFilterPolicy(exclude_timestamp_conflicts=True)
+    dataset = load_clustering_dataset_from_parquet(
+        parquet_path=str(input_path),
+        quality_filter=policy,
+        max_rows=args.max_rows,
+    )
+    config = STDBSCANConfig(
+        eps_spatial_m=args.eps_spatial_m,
+        eps_temporal_s=args.eps_temporal_s,
+        min_samples=args.min_samples,
+        quality_filter=policy,
+    )
+
+    print("=================================================================")
+    print("Project AegisMar - Dataset-Scoped H3 vs. BallTree Parity Verification")
+    print("=================================================================")
+    print(f"Input Parquet:         {input_path}")
+    print(f"Dataset SHA-256:       {sha256}")
+    print(f"Analyzed Observations: {dataset.num_points:,}")
+    print(f"eps_spatial_m:         {args.eps_spatial_m} m")
+    print(f"eps_temporal_s:        {args.eps_temporal_s} s")
+    print(f"min_samples:           {args.min_samples}")
+    print(f"H3 Resolution:         {args.h3_resolution}")
+    print("-----------------------------------------------------------------")
+    print("Executing parity verification across all observations...")
+
+    res = verify_dataset_h3_balltree_parity(
+        dataset=dataset,
+        config=config,
+        resolution=args.h3_resolution,
+        k_ring=args.h3_k_ring,
+        dataset_sha256=sha256,
+    )
+
+    print("\nParity Verification Results:")
+    print("-----------------------------------------------------------------")
+    print(f"CSR Graph Edge Count:  BT={res.total_edges_balltree:,} | H3={res.total_edges_h3:,}")
+    indptr_str = "PASS (Identical degrees)" if res.csr_indptr_match else "FAIL"
+    indices_str = "PASS (Identical neighbors)" if res.csr_indices_match else "FAIL"
+    print(f"CSR indptr Match:      {indptr_str}")
+    print(f"CSR indices Match:     {indices_str}")
+    print(f"Cluster Count Match:   {'PASS' if res.clusters_match else 'FAIL'}")
+    print(f"Core/Border/Noise:     {'PASS' if res.roles_match else 'FAIL'}")
+    print(f"Cluster Labels Match:  {'PASS' if res.labels_match else 'FAIL'}")
+    print(f"BallTree Query Time:   {res.balltree_query_time_s:.3f} s")
+    print(f"H3 Query Time:         {res.h3_query_time_s:.3f} s")
+    print(f"Graph Query Speedup:   {res.graph_query_speedup:.2f}x")
+    print(f"H3 Fallback Count:     {res.h3_metrics['fallback_count']}")
+    print(f"Completeness Contract: {res.h3_metrics['completeness_contract']}")
+    print(f"Is Calibrated:         {res.h3_metrics['is_calibrated']}")
+    print("=================================================================")
+
+    if res.is_perfect_parity:
+        print("VERIFICATION SUCCESS: 100% Bit-for-Bit Parity Confirmed on this dataset!")
+        return 0
+
+    print(
+        "VERIFICATION FAILED: Neighborhood or clustering parity mismatch detected!",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main CLI entrypoint."""
     parser = build_parser()
@@ -323,6 +458,8 @@ def main(argv: list[str] | None = None) -> int:
         return handle_ingest(args)
     if args.command == "cluster":
         return handle_cluster(args)
+    if args.command == "verify-parity":
+        return handle_verify_parity(args)
     parser.print_help()
     return 0
 

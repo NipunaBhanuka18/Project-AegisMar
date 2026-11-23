@@ -1,7 +1,7 @@
 # ADR-009: Uber H3 Discrete Hexagonal Grid as Correctness-Preserving Candidate Neighbor Generator
 
-**Status:** Hardened & Verified (Milestone W3-01A)  
-**Date:** 2026-11-14 (Architecture Formalized: 2026-11-18; Implemented: 2026-11-22; Hardened: 2026-11-23)  
+**Status:** Finalized & Verified (Milestone W3-01B)  
+**Date:** 2026-11-14 (Architecture Formalized: 2026-11-18; Implemented: 2026-11-22; Hardened: 2026-11-23; Finalized: 2026-11-23)  
 **Deciders:** NipunaBhanuka18 (Project Lead & Primary Researcher)  
 **Technical Scope:** Spatial Candidate Indexing & Primary Research Contribution (RQ1)  
 
@@ -34,34 +34,40 @@ We required an indexing mechanism that leverages discrete $O(1)$ cell hashing to
 
 ### Alternative C: Unconditional Global Mathematical Guarantee (Pure Hexagonal Analytical Bounds)
 - **Concept:** Claim that planar apothem formulas analytically prove global completeness for all spherical cells.
-- **Evaluation at Audit Time (W3-01A):** Evaluated and rejected. Snyder projection distortion, edge length variances, and icosahedral pentagons invalidate claims of closed-form global regular-hexagon proofs on the sphere.
+- **Evaluation at Audit Time (W3-01A/B):** Evaluated and rejected. Snyder projection distortion, edge length variances, and icosahedral pentagons invalidate claims of closed-form global regular-hexagon proofs on the sphere.
 
 ---
 
 ## 3. Decision
 
-We adopt **Option B: Experimental H3 Candidate Acceleration with Observable, Fail-Closed Reference Fallback**:
+We adopt **Option B: Empirical H3 Candidate Acceleration with Observable, Fail-Closed Reference Fallback**:
 
 1. **Discrete Projection**: Map observations to discrete H3 cells at resolution $R$ using `h3-py` (v4.x API).
-2. **Empirical Clearance Bounds**: Determine the required ring expansion $k \ge 1$ via `compute_safe_k_ring(R, \varepsilon_s)` using conservative clearance lookup tables (`H3_MIN_CLEARANCE_METERS`) empirically verified across tested regional cells, high-latitude coordinates, and pentagons:
-   - Resolution 7 ($k=1$): clearance $\ge 988.0\text{ m}$ (supports $\varepsilon_s \le 988\text{ m}$)
-   - Resolution 8 ($k=1$): clearance $\ge 395.0\text{ m}$ (supports $\varepsilon_s \le 395\text{ m}$)
-   - Resolution 9 ($k=1$): clearance $\ge 141.0\text{ m}$; $k=2$ clearance $\ge 371.0\text{ m}$ (supports $\varepsilon_s \le 371\text{ m}$)
-3. **Strict Parameter Validation (Fail-Closed)**:
+2. **Empirical Clearance Bounds on Calibrated Resolutions**:
+   - Determine required ring expansion $k \ge 1$ via `compute_safe_k_ring(R, \varepsilon_s)` using conservative clearance lookup tables (`H3_MIN_CLEARANCE_METERS`) empirically verified across tested regional cells, high-latitude coordinates, and pentagons:
+     - **Resolution 7 ($k=1$):** clearance $\ge 988.0\text{ m}$ (supports $\varepsilon_s \le 988\text{ m}$; max table: $4200.0\text{ m}$ at $k=3$)
+     - **Resolution 8 ($k=1$):** clearance $\ge 395.0\text{ m}$ (supports $\varepsilon_s \le 395\text{ m}$; max table: $2160.0\text{ m}$ at $k=4$)
+     - **Resolution 9 ($k=1$):** clearance $\ge 141.0\text{ m}$; $k=2$ clearance $\ge 371.0\text{ m}$ (supports $\varepsilon_s \le 371\text{ m}$; max table: $1060.0\text{ m}$ at $k=5$)
+3. **Unsupported Configuration Policy**:
+   - When an uncalibrated resolution or a search radius exceeding empirical tables is supplied:
+     - **Default strict mode (`allow_uncalibrated=False`)**: if fallback is disabled, raises `ValueError`; if fallback is enabled, routes all observations to reference `BallTree` fallback with clear warnings and metadata (`completeness_contract = "full_balltree_fallback"`).
+     - **Explicit experimental opt-in (`allow_uncalibrated=True`)**: estimates $k$-ring order via average edge approximations, logs clear warnings, and marks metadata (`completeness_contract = "experimental_uncalibrated"`).
+4. **Strict Parameter Validation (Fail-Closed)**:
    - If a caller explicitly configures `k_ring < safe_k`, `H3NeighborhoodProvider` raises a `ValueError` rather than allowing candidate omissions.
-4. **Observable Fallback Architecture**:
-   - If discrete cell expansion (`h3.grid_disk`) fails, or if an observation falls in or near an H3 pentagon (when `fallback_on_pentagons` is configured):
-     - If `enable_fallback=True` (default): route neighborhood evaluation to the reference `BallTreeNeighborhoodProvider`, record the fallback in execution metrics (`fallback_count`, `fallback_time_seconds`, `fallback_reasons`).
-     - If `enable_fallback=False`: raise a `RuntimeError` immediately during index initialization or query execution.
-   - The provider **never** silently downgrades to a self-cell candidate list `[c]`.
-5. **Exact Pruning**: Perform exact geodesic Haversine distance filtering and integer-microsecond temporal filtering on all candidates surviving discrete expansion, matching BallTree precision to machine epsilon.
-6. **Pluggable Protocol**: Implement the shared `NeighborhoodProvider` protocol, enabling drop-in substitution into deterministic `run_st_dbscan`.
+5. **Precise Fallback Triggers vs. Omission Detection**:
+   - The provider does **not** claim real-time automatic detection of omitted candidates outside the candidate disk; runtime exactness is preserved by safe ring radii or explicit fallback routing.
+   - Fallback to `BallTreeNeighborhoodProvider` is triggered strictly by:
+     1. **H3 API Exceptions**: Unexpected errors during `h3.grid_disk(c, k)` expansion mark cells for fallback or fail closed with `RuntimeError` if fallback is disabled.
+     2. **Pentagon-Related Fallback**: When `fallback_on_pentagons=True` is enabled, pentagons and near-pentagon hexagons route to BallTree fallback (or fail closed with `RuntimeError` if fallback is disabled).
+     3. **Unsupported Configuration Fallback**: When an uncalibrated resolution or excessive radius is provided with `enable_fallback=True`.
+6. **Exact Pruning**: Perform exact geodesic Haversine distance filtering and integer-microsecond temporal filtering on all candidates surviving discrete expansion, matching BallTree precision to machine epsilon.
+7. **Dataset-Scoped Parity Verification**: Provide an explicit offline verification tool (`verify_dataset_h3_balltree_parity` and CLI `verify-parity`) confirming 100% bit-for-bit graph parity (`indptr` and `indices`) on specific datasets.
 
 ---
 
 ## 4. Clearance Mathematics and Geometry Audit
 
-During Milestone W3-01A, an in-depth audit of the clearance geometry resolved the following distinctions:
+During Milestones W3-01A and W3-01B, an in-depth audit of the clearance geometry resolved the following distinctions:
 
 | Geometric Concept | Planar Hexagon Idealization | Actual H3 Spherical Reality | Operational Impact |
 |:---|:---|:---|:---|
@@ -75,10 +81,10 @@ During Milestone W3-01A, an in-depth audit of the clearance geometry resolved th
 ## 5. Consequences and Trade-offs
 
 ### Positive Consequences
-- **Zero Candidate Omission Guarantee**: Empirical clearance thresholds plus fail-closed fallback ensure $\text{Recall} = 1.0$ against geodesic ground truth.
-- **Fail-Closed Reliability**: Accidental under-configuration or discrete grid failures cannot silently corrupt research clustering results.
-- **Computational Speedup (Hypothesis H1)**: H3 candidate precomputation and $O(\log M_{\text{cell}})$ temporal search achieve a **1.34x graph query speedup** (31.28 s vs 41.98 s) on 143,116 real observations while maintaining 100% bit-for-bit graph parity.
-- **Granular Instrumentation**: Separate sub-timing counters provide full visibility into cell mapping, candidate precomputation, candidate retrieval, temporal filtering, distance pruning, and fallback execution.
+- **Zero Candidate Omission Guarantee on Calibrated Domains**: Empirical clearance thresholds plus fail-closed fallback ensure $\text{Recall} = 1.0$ against geodesic ground truth on tested regional AIS data.
+- **Fail-Closed Reliability**: Accidental under-configuration, uncalibrated resolutions, or discrete grid failures cannot silently corrupt research clustering results.
+- **Computational Speedup (Hypothesis H1)**: H3 candidate precomputation and $O(\log M_{\text{cell}})$ temporal search achieve a **1.34x graph query speedup** on 143,116 real observations while maintaining 100% bit-for-bit graph parity.
+- **Dataset-Scoped Verifiability**: Any researcher can independently verify full graph parity using `aegismar verify-parity`.
 
 ### Negative Consequences / Trade-offs
 - **Candidate Over-Retrieval**: Hexagonal disks retrieve candidates in corners outside the spherical search circle (precision $< 1.0$ prior to pruning).
@@ -90,22 +96,24 @@ During Milestone W3-01A, an in-depth audit of the clearance geometry resolved th
 
 ## 6. Implementation Status and Evidence Links
 
-- **Status**: Hardened and verified in Milestone W3-01A; formal multi-trial benchmarking in W3-02.
-- **Provider Implementation**: [src/aegismar/clustering/h3_neighbors.py](../../../src/aegismar/clustering/h3_neighbors.py) (`H3NeighborhoodProvider`, `compute_safe_k_ring`).
-- **Engine Integration**: [src/aegismar/clustering/st_dbscan.py](../../../src/aegismar/clustering/st_dbscan.py) (`run_h3_st_dbscan`), [src/aegismar/clustering/config.py](../../../src/aegismar/clustering/config.py) (`STDBSCANConfig`), [src/aegismar/cli.py](../../../src/aegismar/cli.py).
-- **Automated Verification Suite**: [tests/unit/test_h3_neighbors.py](../../../tests/unit/test_h3_neighbors.py) (27 fixture categories, 34 total test cases, covering boundaries, vertices, pentagons, near-pentagons, undersized ring rejection, forced failures, and multi-region parity).
-- **Empirical Baseline Parity**:
-  - Full CSR neighborhood graph parity verified on authentic NOAA San Pedro Bay dataset (`data/processed/lalb_20250101/cleaned_ais.parquet`, 143,116 analyzed observations, 13,188,256 edges):
-    - `indptr match: True` (100.0000%)
-    - `indices match: True` (100.0000%)
-    - `fallback_count: 0`
+- **Status**: Finalized and verified in Milestone W3-01B; formal multi-trial benchmarking in W3-02.
+- **Provider Implementation**: [src/aegismar/clustering/h3_neighbors.py](../../../src/aegismar/clustering/h3_neighbors.py) (`H3NeighborhoodProvider`, `compute_safe_k_ring`, `verify_dataset_h3_balltree_parity`).
+- **Engine Integration**: [src/aegismar/clustering/st_dbscan.py](../../../src/aegismar/clustering/st_dbscan.py) (`run_h3_st_dbscan`), [src/aegismar/clustering/config.py](../../../src/aegismar/clustering/config.py) (`STDBSCANConfig`), [src/aegismar/cli.py](../../../src/aegismar/cli.py) (`cluster`, `verify-parity`).
+- **Automated Verification Suite**: [tests/unit/test_h3_neighbors.py](../../../tests/unit/test_h3_neighbors.py) (32 fixture categories, 39 total test cases, covering boundaries, vertices, pentagons, near-pentagons, undersized rings, uncalibrated resolutions, radii limits, experimental opt-in, and multi-region parity).
+- **Dataset-Specific Empirical Baseline Parity**:
+  - Full CSR neighborhood graph parity verified on authentic NOAA San Pedro Bay dataset ([data/processed/lalb_20250101/cleaned_ais.parquet](../../../data/processed/lalb_20250101/cleaned_ais.parquet), SHA-256: `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b`):
+    - Analyzed observations: 143,116 records (8 timestamp conflicts excluded by policy).
+    - `indptr match: True` (100.0000% degree identity).
+    - `indices match: True` (100.0000% neighbor identity across all 13,188,256 edges).
+    - `clusters_match: True`, `roles_match: True`, `labels_match: True` (241 clusters, 136,276 core, 934 border, 5,906 noise).
+    - `fallback_count: 0`.
 - **Shared Provider Protocol**: [src/aegismar/clustering/types.py](../../../src/aegismar/clustering/types.py) (`NeighborhoodProvider`).
 
 ---
 
 ## 7. Known Limitations
 
-- Verification confirms 100% mathematical correctness ($\text{Recall} = 1.0$) and exact clustering equivalence against the BallTree reference. Formal multi-trial comparative benchmarking across scales (10k, 50k, 100k, full LA/LB) evaluating Hypothesis H1 runtime and memory speedup belongs to Milestone W3-02.
+- Verification confirms 100% mathematical correctness ($\text{Recall} = 1.0$) and exact clustering equivalence against the BallTree reference on the calibrated San Pedro Bay dataset. Formal multi-trial comparative benchmarking across scales (10k, 50k, 100k, full LA/LB) evaluating Hypothesis H1 runtime and memory speedup belongs to Milestone W3-02.
 
 ---
 

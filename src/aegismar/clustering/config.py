@@ -27,6 +27,7 @@ SUPPORTED_PROVIDERS: tuple[str, ...] = (PROVIDER_BALLTREE, PROVIDER_H3)
 # H3 spatial indexing configuration defaults
 DEFAULT_H3_RESOLUTION: int = 8
 SUPPORTED_H3_RESOLUTIONS: tuple[int, ...] = (7, 8, 9)
+SUPPORTED_CALIBRATED_H3_RESOLUTIONS: tuple[int, ...] = (7, 8, 9)
 
 # Maximum valid great-circle distance on a sphere of radius EARTH_RADIUS_METERS
 MAX_SPATIAL_RADIUS_M: float = math.pi * EARTH_RADIUS_METERS
@@ -105,6 +106,7 @@ class STDBSCANConfig:
     h3_k_ring: int | None = None
     h3_enable_fallback: bool = True
     h3_fallback_on_pentagons: bool = False
+    h3_allow_uncalibrated: bool = False
     quality_filter: QualityFilterPolicy = field(default_factory=QualityFilterPolicy)
     algorithm_version: str = ALGORITHM_VERSION
 
@@ -126,6 +128,10 @@ class STDBSCANConfig:
         if not isinstance(self.h3_fallback_on_pentagons, bool):
             raise ValueError(
                 f"h3_fallback_on_pentagons must be a boolean, got {self.h3_fallback_on_pentagons!r}"
+            )
+        if not isinstance(self.h3_allow_uncalibrated, bool):
+            raise ValueError(
+                f"h3_allow_uncalibrated must be a boolean, got {self.h3_allow_uncalibrated!r}"
             )
 
         if self.h3_k_ring is not None and (
@@ -187,6 +193,7 @@ class STDBSCANConfig:
             "h3_k_ring": self.h3_k_ring,
             "h3_enable_fallback": self.h3_enable_fallback,
             "h3_fallback_on_pentagons": self.h3_fallback_on_pentagons,
+            "h3_allow_uncalibrated": self.h3_allow_uncalibrated,
             "quality_filter": self.quality_filter.to_dict(),
             "algorithm_version": self.algorithm_version,
         }

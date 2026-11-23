@@ -152,3 +152,34 @@ def test_cli_cluster_end_to_end_and_errors(
     )
     assert ret_missing == 1
     assert "Error: Input file not found" in capsys.readouterr().err
+
+
+def test_cli_verify_parity_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Test verify-parity command executes and succeeds on valid Parquet dataset."""
+    ingest_dir = tmp_path / "ingest_out"
+    ret_ingest = main(["ingest", "-i", str(SYNTHETIC_2025), "-o", str(ingest_dir)])
+    assert ret_ingest == 0
+    parquet_file = ingest_dir / "cleaned_ais.parquet"
+
+    ret_parity = main(
+        [
+            "verify-parity",
+            "-i",
+            str(parquet_file),
+            "--eps-spatial-m",
+            "500",
+            "--eps-temporal-s",
+            "900",
+            "--min-samples",
+            "2",
+        ]
+    )
+    assert ret_parity == 0
+    out = capsys.readouterr().out
+    assert "Parity Verification Results:" in out
+    assert "VERIFICATION SUCCESS" in out
+
+    # Missing file returns 1
+    ret_missing = main(["verify-parity", "-i", str(tmp_path / "missing.parquet")])
+    assert ret_missing == 1
+    assert "Error: Input file not found" in capsys.readouterr().err

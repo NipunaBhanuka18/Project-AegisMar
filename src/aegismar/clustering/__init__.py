@@ -11,6 +11,7 @@ from aegismar.clustering.config import (
     DEFAULT_MIN_SAMPLES,
     PROVIDER_BALLTREE,
     PROVIDER_H3,
+    SUPPORTED_CALIBRATED_H3_RESOLUTIONS,
     SUPPORTED_H3_RESOLUTIONS,
     SUPPORTED_PROVIDERS,
     QualityFilterPolicy,
@@ -25,7 +26,12 @@ from aegismar.clustering.export import (
     write_clustering_summary_json,
     write_static_cluster_map_html,
 )
-from aegismar.clustering.h3_neighbors import H3NeighborhoodProvider, compute_safe_k_ring
+from aegismar.clustering.h3_neighbors import (
+    H3NeighborhoodProvider,
+    ParityVerificationResult,
+    compute_safe_k_ring,
+    verify_dataset_h3_balltree_parity,
+)
 from aegismar.clustering.st_dbscan import run_balltree_st_dbscan, run_h3_st_dbscan, run_st_dbscan
 from aegismar.clustering.types import (
     NOISE_CLUSTER_ID,
@@ -61,9 +67,13 @@ __all__ = [
     "NeighborhoodGraph",
     "NeighborhoodProvider",
     "ObservationRecord",
+    "ParityVerificationResult",
     "QualityFilterPolicy",
     "STDBSCANConfig",
     "STDBSCANResult",
+    "SUPPORTED_CALIBRATED_H3_RESOLUTIONS",
+    "SUPPORTED_H3_RESOLUTIONS",
+    "SUPPORTED_PROVIDERS",
     "build_clustering_dataset",
     "clustering_result_to_arrow_table",
     "compute_safe_k_ring",
@@ -73,6 +83,7 @@ __all__ = [
     "run_balltree_st_dbscan",
     "run_h3_st_dbscan",
     "run_st_dbscan",
+    "verify_dataset_h3_balltree_parity",
     "write_clustering_geojson_preview",
     "write_clustering_parquet",
     "write_clustering_summary_json",

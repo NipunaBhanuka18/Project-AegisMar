@@ -26,7 +26,8 @@
 | **DOC-01A** | Week 2+ | Research Documentation Accuracy & Collaborator Readiness | 4 h | **Completed** | DOC-01 |
 | **W3-01** | Week 3 | H3 Candidate Optimization & Completeness Verification | 15 h | **Completed** | W2-01 |
 | **W3-01A** | Week 3 | H3 Completeness Audit, Correctness Hardening & PR Preparation | 6 h | **Completed** | W3-01 |
-| **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01A |
+| **W3-01B** | Week 3 | H3 Correctness Contract Finalization | 4 h | **Completed** | W3-01A |
+| **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01B |
 | **W4-01** | Week 4 | Stay-Point Extraction & Berth Polygon Exclusion | 15 h | Planned | W3-02 |
 | **W4-02** | Week 4 | Anchorage Dwell Metrics & Utilization Analytics | 10 h | Planned | W4-01 |
 | **W5-01** | Week 5 | DuckDB In-Process Analytics & Contract Integration | 15 h | Planned | W3-02, W4-02 |
@@ -229,6 +230,27 @@
   - [x] 7 adversarial test fixtures pass (fixtures 21–27; 34 tests in module, 86 in repository)
   - [x] 100% bit-for-bit CSR graph parity verified on 143,116 authentic NOAA AIS observations (13,188,256 edges)
   - [x] All quality gates (pytest, ruff, mypy) pass cleanly in local workspace
+
+### Milestone W3-01B: H3 Correctness Contract Finalization
+- **Goal:** Finalize the empirical correctness contract for the H3 provider, replace unsupported ring extrapolations and approximations with fail-closed rejection or fallback, require explicit opt-in for experimental modes, provide an explicit dataset-scoped parity verification command, and update research documentation.
+- **Estimated Hours:** 4 Hours
+- **Status:** **Completed**
+- **Dependencies:** W3-01A
+- **Deliverables:**
+  - Audited correctness contract: qualified module docstrings, functions, and documentation to reflect empirical calibration on resolutions 7, 8, 9 rather than global mathematical theorems.
+  - Fail-closed handling for unsupported configurations: `compute_safe_k_ring` and `H3NeighborhoodProvider` strictly reject uncalibrated resolutions or radii exceeding empirical tables with `ValueError` (when fallback disabled) or route to BallTree fallback (when enabled).
+  - Explicit experimental opt-in: `allow_uncalibrated=True` / `h3_allow_uncalibrated` permits approximate estimation, logging clear warnings and tagging metadata as `experimental_uncalibrated`.
+  - Precise fallback categorization: documented and tested the 3 actual runtime triggers (API failures, pentagons/near-pentagons, unsupported configurations), explicitly removing claims of automated omitted-candidate detection.
+  - Dataset-scoped parity verification: implemented `verify_dataset_h3_balltree_parity` and added `aegismar verify-parity` CLI subcommand with dataset SHA-256 verification and detailed parity reporting.
+  - Targeted unit test suite (`tests/unit/test_h3_neighbors.py`, `tests/unit/test_cli.py`): added fixtures 28–32 covering unsupported resolutions, radii limits, experimental opt-in, contract metadata, and CLI parity verification (total 92 tests in repository, 100% pass).
+  - Rerun full-dataset verification on canonical San Pedro Bay dataset (`cleaned_ais.parquet`, SHA-256: `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b`): confirmed 100% bit-for-bit parity across all 143,116 analyzed observations (13,188,256 edges, 0 fallbacks).
+- **Acceptance Checks:**
+  - [x] Uncalibrated resolutions and excessive radii strictly rejected or routed to BallTree fallback
+  - [x] Experimental opt-in (`allow_uncalibrated=True`) correctly tracked and logged
+  - [x] Fallback triggers documented and separated from omission detection
+  - [x] CLI `verify-parity` command operational and validated on historical dataset
+  - [x] All 92 automated tests pass; repository code coverage reaches 94%
+  - [x] All documentation updated to eliminate unproven global theorems
 
 ### Milestone W3-02: Comparative H1 Benchmarking (BallTree vs. H3)
 - **Goal:** Formally benchmark runtime (build, query, pruning, clustering), peak memory, neighbor recall/precision, and Adjusted Rand Index between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` across dataset scales (10k, 50k, 100k, full LA/LB). *(Not yet started.)*

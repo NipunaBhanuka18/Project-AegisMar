@@ -600,4 +600,67 @@ This log documents chronological engineering actions, commands executed, test re
     - `ruff`: 0 lint errors; 60 files formatted
     - `mypy`: 0 errors across 27 source files in strict mode
 - **Next Action:**
-  - Commit on feature branch `feat/clu-h3-neighborhood`, push to origin, prepare pull request, and submit completion report.
+  - Execute Milestone W3-01B: H3 Correctness Contract Finalization.
+
+---
+
+## Log Entry: 2026-11-23 — Task: Milestone W3-01B (H3 Correctness Contract Finalization)
+
+- **Date:** 2026-11-23
+- **Task Identifier:** `W3-01B: H3 Correctness Contract Finalization`
+- **Branch:** `feat/clu-h3-neighborhood`
+- **Scope:** Resolution of the mismatch between empirically tested H3 candidate coverage and claims of guaranteed completeness; replacing unsupported extrapolations/approximations with fail-closed rejection or fallback; requiring explicit opt-in for experimental uncalibrated configurations; establishing dataset-scoped parity verification tools; and updating research documentation.
+- **Summary of Changes:**
+  - **Correctness Contract & Empirical Bounds Audit**:
+    - Removed all claims of "guaranteed candidate completeness" or unconditional global mathematical theorems.
+    - Formalized the two-tier support policy:
+      1. Calibrated regional candidate search on resolutions 7, 8, 9 within empirically tested search radii.
+      2. Fail-closed rejection or fallback for uncalibrated resolutions, radii exceeding empirical tables, or expansion anomalies.
+  - **Replaced Unsupported Extrapolation with Fail-Closed Configuration Handling**:
+    - Updated `compute_safe_k_ring(resolution, eps_spatial_m, allow_uncalibrated=False)`:
+      - If resolution is not in `H3_MIN_CLEARANCE_METERS` (calibrated: 7, 8, 9) and `allow_uncalibrated=False`, raises `ValueError`.
+      - If `eps_spatial_m` exceeds the maximum empirical clearance in the table and `allow_uncalibrated=False`, raises `ValueError`.
+    - Updated `H3NeighborhoodProvider.__init__`:
+      - If an unsupported configuration is supplied without opt-in (`allow_uncalibrated=False`):
+        * If `enable_fallback=False`: raises `ValueError` immediately.
+        * If `enable_fallback=True`: routes all queries cleanly to `BallTreeNeighborhoodProvider` with `completeness_contract = "full_balltree_fallback"`, recording `fallback_reasons["unsupported_configuration..."]`.
+      - If explicit experimental opt-in (`allow_uncalibrated=True`) is provided:
+        * Emits clear logger warnings.
+        * Flags metadata `is_calibrated = False`, `completeness_contract = "experimental_uncalibrated"`.
+  - **Configuration Model Extension (`src/aegismar/clustering/config.py`)**:
+    - Added `SUPPORTED_CALIBRATED_H3_RESOLUTIONS: tuple[int, ...] = (7, 8, 9)`.
+    - Added `h3_allow_uncalibrated: bool = False` to `STDBSCANConfig` with boolean type validation and JSON serialization.
+    - Updated `run_h3_st_dbscan` to accept `allow_uncalibrated: bool | None = None`.
+  - **Dataset-Scoped Parity Verification Command (`aegismar verify-parity`)**:
+    - Created `verify_dataset_h3_balltree_parity` function and `ParityVerificationResult` dataclass in `h3_neighbors.py`.
+    - Added `verify-parity` subcommand to `src/aegismar/cli.py` and exported from `src/aegismar/clustering/__init__.py`.
+    - Computes input Parquet SHA-256, runs full CSR graph build and ST-DBSCAN for both BallTree and H3, verifies `indptr`, `indices`, cluster count, role counts, and cluster labels, and prints a formatted verification report.
+  - **Targeted Unit Test Suite Additions (`tests/unit/`)**:
+    - Added fixtures 28–32 in `tests/unit/test_h3_neighbors.py`:
+      - `test_28_unsupported_resolution_handling`: verifies `ValueError` in strict mode and full BallTree fallback when enabled.
+      - `test_29_radius_exceeding_calibrated_table_handling`: verifies `ValueError` on excessive radii and fallback when enabled.
+      - `test_30_experimental_uncalibrated_mode`: verifies opt-in approximate ring estimation, warnings, and contract metadata.
+      - `test_31_parity_verification_helper`: verifies `verify_dataset_h3_balltree_parity` helper.
+      - `test_32_contract_semantics_and_metadata`: verifies calibrated contract reporting.
+    - Added `test_cli_verify_parity_command` in `tests/unit/test_cli.py`.
+    - Total test count expanded to 92 tests passing at 94% repository code coverage (98% in `h3_neighbors.py`).
+  - **Full-Dataset Parity Execution**:
+    - Executed `verify-parity` on canonical NOAA San Pedro Bay dataset (`data/processed/lalb_20250101/cleaned_ais.parquet`, SHA-256: `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b`):
+      - 143,116 analyzed observations, 13,188,256 total CSR edges.
+      - `CSR indptr Match: PASS (Identical degrees)`
+      - `CSR indices Match: PASS (Identical neighbors across all 13.1M edges)`
+      - `Cluster Count Match: PASS` (241 clusters)
+      - `Core/Border/Noise Match: PASS` (136,276 core, 934 border, 5,906 noise)
+      - `Cluster Labels Match: PASS`
+      - `Fallback Count: 0`
+      - `Completeness Contract: empirical_regional_calibrated`
+  - **Documentation Updates**:
+    - Updated `README.md`, `ADR-009`, `evidence-register.md` (`CLM-CLU-06`), `evaluation-protocol.md`, `milestones.md`, and `CHANGELOG.md`.
+- **Quality Gates Verification**:
+  - `pytest`: 92 passed in 5.98 s (100% pass)
+  - Code Coverage: 94% total repository coverage (98% in `h3_neighbors.py`)
+  - `ruff`: 0 lint errors; 60 files formatted
+  - `mypy`: 0 errors across 27 source files in strict mode
+  - Markdown link check: 50 markdown files checked, 0 broken links
+- **Next Action:**
+  - Commit on feature branch `feat/clu-h3-neighborhood` with authorized message, push to origin, and prepare completion report.

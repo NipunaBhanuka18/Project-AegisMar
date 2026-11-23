@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed & Hardened - Milestone W3-01B: H3 Correctness Contract Finalization (2026-11-23)
+- **H3 Correctness Contract Finalization**:
+  - Removed all statements claiming unconditional global mathematical completeness for H3 discrete hexagonal candidate generation.
+  - Formalized two-tier empirical support contract: calibrated regional indexing on resolutions 7, 8, 9 within documented clearance tables vs fail-closed rejection or BallTree fallback for uncalibrated configurations.
+- **Fail-Closed Unsupported Configuration Handling**:
+  - Replaced unproven ring extrapolations and approximations in `compute_safe_k_ring` with strict fail-closed validation: uncalibrated resolutions or radii exceeding empirical clearance tables raise `ValueError` unless `allow_uncalibrated=True` is explicitly specified.
+  - Configured `H3NeighborhoodProvider` to route unsupported configurations cleanly to `BallTreeNeighborhoodProvider` when fallback is enabled, or fail closed with `ValueError` when fallback is disabled.
+  - Added explicit experimental opt-in via `allow_uncalibrated=True` (and `STDBSCANConfig(h3_allow_uncalibrated=True)`), logging clear warnings and marking execution metadata as `completeness_contract = "experimental_uncalibrated"`.
+- **Dataset-Scoped Parity Verification Command (`aegismar verify-parity`)**:
+  - Implemented `verify_dataset_h3_balltree_parity` and the `aegismar verify-parity` CLI subcommand with dataset SHA-256 verification and comprehensive bit-for-bit parity reporting.
+  - Validated full CSR graph parity (`indptr`, `indices`) and clustering parity across all 143,116 observations of `cleaned_ais.parquet` (SHA-256: `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b`) with 0 fallbacks and identical cluster accounting.
+- **Targeted Test Suite Expansion**:
+  - Added test fixtures 28–32 in `tests/unit/test_h3_neighbors.py` covering unsupported resolutions, radii limits, experimental opt-in, contract metadata, and parity verification.
+  - Added `test_cli_verify_parity_command` in `tests/unit/test_cli.py`.
+  - Expanded automated test suite to 92 passing tests at 94% repository coverage (98% in `h3_neighbors.py`).
+
+
 ### Fixed & Hardened - Milestone W3-01A: H3 Completeness Audit & Correctness Hardening (2026-11-23)
 - **H3 Spherical Clearance Mathematics Audit**:
   - Audited planar regular hexagon apothem formulas ($k \cdot 2 r_{\text{inscribed}} = k \sqrt{3} s$) against spherical Snyder equal-area icosahedron projections; clarified edge length variance ($\sim 1.4\times$) and 12 pentagonal face distortions.
