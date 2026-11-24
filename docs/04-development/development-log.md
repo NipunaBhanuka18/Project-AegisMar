@@ -664,3 +664,37 @@ This log documents chronological engineering actions, commands executed, test re
   - Markdown link check: 50 markdown files checked, 0 broken links
 - **Next Action:**
   - Commit on feature branch `feat/clu-h3-neighborhood` with authorized message, push to origin, and prepare completion report.
+
+---
+
+## Log Entry: 2026-11-23 — Track B: ML-01 (Data Profiling), ML-02, ML-03 and Held-Out Test Days
+
+- **Date:** 2026-11-23
+- **Track:** Track B (Vessel Behavior ML) — Kishakya
+- **Branches / PRs:** `feat/ml-01-data-profiling` (PR #2, merged), `feat/ml-02-feature-spec` (PR #3, merged), `feat/ml-03-evaluation-protocol` (PR #4)
+- **Summary of Work:**
+  - **Environment:** `uv sync --locked` (Python 3.11.9) on a second workstation; all quality gates passed before any change.
+  - **Independent dataset reproduction:** Downloaded `ais-2025-01-01.csv.zst` (202,190,247 bytes; SHA-256 matches `datasets.md`). Sliced the San Pedro Bay box (lat [33.5, 33.9], lon [-118.4, -118.0]) with a new streaming slicer: 7,337,208 nationwide rows scanned → 143,156 rows / 362 vessels, sample SHA-256 `42e4f766feb98b20e98124685137bcc2be16a20c06dda46e33f415f0b281eac8` (exact match). `aegismar ingest` reproduced 143,124 rows (32 duplicates, 8 conflicts, 18 implied-speed violations). Re-running the W2-01 BallTree configuration reproduced 241 clusters (136,276 core, 934 border, 5,906 noise).
+  - **ML-01 profiling** (`experiments/anomaly/ml01_profile_dataset.py`): reporting cadence about 70 s (moving) and about 180 s (stationary); 90.0% of SOG values < 0.5 kt; 135 of 362 vessels ever reach SOG ≥ 1.5 kt; heading present in 63.0% of Class A and 8.8% of Class B rows; two feed-wide silences (03:07:37–03:20:25 and 12:06:09–12:18:20 UTC) spanned by 557 of 1,579 vessel gaps > 600 s.
+  - **ML-02 v1.0** (`docs/03-research/ml-02-feature-spec.md`) and `experiments/anomaly/ml02_drift_breakdown.py`: of 429 COG–heading disparities > 45° at SOG ≥ 1.5 kt, 342 are near-reversals (> 135°; 281 from tug/towing vessels) and 87 are lateral drift (45–135°), leading to separate features F7/F8.
+  - **ML-03 v1.0** (`docs/03-research/ml-03-evaluation-protocol.md`): frozen before any test-day inspection.
+  - **Held-out test days (integrity checks only, per the ML-03 firewall):**
+    - T1 2025-01-14: `ais-2025-01-14.csv.zst` 206,100,977 bytes, SHA-256 `973dda3660fe1386da6d4ecbafeaa1e1d4de3c31b3cff535c4d78ec4aa9679f3`; 7,225,757 nationwide rows → 121,778 sample rows / 348 vessels (sample SHA-256 `0725aedd78ca44e736b2c6026846f1cbb66fbe3027e79e95b72ec16f8ca33516`) → 121,742 cleaned rows (36 duplicates, 8 conflicts, 0 hard-invalid); Parquet SHA-256 `5b13767f2a48b4fdff76179049375611cf42a17ce24e8294579a01a7718b42f2`; range 2025-01-14T00:00:00Z → 23:59:59Z.
+    - T2 2025-01-22: `ais-2025-01-22.csv.zst` 189,491,631 bytes, SHA-256 `6a238bd4084b5afc1d7d95ccbcee182d5d4a250377224da76721a63a2277f627`; 6,818,100 nationwide rows → 119,803 sample rows / 356 vessels (sample SHA-256 `afd7240b4d8d48fe706d8db5905ab37e8217d4dd80256a58a403876a47e1b120`) → 119,750 cleaned rows (53 duplicates, 4 conflicts, 0 hard-invalid); Parquet SHA-256 `44d5eda18a64af873c13053df383fb806349e34aecc77abfc0dc4afafae816c5`; range 2025-01-22T00:00:00Z → 23:59:59Z.
+- **Known open item:** ML-01 literature review notes not yet written.
+
+---
+
+## Log Entry: 2026-11-24 — Track B: Documentation Sync after ML-01–ML-03
+
+- **Date:** 2026-11-24
+- **Track:** Track B — Kishakya
+- **Branch:** `docs/track-b-ml01-ml03-sync` (based on `feat/ml-03-evaluation-protocol`)
+- **Summary of Changes:**
+  - Added `scripts/slice_noaa_bbox.py` (re-verified: reproduces the 2025-01-01 sample SHA-256 `42e4f766…`).
+  - Updated README, START-HERE, roadmap, milestones, ML onboarding guide (v1.2), ML proposal (v1.2, superseded-part notes), evaluation protocol §3 (pointer to ML-03), collaboration plan §4.1 (row order), evidence register (CLM-ANO-01 references, test-count instruction), and CHANGELOG.
+  - Removed a stale duplicate of the W7-02 / W8-01 / W8-02 specifications (and a misplaced dashboard acceptance bullet under ML-05) from the end of `milestones.md`; the current Track A versions are unchanged.
+  - Historical records (W2-01 milestone notes, ADRs) intentionally keep the figures valid at their time.
+  - Track B leadership confirmed: Kishakya reviewed and accepted the collaboration plan, so the "Proposed / pending review" qualifiers were removed from 14 current documents. ADR-010 keeps its original wording as a historical decision record.
+- **Quality Gates:** see the PR description for the executed results.
+- **Next Action:** ML-04 — implement `src/aegismar/anomaly/features.py` per ML-02 v1.0.

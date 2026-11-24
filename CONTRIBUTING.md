@@ -10,7 +10,7 @@ Thank you for contributing to Project AegisMar! This document outlines our colla
 
 Project AegisMar is developed collaboratively between two AI undergraduate researchers:
 - **Clustering & Spatial Indexing Track (Lead: NipunaBhanuka18)**: AIS ingestion foundation, BallTree reference ST-DBSCAN, Uber H3 candidate optimization, stay-point/anchorage analytics, shared platform integration.
-- **Vessel Behavior Anomaly Detection Track (Proposed Lead: Kishakya)**: Vessel trajectory feature engineering, unsupervised kinematic anomaly detection, synthetic perturbation evaluation, explainable anomaly incidents.
+- **Vessel Behavior Anomaly Detection Track (Lead: Kishakya)**: Vessel trajectory feature engineering, unsupervised kinematic anomaly detection, synthetic perturbation evaluation, explainable anomaly incidents.
 
 Both tracks share common data engineering foundations and integration contracts while maintaining modular autonomy in development.
 
@@ -115,9 +115,9 @@ To enable independent progress while protecting shared core infrastructure:
 | `src/aegismar/clustering/` | NipunaBhanuka18 | Must be reviewed by NipunaBhanuka18 |
 | `src/aegismar/spatial/` | NipunaBhanuka18 | Must be reviewed by NipunaBhanuka18 |
 | `src/aegismar/staypoint/` | NipunaBhanuka18 | Must be reviewed by NipunaBhanuka18 |
-| `src/aegismar/anomaly/` | Kishakya *(proposed)* | Owned by Kishakya; reviewed collaboratively |
+| `src/aegismar/anomaly/` | Kishakya | Owned by Kishakya; reviewed collaboratively |
 | `src/aegismar/storage/`, `api/` | Shared | Joint review prior to merging |
-| `docs/03-research/vessel-behavior-ml.md` | Kishakya *(proposed)* | Kishakya has editorial ownership |
+| `docs/03-research/vessel-behavior-ml.md` | Kishakya | Kishakya has editorial ownership |
 | `pyproject.toml`, `.python-version` | Shared | Core dependency changes must be mutually agreed |
 
 ### Pull Request Workflow
@@ -134,4 +134,4 @@ To enable independent progress while protecting shared core infrastructure:
 Both researchers are equal academic partners in Project AegisMar:
 - Research contributions will be attributed transparently according to track responsibilities.
 - All joint academic papers, thesis submissions, or public presentations resulting from this work will list both researchers as co-authors, with primary track leads acknowledged on their respective core contributions.
-- Kishakya's participation, scope, and attribution remain prospective until her formal review and agreement.
+- Kishakya's participation, Track B leadership, and attribution were confirmed on 2026-11-24 after Kishakya reviewed and accepted the collaboration plan.

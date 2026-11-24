@@ -6,7 +6,7 @@
 **Status:** Controlled Scope Baseline & Collaborative Governance  
 **Research Tracks & Capacity:**  
 - **Track A (Clustering & Platform Lead):** NipunaBhanuka18 (20–30 hours/week, 200 total hours across 8 weeks)  
-- **Track B (ML Anomaly Detection):** Kishakya *(proposed collaborator; independent schedule to be agreed)*  
+- **Track B (ML Anomaly Detection):** Kishakya *(Track Lead; independent flexible schedule)*  
 **Lifecycle Baseline:** Eight-Week Research & Engineering MVP with Parallel ML Track  
 
 ---
@@ -16,7 +16,7 @@
 To guarantee that Project AegisMar delivers both defensible research contributions and a functioning software engineering artifact, scope is governed across two complementary, decoupled tracks:
 
 1. **Track A (Clustering & Data Platform Lead: NipunaBhanuka18)**: Governed by the intact eight-week solo roadmap (200 hours). Mandatory P1 deliverables focus on the AIS data engineering foundation, BallTree ST-DBSCAN reference engine, Uber H3 candidate optimization, and stay-point/anchorage intelligence.
-2. **Track B (Vessel Behavior ML Track: Kishakya, *proposed*)**: Governed as an independent research track focusing on trajectory feature engineering, explainable rule-based scoring, and unsupervised anomaly detection (Isolation Forest / LOF). This track has its own flexible schedule (ML-01 to ML-04) and integrates into the platform strictly via defined data contracts without expanding the mandatory MVP scope of Track A.
+2. **Track B (Vessel Behavior ML Track Lead: Kishakya)**: Governed as an independent research track focusing on trajectory feature engineering, explainable rule-based scoring, and unsupervised anomaly detection (Isolation Forest / LOF). This track has its own flexible schedule (ML-01 to ML-05) and integrates into the platform strictly via defined data contracts without expanding the mandatory MVP scope of Track A.
 
 All deliverables within each track remain prioritized under three strict tiers:
 - **Mandatory (P1)**: Core deliverables required for the undergraduate research thesis, empirical validation, and functional MVP.

@@ -7,7 +7,7 @@
 **Architectural Style:** Python-First Modular Monolith with Parallel Research Tracks  
 **Research Tracks & Ownership:**  
 - **Track A (Clustering & Platform Lead):** NipunaBhanuka18  
-- **Track B (Vessel Behavior ML Track):** Kishakya *(proposed collaborator; participation pending review)*  
+- **Track B (Vessel Behavior ML Track):** Kishakya *(Track Lead)*  
 **Target Environment:** Localhost / Single-Node Analytical Workstation  
 
 ---
@@ -17,7 +17,7 @@
 Project AegisMar is engineered as a **Python-first modular monolith**. The architecture supports collaborative research between two undergraduate AI researchers working on decoupled, complementary tracks:
 
 1. **Track A (Clustering & Spatial Indexing Lead: NipunaBhanuka18)**: Owns the ingestion foundation, metric BallTree and discrete H3 spatial indexing, ST-DBSCAN clustering, stay-point/anchorage intelligence, shared DuckDB storage, and API serving.
-2. **Track B (Vessel Behavior Anomaly Detection Lead: Kishakya, *proposed*)**: Owns vessel trajectory feature engineering, rule-based kinematic scoring, unsupervised anomaly modeling (Isolation Forest / LOF), and perturbation evaluation.
+2. **Track B (Vessel Behavior Anomaly Detection Lead: Kishakya)**: Owns vessel trajectory feature engineering, rule-based kinematic scoring, unsupervised anomaly modeling (Isolation Forest / LOF), and perturbation evaluation.
 
 The system is governed by five non-negotiable architectural principles:
 1. **Separation of Concerns via Clean Internal Boundaries**: Modules are organized by functional domain (`ingestion`, `spatial`, `clustering`, `staypoint`, `anomaly`, `storage`, `api`). Inter-module communication uses explicit Python interfaces and typed dataclasses.
@@ -47,7 +47,7 @@ flowchart TD
         Cluster --> StayPoint["4. Stay-Point & Anchorage Intelligence"]
     end
 
-    subgraph TrackB ["Track B: Vessel Behavior ML (Proposed Lead: Kishakya)"]
+    subgraph TrackB ["Track B: Vessel Behavior ML (Lead: Kishakya)"]
         CleanParquet --> TrajFeat["5. Trajectory Assembly & Kinematic Features"]
         TrajFeat --> RuleEngine["- Rule-Based Kinematic Scorer"]
         TrajFeat --> IsoForest["- Isolation Forest & LOF Baselines"]
@@ -118,7 +118,7 @@ flowchart TD
   - Calculate unique vessel dwell metrics ($\text{count}(\text{distinct } MMSI)$, median waiting hours) to avoid sampling-frequency skew.
 
 ### 3.7 Kinematic Trajectory Anomaly Analysis (`aegismar.anomaly`)
-- **Status:** Proposed ML Track (Track Lead: Kishakya, *pending review*).
+- **Status:** Active ML Track (Track Lead: Kishakya). Feature specification (ML-02) and evaluation protocol (ML-03) accepted; `aegismar.anomaly` not yet implemented (ML-04 next).
 - **Responsibilities:**
   - Trajectory windowing and kinematic feature extraction (`aegismar.anomaly.features`):
     - Instantaneous acceleration and speed deltas ($\Delta \text{SOG} / \Delta t$).

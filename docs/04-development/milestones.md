@@ -6,7 +6,7 @@
 **Status:** Collaborative Dual-Track Milestone Architecture  
 **Research Tracks & Capacity:**  
 - **Track A (Maritime Traffic & Geospatial Clustering Lead):** NipunaBhanuka18 (200 Hours across 8 Weeks, 25 Hours/Week)  
-- **Track B (Vessel Behavior ML Track Lead):** Kishakya *(participation pending review; independent parallel schedule)*  
+- **Track B (Vessel Behavior ML Track Lead):** Kishakya *(independent parallel schedule)*  
 **Status Key:** `Planned` | `In Progress` | `Completed` | `Deferred`  
 
 ---
@@ -41,15 +41,15 @@
 
 ## 2. Track B Milestone Tracking Board (Vessel Behavior ML & Anomaly Detection)
 
-**Proposed Lead:** Kishakya *(participation pending review)*  
+**Lead:** Kishakya  
 **Scope:** Vessel Trajectory Feature Engineering, Explainable Rule-Based Kinematic Scoring, Unsupervised Anomaly Modeling (Isolation Forest / LOF), Controlled Perturbation Evaluation, and Explainable GeoJSON Incident Export.  
 **Schedule Governance:** Independent parallel schedule; milestones advance based on Kishakya's availability without hard week-number deadlines.
 
 | Milestone ID | Target Phase | Target Deliverable | Est. Hours | Status | Dependencies |
 |---|---|---|---|---|---|
-| **ML-01** | Phase 1 | Domain Literature, AIS Schema & Telemetry Review | 10 h | Planned | None (Cleaned Parquet available) |
-| **ML-02** | Phase 2 | Vessel Trajectory Kinematic Feature Specification | 15 h | Planned | ML-01 |
-| **ML-03** | Phase 3 | Baseline Models & Evaluation Protocol Freezing | 15 h | Planned | ML-02 |
+| **ML-01** | Phase 1 | Domain Literature, AIS Schema & Telemetry Review | 10 h | **In Progress** (data profiling completed; literature review pending) | None (Cleaned Parquet available) |
+| **ML-02** | Phase 2 | Vessel Trajectory Kinematic Feature Specification | 15 h | **Completed** | ML-01 (profiling) |
+| **ML-03** | Phase 3 | Baseline Models & Evaluation Protocol Freezing | 15 h | **Completed** | ML-02 |
 | **ML-04** | Phase 4 | Feature Engineering Module & Baseline Experiments | 20 h | Planned | ML-03, `cleaned_ais.parquet` |
 | **ML-05** | Phase 5 | Anomaly Model Evaluation & `vessel_anomaly_v1` Export | 20 h | Planned | ML-04 |
 
@@ -359,44 +359,53 @@
 
 ## 4. Milestone Detail Specifications — Track B (Vessel Behavior ML & Anomaly Detection)
 
-**Proposed Lead:** Kishakya *(participation pending review)*  
+**Lead:** Kishakya  
 **Governance:** Track B operates on an independent parallel schedule with flexible pacing. Milestones advance based on Kishakya's availability and research goals without rigid week-number constraints.
 
 ### Milestone ML-01: Domain Literature & AIS Telemetry Review
 - **Goal:** Review maritime anomaly detection literature and existing `docs/03-research/vessel-behavior-ml.md`. Profile canonical AIS telemetry fields (`cleaned_ais.parquet`) and understand sensor sentinels/limits.
 - **Estimated Hours:** 10 Hours
-- **Status:** Planned
+- **Status:** **In Progress** — data profiling completed (2026-11-23); literature review pending
 - **Dependencies:** Cleaned Parquet available (`data/processed/lalb_20250101/cleaned_ais.parquet`)
 - **Planned Deliverables:**
   - Literature review notes and telemetry field profiling summary
   - Confirmed kinematic feature candidate list
+- **Delivered so far:**
+  - `experiments/anomaly/ml01_profile_dataset.py` (PR #2): reproducible profile JSON/Markdown recording git commit and input SHA-256 (reporting cadence, SOG distribution, field availability by class/group, segmentation, kinematic ranges, feed-wide silences)
+  - Independent reproduction of the D0 dataset from NOAA via the new `scripts/slice_noaa_bbox.py` (143,156 sample rows; SHA-256 `42e4f766...` matches the documented sample)
+  - Feature candidate list confirmed and formalized in ML-02
 - **Acceptance Checks:**
-  - Telemetry limits, sentinels, and reception gap realities clearly documented
+  - [x] Telemetry limits, sentinels, and reception gap realities documented with measured evidence (ML-02 §2, C1–C10)
+  - [ ] Literature review notes written
 
 ### Milestone ML-02: Vessel Trajectory Kinematic Feature Specification
 - **Goal:** Formulate mathematical definitions for kinematic acceleration, angular course rates, drift angles, and transponder reporting intervals. Define windowing parameters (sliding time window vs. fixed-ping strides).
 - **Estimated Hours:** 15 Hours
-- **Status:** Planned
-- **Dependencies:** ML-01
-- **Planned Deliverables:**
-  - Trajectory feature extraction specification document
-  - Mathematical formulation of windowing and kinematic delta calculations
+- **Status:** **Completed** (2026-11-23; PR #3)
+- **Dependencies:** ML-01 (profiling)
+- **Deliverables:**
+  - [`docs/03-research/ml-02-feature-spec.md`](../03-research/ml-02-feature-spec.md) v1.0: 13 pair features (F1–F13), 13 window aggregates (W1–W13), guards G1–G8, feed-wide outage detection, decisions D1–D6 accepted
+  - `experiments/anomaly/ml02_drift_breakdown.py`: COG–heading disparity breakdown supporting the lateral-drift / near-reversal split
 - **Acceptance Checks:**
-  - Windowing parameters and feature formulas physically grounded in commercial vessel dynamics
+  - [x] Every feature has an exact formula, unit, guard and null rule
+  - [x] Every guard is justified by measured ML-01 evidence rather than assumption
+  - [x] Verification cases for ML-04 unit tests defined (ML-02 §11)
 
 ### Milestone ML-03: Baseline Models & Evaluation Protocol Freezing
 - **Goal:** Formalize rule-based heuristic scoring thresholds and Isolation Forest architecture. Specify vessel-disjoint (70/30 MMSI) and chronological holdout splits. Parameterize synthetic perturbation types (speed jumps, crabbing, coverage dropouts).
 - **Estimated Hours:** 15 Hours
-- **Status:** Planned
+- **Status:** **Completed** (2026-11-23; PR #4)
 - **Dependencies:** ML-02
-- **Planned Deliverables:**
-  - Evaluation protocol document and perturbation configuration schema
-  - Baseline model definitions and hyperparameter search space
+- **Deliverables:**
+  - [`docs/03-research/ml-03-evaluation-protocol.md`](../03-research/ml-03-evaluation-protocol.md) v1.0 (frozen): development day D0 = 2025-01-01 with a stratified vessel-disjoint 70/30 split (seed 42); held-out test days T1 = 2025-01-14 and T2 = 2025-01-22 behind a test-day firewall; perturbation types A1/A2/B/C1/C2 with severity sweeps; baselines B0 (tuned ST-DBSCAN noise), R1 (ECDF-calibrated rules), M1 (Isolation Forest), M2 (LOF); metrics and cluster-bootstrap decision rules; decisions D7–D14 accepted
+  - T1/T2 downloaded, sliced and ingested with integrity checks only (2026-11-23): `lalb_20250114` 121,742 rows / 348 vessels; `lalb_20250122` 119,750 rows / 356 vessels
 - **Acceptance Checks:**
-  - Data leakage strictly prevented via vessel-disjoint splitting; perturbations bounded by maritime physics
+  - [x] Data leakage prevented: vessel-disjoint partition, validation-only threshold selection, test-day firewall
+  - [x] Perturbations parameterized, with severity sweeps and recorded seeds
+  - [x] Protocol frozen before any test-day inspection
 
 ### Milestone ML-04: Feature Engineering Module & Baseline Experiments
-- **Goal:** Implement `src/aegismar/anomaly/features.py` with comprehensive unit tests (`tests/unit/test_anomaly.py`). Extract feature representations across test partitions and log reproducible experiment artifacts.
+- **Goal:** Implement `src/aegismar/anomaly/features.py` exactly as specified in ML-02 v1.0, with comprehensive unit tests (`tests/unit/test_anomaly.py`, including the ML-02 §11 verification cases). Build the D0 vessel partition (ML-03 §3.2) and extract development-day features, logging reproducible experiment artifacts. Test days stay behind the ML-03 firewall.
 - **Estimated Hours:** 20 Hours
 - **Status:** Planned
 - **Dependencies:** ML-03
@@ -417,38 +426,3 @@
   - Exported `vessel_anomaly_v1` GeoJSON artifacts ready for DuckDB ingestion
 - **Acceptance Checks:**
   - Rule-based and ML models evaluated on held-out splits; incident outputs validate against `vessel_anomaly_v1` schema; factor attributions provide physical explanations for 100% of alerts
-  - Smooth client-side rendering without build steps; clicks on anomaly markers show full physical justification
-
-### Milestone W7-02: End-to-End Pipeline Integration & Verification
-- **Goal:** Run end-to-end integration tests connecting raw sample ingestion to web map display.
-- **Estimated Hours:** 10 Hours
-- **Status:** Planned
-- **Dependencies:** W7-01
-- **Planned Deliverables:**
-  - End-to-end integration test suite
-  - CLI runner orchestrating full pipeline
-- **Acceptance Checks:**
-  - Single CLI command runs sample data through ingestion, clustering, anomaly detection, and starts dashboard
-
-### Milestone W8-01: Automated Benchmark Execution (10k, 50k, 100k)
-- **Goal:** Execute scientific benchmark suite, capturing runtimes, memory, recall, and hypothesis tests.
-- **Estimated Hours:** 15 Hours
-- **Status:** Planned
-- **Dependencies:** W7-02
-- **Planned Deliverables:**
-  - Benchmark runner script producing structured JSON outputs
-  - Statistical significance tests for Hypotheses H1 and H2
-- **Acceptance Checks:**
-  - 10 repeated benchmark runs completed across all scales without manual intervention
-
-### Milestone W8-02: Reproducibility Package, Final Audit & Thesis Report
-- **Goal:** Complete final codebase freeze, reproducibility verification guide, and academic thesis documentation.
-- **Estimated Hours:** 10 Hours
-- **Status:** Planned
-- **Dependencies:** W8-01
-- **Planned Deliverables:**
-  - Final research thesis document and reproducibility artifacts
-  - Comprehensive codebase audit ensuring zero unverified claims
-- **Acceptance Checks:**
-  - Clean execution of reproducibility instructions on a fresh environment
-

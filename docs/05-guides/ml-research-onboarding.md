@@ -1,8 +1,8 @@
 # ML Research Collaborator Onboarding Guide
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**  
-> **Document Version:** 1.1  
-> **Target Audience:** Kishakya (Incoming ML Research Collaborator) & Academic Collaborators  
+> **Document Version:** 1.2 (updated 2026-11-24 after ML-01–ML-03; see §14)  
+> **Target Audience:** Kishakya (ML Research Collaborator, Track B Lead) & Academic Collaborators  
 > **Track:** Track B — ML-Based Vessel Behavior Intelligence  
 > **Platform Lead:** NipunaBhanuka18  
 > **Date:** 2026-11-22  
@@ -11,7 +11,7 @@
 
 Welcome to **Project AegisMar**! This guide is designed to get you up to speed quickly on the problem space, repository architecture, data contracts, and development practices.
 
-As the proposed Machine Learning Research Collaborator, you will lead Track B: **vessel trajectory feature engineering, explainable behavioral anomaly scoring, and unsupervised machine learning models**.
+As the Machine Learning Research Collaborator and Track B lead, you lead Track B: **vessel trajectory feature engineering, explainable behavioral anomaly scoring, and unsupervised machine learning models**.
 
 ---
 
@@ -22,7 +22,9 @@ To get oriented without feeling overwhelmed by documentation, read in this seque
 2. **[docs/01-project/collaboration-plan.md](../01-project/collaboration-plan.md)**: Team structure, track leadership, module boundaries, and authorship principles.
 3. **[docs/03-research/evidence-register.md](../03-research/evidence-register.md)**: The verifiable claims register distinguishing proven facts from hypotheses.
 4. **[docs/03-research/vessel-behavior-ml.md](../03-research/vessel-behavior-ml.md)**: The formal ML research proposal (marked `PROPOSAL — NOT FINALIZED`).
-5. **[CONTRIBUTING.md](../../CONTRIBUTING.md)**: Coding standards, branch conventions, and automated quality gates.
+5. **[docs/03-research/ml-02-feature-spec.md](../03-research/ml-02-feature-spec.md)**: The accepted Track B feature specification (v1.0). Where it differs from the proposal, it takes precedence.
+6. **[docs/03-research/ml-03-evaluation-protocol.md](../03-research/ml-03-evaluation-protocol.md)**: The frozen Track B evaluation protocol (v1.0): splits, test days, perturbations, baselines, metrics.
+7. **[CONTRIBUTING.md](../../CONTRIBUTING.md)**: Coding standards, branch conventions, and automated quality gates.
 
 ---
 
@@ -35,13 +37,16 @@ As an AI research engineer, it is essential to distinguish between **what is cur
   - Columnar `zstd` Parquet storage writer and cryptographic `manifest.json`.
   - Reference Haversine `BallTree` ST-DBSCAN clustering engine (`stdbscan-core-first-v1.0`).
   - Independent brute-force $O(N^2)$ geodesic test oracle (`BruteForceNeighborhoodOracle`).
-  - 52 automated tests in `tests/` with 95% total code coverage.
+  - Uber H3 candidate neighborhood provider (`H3NeighborhoodProvider`, Track A W3-01/W3-01B) with verified neighborhood parity against the BallTree reference on the LA/LB dataset.
+  - Track B data tooling: ML-01 dataset profiling (`experiments/anomaly/ml01_profile_dataset.py`), ML-02 drift breakdown (`experiments/anomaly/ml02_drift_breakdown.py`), and the NOAA bounding-box slicer (`scripts/slice_noaa_bbox.py`).
+  - 92 automated tests in `tests/` with 94% total code coverage (measured 2026-11-24 on `main` @ `c4b9344`).
+- **Specified but Not Yet Implemented**:
+  - Trajectory kinematic feature extraction — specified in [ML-02 v1.0](../03-research/ml-02-feature-spec.md); implementation is ML-04.
+  - Rule-based scoring, Isolation Forest / LOF models and the perturbation harness — evaluation frozen in [ML-03 v1.0](../03-research/ml-03-evaluation-protocol.md); implementation is ML-05.
 - **Planned / Hypothesized (Not Yet Implemented)**:
-  - Uber H3 candidate neighbor optimization (Track A, Week 3).
+  - Comparative H1 benchmarking, BallTree vs. H3 (Track A, W3-02).
   - Vessel stay-point extraction and berth polygon exclusion (Track A, Week 4).
-  - Trajectory kinematic feature engineering (Track B, Milestone ML-02/ML-04).
-  - Rule-based kinematic anomaly scoring and Isolation Forest models (Track B).
-  - DuckDB analytical queries and FastAPI map service (Weeks 6–7).
+  - DuckDB analytical queries, FastAPI service and map dashboard (Track A, W5-01 to W7-01).
 
 Always check [docs/03-research/evidence-register.md](../03-research/evidence-register.md) if you are unsure whether a capability is verified or proposed.
 
@@ -76,7 +81,7 @@ uv sync --locked
 Every change must pass our strict automated quality gates before opening a pull request:
 
 ```bash
-# 1. Run all unit and oracle tests (currently 52 passing tests)
+# 1. Run all unit and oracle tests (92 passing tests as of 2026-11-24)
 uv run pytest -v
 
 # 2. Check code coverage
@@ -142,15 +147,26 @@ uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --out
 
 ### Option B: Downloading Directly from NOAA Marine Cadastre
 ```bash
-# 1. Download official NOAA 2025-01-01 extract (192.8 MB compressed)
-curl -o data/raw/ais-2025-01-01.csv.zst "https://noaaocm.blob.core.windows.net/ais/csv2/csv2025/ais-2025-01-01.csv.zst"
+# 1. Download official NOAA 2025-01-01 extract (202,190,247 bytes; SHA-256 36c07f4a...bdde53)
+curl -fL -o data/raw/ais-2025-01-01.csv.zst "https://noaaocm.blob.core.windows.net/ais/csv2/csv2025/ais-2025-01-01.csv.zst"
 
-# 2. Decompress and slice San Pedro Bay bounding box (Lat: [33.5, 33.9], Lon: [-118.4, -118.0])
+# 2. Stream-decompress and slice the San Pedro Bay bounding box (no extra dependency; uses pyarrow)
+uv run python scripts/slice_noaa_bbox.py data/raw/ais-2025-01-01.csv.zst data/raw/sample_lalb_20250101.csv --lat 33.5 33.9 --lon -118.4 -118.0
+
 # 3. Run the ingestion pipeline
 uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
 ```
 
-The resulting `data/processed/lalb_20250101/cleaned_ais.parquet` will have 143,124 canonical rows and generate a cryptographic `manifest.json`.
+Expected results (independently reproduced by the Track B lead on 2026-11-23; slicer re-verified 2026-11-24):
+- Slicer: 7,337,208 nationwide rows scanned; 143,156 rows and 362 vessels kept; sample SHA-256 `42e4f766feb98b20e98124685137bcc2be16a20c06dda46e33f415f0b281eac8`.
+- Ingestion: 143,124 canonical rows (32 duplicates consolidated, 8 timestamp-position conflicts) plus a cryptographic `manifest.json`. Always record the SHA-256 of the Parquet file you actually used in experiment metadata.
+
+### Track B held-out test days (ML-03)
+The same procedure (download → `scripts/slice_noaa_bbox.py` → `aegismar ingest`) is used for the two
+held-out test days defined in [ML-03 §3.1](../03-research/ml-03-evaluation-protocol.md): 2025-01-14 →
+`data/processed/lalb_20250114/` and 2025-01-22 → `data/processed/lalb_20250122/`. Follow the ML-03
+**test-day firewall**: only integrity checks (hashes, row and vessel counts, time range) are allowed on
+these days until the final evaluation.
 
 ---
 
@@ -159,13 +175,14 @@ The resulting `data/processed/lalb_20250101/cleaned_ais.parquet` will have 143,1
 You can import and reuse existing verified utilities:
 - `src/aegismar/common/types.py`: `CanonicalPing` dataclass representing a single observation.
 - `src/aegismar/common/constants.py`: Quality flags (`IMPLIED_SPEED_VIOLATION`, `TIMESTAMP_POSITION_CONFLICT`), maximum physical bounds.
-- `src/aegismar/spatial/haversine.py`: Fast scalar and array-based Haversine geodesic distance functions:
+- `src/aegismar/spatial/haversine.py`: Scalar Haversine geodesic distance functions (`haversine_distance_meters`, `haversine_distance_nm`) and a list-based pairwise helper (`haversine_vector_meters`):
   ```python
-  from aegismar.spatial.haversine import haversine_distance_m, haversine_distance_nm
+  from aegismar.spatial.haversine import haversine_distance_meters, haversine_distance_nm
 
-  dist_m = haversine_distance_m(lat1, lon1, lat2, lon2)
+  dist_m = haversine_distance_meters(lat1, lon1, lat2, lon2)
   ```
-- `src/aegismar/clustering/types.py`: `load_clustering_dataset_from_parquet` for fast loading with canonical total order.
+- `src/aegismar/clustering/types.py`: `load_clustering_dataset_from_parquet` loads the Parquet file and re-sorts it into the clustering canonical total order `(timestamp_utc, mmsi, latitude, longitude, source_row)`.
+- **Row order on disk:** `cleaned_ais.parquet` itself is written in `(mmsi, timestamp_utc, source_row)` order by the ingestion cleaner. Track B code must not rely on file order; ML-02 §4.1 re-sorts each vessel by `(timestamp_utc, source_row)`.
 
 ---
 
@@ -218,9 +235,10 @@ To ensure platform stability:
 
 Keep these real-world constraints in mind when designing your models:
 1. **No Ground Truth for Malicious Behavior**: Public AIS feeds do not label "rogue" ships. Our primary quantitative evaluation relies on documented synthetic perturbations injected into clean trajectories.
-2. **Terrestrial AIS Coverage Blind Spots**: Receiver antenna shielding or line-of-sight limits near port cranes can cause 15–30 minute gaps that are innocent coverage drops, not deliberate transponder blackouts.
-3. **Low-Speed Gyro Drift**: At speeds under $1.5\text{ knots}$, GPS Course Over Ground (COG) swings erratically. Always guard drift angle calculations ($|\text{COG} - \text{Heading}|$) with a minimum speed check ($\text{SOG} > 1.5\text{ kt}$).
-4. **Single-Day Scope**: The primary study sample spans 24 hours of San Pedro Bay traffic (143k pings). Models must not assume weeks of historical training data for individual ships.
+2. **Terrestrial AIS Coverage Blind Spots**: Receiver antenna shielding or line-of-sight limits near port cranes can cause 15–30 minute gaps that are innocent coverage drops, not deliberate transponder blackouts. ML-01 also found two **feed-wide** silences on 2025-01-01 (03:07:37–03:20:25 and 12:06:09–12:18:20 UTC) that account for 557 of 1,579 vessel gaps > 600 s; gap features must be outage-aware (ML-02 §6).
+3. **Low-Speed Gyro Drift**: At speeds under $1.5\text{ knots}$, GPS Course Over Ground (COG) swings erratically. Always guard drift angle calculations ($|\text{COG} - \text{Heading}|$) with a minimum speed check ($\text{SOG} \ge 1.5\text{ kt}$; ML-02 guard G1).
+4. **Limited Temporal Scope**: Development uses one day (2025-01-01, a public holiday; 143k pings). Evaluation adds two held-out days (2025-01-14 and 2025-01-22; ML-03 §3.1). Models must not assume weeks of historical training data for individual ships.
+5. **Coarse Reporting Cadence**: The NOAA data arrives at roughly 70 s (moving Class A) to 180 s intervals, not raw 2–10 s AIS, so "instantaneous" rates are interval averages (ML-02 C1, C3).
 
 ---
 
@@ -228,19 +246,25 @@ Keep these real-world constraints in mind when designing your models:
 
 Here is a recommended starting sequence for your research track (no fixed deadlines; proceed at your own pace):
 
-- **ML-01: Literature & Schema Review**:
-  - Read `docs/03-research/vessel-behavior-ml.md` (the research proposal).
-  - Inspect `data/processed/lalb_20250101/cleaned_ais.parquet` schema and distributions.
-  - Review key maritime anomaly literature (e.g., kinematic rules, trajectory windowing, Isolation Forests).
-- **ML-02: Vessel Trajectory Feature Specification**:
-  - Define exact mathematical formulas for kinematic acceleration, angular course change, drift angle, and gap duration.
-  - Define windowing policy (sliding time window vs fixed ping count).
-- **ML-03: Freeze Baseline Models and Evaluation Protocol**:
-  - Define vessel-disjoint train/test split strategy (70/30 MMSI partition with vessel-type stratification).
-  - Specify synthetic perturbation parameter bounds (speed jumps, crabbing, coverage dropouts).
-  - Define metrics: Precision, Recall, $F_1$, PR-AUC, and Factor Attribution Accuracy.
-- **ML-04: Implement First Feature Engineering Experiment**:
-  - Implement `src/aegismar/anomaly/features.py` with unit tests in `tests/unit/test_anomaly.py`.
-  - Extract feature matrix for the 362 vessels in San Pedro Bay and generate a summary report.
+- **ML-01: Literature & Schema Review** — *data profiling completed; literature review pending*:
+  - [x] Inspect `cleaned_ais.parquet` schema and distributions (`experiments/anomaly/ml01_profile_dataset.py`).
+  - [ ] Review key maritime anomaly literature (e.g., kinematic rules, trajectory windowing, Isolation Forests) and write summary notes.
+- **ML-02: Vessel Trajectory Feature Specification** — *completed* ([v1.0](../03-research/ml-02-feature-spec.md)).
+- **ML-03: Freeze Baseline Models and Evaluation Protocol** — *completed* ([v1.0](../03-research/ml-03-evaluation-protocol.md)); held-out days 2025-01-14 and 2025-01-22 downloaded, sliced, ingested and integrity-checked.
+- **ML-04: Feature Engineering Module & Baseline Experiments** — *next*:
+  - Implement `src/aegismar/anomaly/features.py` exactly as specified in ML-02, with the ML-02 §11 verification cases in `tests/unit/test_anomaly.py`.
+  - Build the D0 vessel partition (ML-03 §3.2) and record its hash.
+  - Extract features for the development day (2025-01-01) and log a reproducible experiment under `experiments/outputs/anomaly/`.
+- **ML-05: Anomaly Model Evaluation & `vessel_anomaly_v1` Export**:
+  - Perturbation harness, R1 rule scorer, Isolation Forest / LOF, and the single frozen test-day evaluation, all per ML-03.
 
 Welcome aboard! Feel free to raise questions, suggest alternative modeling ideas, and adapt the proposal to match your research interests.
+
+---
+
+## 14. Version History
+
+| Version | Date | Change |
+|---|---|---|
+| 1.1 | 2026-11-22 | Collaborator onboarding baseline. |
+| 1.2 | 2026-11-24 | Corrected the Haversine import example (`haversine_distance_meters`); documented the on-disk row order; added the `scripts/slice_noaa_bbox.py` slicing step with verified expected results; updated implemented/planned status (H3 implemented; 92 tests, 94% coverage); linked ML-02/ML-03; added the held-out test days, outage and cadence limitations; updated the ML backlog status. |

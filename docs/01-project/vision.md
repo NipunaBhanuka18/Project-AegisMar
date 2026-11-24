@@ -7,7 +7,7 @@
 **Last Updated:** 2026-11-22  
 **Research Tracks & Collaboration:**  
 - **Track A (Clustering & Platform Lead):** NipunaBhanuka18  
-- **Track B (Vessel Behavior ML):** Kishakya *(proposed collaborator; participation and attribution pending review)*  
+- **Track B (Vessel Behavior ML):** Kishakya *(Track Lead)*  
 
 ---
 

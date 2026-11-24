@@ -3,7 +3,7 @@
 > **Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**  
 > **Collaborative AI Research & Software Engineering Knowledge Base**  
 > **Repository:** [https://github.com/NipunaBhanuka18/Project-AegisMar](https://github.com/NipunaBhanuka18/Project-AegisMar)  
-> **Primary Researchers:** NipunaBhanuka18 (Project Lead & Author) & Kishakya (Proposed ML Research Collaborator)  
+> **Primary Researchers:** NipunaBhanuka18 (Project Lead & Author) & Kishakya (ML Research Collaborator & Track B Lead)  
 > **Date:** 2026-11-22  
 
 ---
@@ -74,7 +74,7 @@ Project AegisMar is organized as **one unified research and engineering initiati
 ```mermaid
 flowchart LR
     CleanData[("Cleaned Parquet Partitions")] --> TrackA["Track A: Traffic & Anchorages<br><b>Lead: NipunaBhanuka18</b>"]
-    CleanData --> TrackB["Track B: Behavior Anomaly ML<br><b>Proposed Lead: Kishakya</b>"]
+    CleanData --> TrackB["Track B: Behavior Anomaly ML<br><b>Lead: Kishakya</b>"]
 
     TrackA --> StoredA["Anchorage Dwell Polygons"]
     TrackB --> StoredB["Explainable Incident GeoJSON"]
@@ -84,7 +84,7 @@ flowchart LR
 ```
 
 - **Track A (Geospatial Clustering Lead: NipunaBhanuka18)**: Owns spatial indexing, ST-DBSCAN clustering, H3 optimization benchmarks, stay-point extraction, and anchorage utilization.
-- **Track B (Vessel Behavior ML Lead: Kishakya, *proposed*)**: Owns vessel trajectory feature engineering, explainable rule-based scoring, unsupervised anomaly models (Isolation Forest / LOF), and perturbation evaluation.
+- **Track B (Vessel Behavior ML Lead: Kishakya)**: Owns vessel trajectory feature engineering, explainable rule-based scoring, unsupervised anomaly models (Isolation Forest / LOF), and perturbation evaluation.
 - **Integration**: Both tracks consume the identical cleaned Parquet dataset and feed their precomputed outputs into a shared DuckDB storage layer and read-only map interface.
 
 ---
@@ -111,6 +111,7 @@ The repository has completed foundational data engineering and reference cluster
 - **Milestone W2-01**: Ingestion hardening (strict integer MMSI sanitation, same-timestamp conflict preservation, ambiguous header rejection), reference Haversine `BallTree` ST-DBSCAN engine (`stdbscan-core-first-v1.0`), and independent brute-force $O(N^2)$ oracle (`BruteForceNeighborhoodOracle`). 52 automated tests passing with 95% total code coverage.
 - **Milestone W2-CLOSE**: Public exploratory clustering visualization published in `README.md` (`docs/assets/w2-balltree-clustering.png`).
 - **Milestone W3-01**: Uber H3 discrete hexagonal candidate neighborhood provider (`H3NeighborhoodProvider`) with safe $k$-ring coverage lower bounds, exact Haversine/temporal pruning, and pentagon fallback. Verified 100% recall (0 missing neighbors) against the brute-force oracle and 100% role/label identity with BallTree across 143,116 real LA/LB observations. 77 automated tests passing with 93% total code coverage.
+- **Track B ML-01 (in progress) / ML-02 / ML-03 (completed)**: Reproducible dataset profiling (`experiments/anomaly/ml01_profile_dataset.py`) and drift breakdown (`experiments/anomaly/ml02_drift_breakdown.py`); accepted feature specification ([ML-02 v1.0](03-research/ml-02-feature-spec.md)); frozen evaluation protocol ([ML-03 v1.0](03-research/ml-03-evaluation-protocol.md)); NOAA bounding-box slicer (`scripts/slice_noaa_bbox.py`) reproducing the documented 2025-01-01 sample exactly. No anomaly models are implemented yet. The test suite stands at 92 tests with 94% coverage (2026-11-24).
 
 ---
 
@@ -153,7 +154,7 @@ git clone https://github.com/NipunaBhanuka18/Project-AegisMar.git
 cd Project-AegisMar
 uv sync --locked
 
-# 2. Run quality gates (all 52 tests should pass)
+# 2. Run quality gates (all tests should pass; 92 as of 2026-11-24)
 uv run pytest -v
 uv run ruff check .
 uv run mypy src tests
@@ -208,6 +209,10 @@ Get-Content experiments/outputs/w3_01_lalb_balltree/clustering_summary.json
   - `research-plan.md`: Formal research questions and hypotheses.
   - `evaluation-protocol.md`: Scientific benchmark methodology.
   - `vessel-behavior-ml.md`: The ML anomaly detection research proposal.
+  - `ml-02-feature-spec.md`: Accepted Track B feature specification (v1.0).
+  - `ml-03-evaluation-protocol.md`: Frozen Track B evaluation protocol (v1.0).
+- **Track B Experiment Scripts**: [`experiments/anomaly/`](../experiments/anomaly/) (profiling and analysis scripts; outputs are written to the gitignored `experiments/outputs/anomaly/`).
+- **Data Tooling**: [`scripts/slice_noaa_bbox.py`](../scripts/slice_noaa_bbox.py) (stream-decompresses a NOAA `.csv.zst` daily extract and slices the study bounding box).
 
 ---
 
@@ -250,7 +255,7 @@ First-time contributors, academic evaluators, and research collaborators can fol
 7. **Distinguish Implemented Features from Planned Work**:
    Consult the [Research Evidence Register](03-research/evidence-register.md) to verify what has been formally measured versus what remains a planned hypothesis.
 8. **Review the ML Research Proposal**:
-   If contributing to behavioral analytics (Track B), review the [ML Research Proposal](03-research/vessel-behavior-ml.md) and detailed [ML Onboarding Guide](05-guides/ml-research-onboarding.md).
+   If contributing to behavioral analytics (Track B), review the [ML Research Proposal](03-research/vessel-behavior-ml.md), the accepted [ML-02 Feature Specification](03-research/ml-02-feature-spec.md) and [ML-03 Evaluation Protocol](03-research/ml-03-evaluation-protocol.md), and the detailed [ML Onboarding Guide](05-guides/ml-research-onboarding.md).
 9. **Create an Isolated Development Branch**:
    ```bash
    git checkout main
@@ -272,9 +277,9 @@ First-time contributors, academic evaluators, and research collaborators can fol
   - **Milestone W4-01 / W4-02**: Stay-point extraction, berth polygon exclusion, and anchorage dwell analytics.
   - **Milestone W5-01 / W6-01**: DuckDB analytical storage, `vessel_anomaly_v1` contract integration, and read-only FastAPI service.
   - **Milestone W7-01 / W8-01**: Interactive geospatial web dashboard and multi-trial benchmark reproducibility package.
-- **Track B (Vessel Behavior ML & Anomaly Detection — Proposed Lead: Kishakya)**:
-  - **Milestone ML-01**: Review domain literature, AIS telemetry fields, and evaluation constraints.
-  - **Milestone ML-02**: Define mathematical specifications for trajectory windowing and kinematic features.
-  - **Milestone ML-03**: Freeze baseline models and synthetic perturbation evaluation protocol.
-  - **Milestone ML-04**: Implement first reproducible feature engineering experiment.
+- **Track B (Vessel Behavior ML & Anomaly Detection — Lead: Kishakya)**:
+  - **Milestone ML-01**: *(In progress — data profiling completed; literature review pending)* Review domain literature, AIS telemetry fields, and evaluation constraints.
+  - **Milestone ML-02**: *(Completed — [v1.0](03-research/ml-02-feature-spec.md))* Mathematical specifications for trajectory windowing and kinematic features.
+  - **Milestone ML-03**: *(Completed — [v1.0](03-research/ml-03-evaluation-protocol.md), frozen)* Baseline models and synthetic perturbation evaluation protocol.
+  - **Milestone ML-04**: *(Next)* Implement `features.py` per ML-02 and the first reproducible feature engineering experiment on the development day.
   - **Milestone ML-05**: Anomaly model evaluation and `vessel_anomaly_v1` GeoJSON contract export.

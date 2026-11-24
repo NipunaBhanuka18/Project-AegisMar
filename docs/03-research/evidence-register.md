@@ -3,7 +3,7 @@
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**  
 > **Document Version:** 1.0  
 > **Lifecycle Status:** Active Evidence Baseline  
-> **Maintained By:** NipunaBhanuka18 (Project Lead) & Kishakya (Proposed ML Collaborator)  
+> **Maintained By:** NipunaBhanuka18 (Project Lead) & Kishakya (Track B Lead)  
 > **Last Reconciled:** 2026-11-22  
 
 ---
@@ -99,7 +99,7 @@ Before evaluating algorithmic claims, the data pipeline accounting from raw byte
 | **CLM-CLU-04** | Experimentally Observed | Exploratory BallTree ST-DBSCAN run on 143,116 analyzed LA/LB rows partitions observations into 241 spatiotemporal density clusters (136,276 core, 934 border, 5,906 noise). | `cleaned_ais.parquet`<br>(SHA-256: `4a7ca719...`) | $\varepsilon_s=300\text{m}$, $\Delta T=900\text{s}$, $\text{MinPts}=5$ | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json` | **Verified on Local Disk** (Summary JSON verified) | Clusters represent raw density groups; they are **NOT** 241 confirmed anchorages. |
 | **CLM-CLU-05** | Reported by Development Assistant | Exploratory BallTree ST-DBSCAN recorded 13.680 s uninstrumented wall time (0.077 s build, 13.341 s query, 0.262 s clustering) in development log; instrumented run recorded 38.014 s wall time with 225.83 MB peak heap in summary JSON. | `cleaned_ais.parquet` | Commit `3ece859` | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json`<br>`docs/04-development/development-log.md` | **Recorded in Log; Not Multi-Trial Benchmark** | Measured on a single workstation run; uninstrumented timing reported in dev log, instrumented timing in summary JSON; not a multi-trial benchmark. |
 | **CLM-CLU-06** | Tested by Automated Checks | Uber H3 candidate generation with empirical clearance lower bounds on calibrated resolutions (7, 8, 9), exact Haversine/temporal pruning, and fail-closed BallTree fallback for unsupported or anomalous configurations (Option B) achieves 100% recall (0 missing neighbors) against the brute-force oracle across 32 unit test fixture categories and 100% bit-for-bit CSR graph parity (13,188,256 / 13,188,256 edges, identical `indptr` and `indices`) against the BallTree reference on 143,116 real LA/LB observations (`cleaned_ais.parquet`, SHA-256: `4a7ca719...`, verified via `aegismar verify-parity`). | Synthetic fixtures & `cleaned_ais.parquet` | Calibrated Res 7–9, Option B | `src/aegismar/clustering/h3_neighbors.py`<br>`tests/unit/test_h3_neighbors.py` (32 fixtures)<br>`experiments/outputs/w3_01_lalb_h3/clustering_summary.json` | **Verified** (Automated checks & real LA/LB parity pass) | Proves neighborhood candidate completeness and clustering equivalence under Option B contract on calibrated domain; formal comparative speedup benchmarking belongs to W3-02 ($H_{1,A}$). |
-| **CLM-ANO-01** | Planned / Hypothesized | Multi-factor kinematic trajectory anomaly scoring will achieve at least 15 percentage points higher $F_1$ than ST-DBSCAN spatial density noise ($H_{2,A}$). | Held-out trajectory partitions | Rule-based vs. IF | `docs/03-research/vessel-behavior-ml.md` | **Unverified Hypothesis** (Planned ML track) | Anomaly models are **not yet implemented**; hypotheses remain subject to experiment. |
+| **CLM-ANO-01** | Planned / Hypothesized | Multi-factor kinematic trajectory anomaly scoring will achieve at least 15 percentage points higher $F_1$ than ST-DBSCAN spatial density noise ($H_{2,A}$). | Held-out trajectory partitions (test days 2025-01-14, 2025-01-22) | Rule-based (R1) vs. density noise (B0); IF (M1) | `docs/03-research/vessel-behavior-ml.md`<br>`docs/03-research/ml-03-evaluation-protocol.md` (frozen decision rules, §8) | **Unverified Hypothesis** (Planned ML track) | Anomaly models are **not yet implemented**; the evaluation protocol and statistical decision rules are frozen in ML-03 v1.0; hypotheses remain subject to experiment. |
 
 ---
 
@@ -132,7 +132,7 @@ Because raw and processed AIS datasets and experiment output directories are exc
 # 1. Synchronize the exact locked Python environment
 uv sync --locked
 
-# 2. Verify all 52 unit, oracle, and CLI regression tests
+# 2. Verify all unit, oracle, and CLI regression tests (92 as of 2026-11-24)
 uv run pytest -v
 
 # 3. Check code formatting, linting, and strict static types

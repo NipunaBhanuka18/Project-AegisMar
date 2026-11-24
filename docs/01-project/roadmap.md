@@ -5,7 +5,7 @@
 **Document Version:** 2.2  
 **Status:** Approved Roadmap (Collaborative Dual-Track Architecture)  
 **Track A Capacity:** 200 Hours (8 Weeks @ 25 Hours/Week) — Lead: NipunaBhanuka18  
-**Track B Capacity:** Independent Parallel Track — Proposed Lead: Kishakya *(schedule to be agreed)*  
+**Track B Capacity:** Independent Parallel Track — Lead: Kishakya *(independent flexible schedule)*  
 
 ---
 
@@ -17,7 +17,7 @@ The development lifecycle operates across two complementary, decoupled research 
   2. **Core Research Algorithms (Weeks 3–4)**: ST-DBSCAN clustering, H3 candidate acceleration, stay-points, and anchorages.
   3. **Platform Storage & Serving (Weeks 5–6)**: DuckDB in-process analytics, contract integration, and read-only FastAPI service.
   4. **Geospatial UI & Research Defense (Weeks 7–8)**: Interactive map, benchmarking, reproducibility package, and final thesis documentation.
-- **Track B (Parallel Behavioral ML Anomaly Research Track — Lead: Kishakya, *proposed*)**:
+- **Track B (Parallel Behavioral ML Anomaly Research Track — Lead: Kishakya)**:
   - Operates on an independent schedule decoupled from Track A's critical path.
   - Consumes cleaned Parquet datasets via the canonical schema and exports incident predictions via the `vessel_anomaly_v1` GeoJSON contract.
   - Governed by milestones `ML-01` through `ML-05` with flexible pacing.
@@ -103,7 +103,7 @@ The development lifecycle operates across two complementary, decoupled research 
 
 ---
 
-## 3. Parallel ML Research Track (Proposed Lead: Kishakya)
+## 3. Parallel ML Research Track (Lead: Kishakya)
 
 The machine learning anomaly detection research track proceeds in parallel with its own flexible milestone backlog. No hard deadlines are imposed; milestone timing and priorities will be established collaboratively upon Kishakya's onboarding review.
 
@@ -112,19 +112,23 @@ The machine learning anomaly detection research track proceeds in parallel with 
   - Review maritime anomaly detection literature and existing `docs/03-research/vessel-behavior-ml.md`.
   - Profile canonical AIS telemetry fields (`cleaned_ais.parquet`) and understand sensor sentinels/limits.
   - *Deliverable*: Literature summary notes and confirmed feature selection strategy.
+  - *Status (2026-11-24)*: **In Progress** — data profiling completed; literature review pending.
 - **ML-02: Vessel Trajectory Feature Specification**:
   - Formulate mathematical definitions for kinematic acceleration, angular course rates, drift angles, and transponder reporting intervals.
   - Define windowing parameters (sliding time window vs. fixed-ping strides).
   - *Deliverable*: Trajectory feature extraction specification document.
+  - *Status (2026-11-24)*: **Completed** — [ML-02 v1.0](../03-research/ml-02-feature-spec.md).
 - **ML-03: Baseline Models & Evaluation Protocol Freezing**:
   - Formalize rule-based heuristic scoring thresholds and Isolation Forest architecture.
-  - Specify vessel-disjoint (70/30 MMSI) and chronological holdout splits.
+  - Specify a vessel-disjoint (70/30 MMSI) split of the development day and separate held-out test days (replacing the earlier chronological holdout idea).
   - Parameterize synthetic perturbation types (speed jumps, crabbing, coverage dropouts) with maritime physical bounds.
   - *Deliverable*: Evaluation protocol document and perturbation configuration schema.
+  - *Status (2026-11-24)*: **Completed** — [ML-03 v1.0](../03-research/ml-03-evaluation-protocol.md) (frozen); test days 2025-01-14 and 2025-01-22 ingested.
 - **ML-04: First Reproducible Feature-Engineering Experiment**:
   - Implement `src/aegismar/anomaly/features.py` with comprehensive unit tests (`tests/unit/test_anomaly.py`).
-  - Extract feature representations across San Pedro Bay test partition and log reproducible experiment artifacts under `experiments/outputs/anomaly/`.
+  - Extract feature representations for the development day (2025-01-01) and log reproducible experiment artifacts under `experiments/outputs/anomaly/`. Held-out test days stay behind the ML-03 firewall.
   - *Deliverable*: Feature extractor module and baseline experiment summary JSON.
+  - *Status (2026-11-24)*: **Next**.
 - **ML-05: Anomaly Model Evaluation & `vessel_anomaly_v1` Export**:
   - Implement rule-based scoring engine and Isolation Forest model.
   - Evaluate PR-AUC, precision, recall, and false alarm rates on held-out splits.
