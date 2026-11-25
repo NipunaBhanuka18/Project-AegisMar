@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation - Canonical Dataset v1.1 Reconciliation (2026-11-25)
+- **Decision (track leads, 2026-11-25):** the post-W2-01 cleaned dataset v1.1 (`lalb_20250101_v1_1/`, file SHA-256 `bdde2581…`, logical fingerprint `d8a619f7…`) is canonical for Track A (from W3-02) and Track B. The historical v1.0 file (`4a7ca719…`, fingerprint `570b0fb0…`) remains the immutable baseline for the W2-01 and W3-01/W3-01B clustering runs.
+- **Evidence (independently reproduced on a second workstation):** ingestion at `1b573ad` reproduces v1.0 byte-for-byte and current `main` reproduces v1.1 byte-for-byte; the versions differ in exactly 12 rows of derived kinematic columns, and clustering inputs after quality filtering are bit-identical (143,116 rows).
+- **Evidence Register v1.1:** new §2.1 "Canonical Dataset Versions"; new claims `CLM-ING-07`, `CLM-ING-08` and Track B claims `CLM-ANO-02` to `CLM-ANO-05` (21 claims in total); `CLM-CLU-04`/`CLM-CLU-06` annotated as historical v1.0 with identical clustering inputs.
+- **ADR-011 / ADR-009:** resolution note and dataset note added. **PROJECT_STATE / CLAUDE / GEMINI:** v1.1 path recorded as canonical and immutable; stale CI and open-PR statements corrected.
+- **Safety fix:** README, installation guide, START-HERE and the ML onboarding guide no longer instruct `aegismar ingest … -o data/processed/lalb_20250101 --overwrite`, which would overwrite the immutable v1.0 file; they now write to `lalb_20250101_v1_1/`.
+- **ML-02 v1.0.1 (editorial):** dataset path updated to the v1.1 folder; numbers and decisions unchanged. Track B script usage examples updated likewise.
+
 ### Documentation - Track B Documentation Sync after ML-01–ML-03 (2026-11-24)
 - **README / START-HERE / Roadmap / Milestones**: Track B statuses updated (ML-01 in progress: data profiling completed, literature review pending; ML-02 and ML-03 completed; ML-04 next). Current-state test figures updated to 92 tests / 94% coverage. Stale "H3 not yet implemented" statements updated. ML-02/ML-03 linked from the documentation indexes.
 - **Milestones**: Removed a stale duplicate copy of the W7-02, W8-01 and W8-02 specifications that sat after the Track B section, including a misplaced dashboard acceptance bullet under ML-05. The current versions in the Track A section are unchanged.

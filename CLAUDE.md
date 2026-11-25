@@ -13,7 +13,7 @@ Inspect `PROJECT_STATE.md`, `CONTRIBUTING.md`, `docs/02-architecture/system-arch
 - Never claim tests, linters, or type checks passed without executing them and reporting exact command output.
 
 ## Hard Safety Guardrails
-1. **Immutable Data:** Never overwrite, delete, or modify `data/raw/` or `data/processed/lalb_20250101/` (`4a7ca719...e88b`). Never commit files under `data/` or `experiments/outputs/`.
+1. **Immutable Data:** Never overwrite, delete, or modify `data/raw/`, `data/processed/lalb_20250101/` (historical v1.0, `4a7ca719...e88b`) or `data/processed/lalb_20250101_v1_1/` (canonical v1.1, `bdde2581...af48`). Never commit files under `data/` or `experiments/outputs/`.
 2. **No Unauthorized Runs:** Do not regenerate datasets or run multi-scale benchmarks unless explicitly instructed in the approved task prompt.
 3. **Git Hygiene:** Use `CONTRIBUTING.md` branch prefixes (`feat/clu-`, `fix/`, `docs/`, `exp/`) and Conventional Commits. Never force-push, commit, push, modify PRs, or merge without explicit authorization. Never edit unrelated files outside the approved task scope.
 4. **Track Boundary (`ADR-010`):** Do not modify Track B files (`src/aegismar/anomaly/`, `experiments/anomaly/`, `docs/03-research/ml-*.md`) unless explicitly scoped for an approved integration task.

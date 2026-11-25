@@ -220,7 +220,7 @@ uv run mypy src tests
 uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
 
 # Ingest with custom implied speed threshold (knots) and overwrite permission
-uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101 -s 50.0 --overwrite
+uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101_v1_1 -s 50.0
 
 # Run reference Haversine BallTree ST-DBSCAN on cleaned AIS Parquet
 uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w2_01_lalb_balltree --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite

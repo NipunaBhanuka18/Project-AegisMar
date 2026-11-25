@@ -86,7 +86,7 @@ uv run python -m aegismar ingest --help
 uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
 
 # Ingest with custom implied speed threshold and overwrite enabled
-uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101 -s 50.0 --overwrite
+uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101_v1_1 -s 50.0
 ```
 
 ---

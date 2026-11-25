@@ -107,7 +107,7 @@ uv run ruff format .
 ## 5. How Cleaned AIS Data Is Structured
 
 Cleaned telemetry is stored in columnar Apache Parquet format at:
-`data/processed/lalb_20250101/cleaned_ais.parquet`
+`data/processed/lalb_20250101_v1_1/cleaned_ais.parquet` (canonical v1.1; see [evidence-register.md §2.1](../03-research/evidence-register.md))
 
 The dataset contains 19 standardized columns defined in `src/aegismar/ingestion/schema.py`:
 1. `source_row` (`int64`): Original CSV row number for auditability.
@@ -142,7 +142,7 @@ If you do not have the local Parquet dataset, you can reproduce it in under 2 mi
 ### Option A: From Pre-extracted Regional Sample
 If you have `data/raw/sample_lalb_20250101.csv`:
 ```bash
-uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101 --overwrite
+uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101_v1_1
 ```
 
 ### Option B: Downloading Directly from NOAA Marine Cadastre
@@ -154,7 +154,7 @@ curl -fL -o data/raw/ais-2025-01-01.csv.zst "https://noaaocm.blob.core.windows.n
 uv run python scripts/slice_noaa_bbox.py data/raw/ais-2025-01-01.csv.zst data/raw/sample_lalb_20250101.csv --lat 33.5 33.9 --lon -118.4 -118.0
 
 # 3. Run the ingestion pipeline
-uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
+uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101_v1_1
 ```
 
 Expected results (independently reproduced by the Track B lead on 2026-11-23; slicer re-verified 2026-11-24):

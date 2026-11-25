@@ -100,7 +100,7 @@ Both candidate study regions were extracted and profiled from the complete 24-ho
 ## 5. Study Region Selection Decision
 
 **Selected Study Region:** **Los Angeles / Long Beach (San Pedro Bay), California**  
-**Lifecycle Status:** **Selected, Inspected & Validated** (Extract preserved in `data/raw/sample_lalb_20250101.csv`, 143,156 records; ingested and validated into `data/processed/lalb_20250101/cleaned_ais.parquet`, 143,124 canonical rows).
+**Lifecycle Status:** **Selected, Inspected & Validated** (Extract preserved in `data/raw/sample_lalb_20250101.csv`, 143,156 records; ingested and validated into `data/processed/lalb_20250101/cleaned_ais.parquet`, 143,124 canonical rows). **Versions:** that folder holds the historical v1.0 file; the canonical cleaned dataset since 2026-11-25 is v1.1 in `data/processed/lalb_20250101_v1_1/` (file SHA-256 `bdde2581...`, fingerprint `d8a619f7...`). See [evidence-register.md §2.1](evidence-register.md).
 
 ### Selection Justification
 1. **Direct Alignment with Benchmark Scales**: A single 24-hour slice yields 143,156 valid pings across 362 unique vessels, enabling immediate sampling at the 10,000, 50,000, and 100,000 benchmark scales without multi-day concatenation.
