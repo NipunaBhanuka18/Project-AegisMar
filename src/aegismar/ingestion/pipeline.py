@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import time
 from pathlib import Path
 from typing import Any
@@ -12,21 +11,23 @@ from aegismar import __version__
 from aegismar.common.constants import DEFAULT_IMPLIED_SPEED_THRESHOLD_KNOTS
 from aegismar.common.types import IngestionManifest
 from aegismar.ingestion.cleaner import process_and_clean_observations
-from aegismar.ingestion.schema import detect_and_build_column_mapping
+from aegismar.ingestion.provenance import (
+    collect_runtime_provenance,
+    compute_content_fingerprint,
+)
+
+# Re-exported for backward compatibility (moved to provenance.py in W3-02A).
+from aegismar.ingestion.provenance import compute_file_sha256 as compute_file_sha256
+from aegismar.ingestion.schema import (
+    CANONICAL_ROW_ORDER,
+    SCHEMA_CONTRACT_VERSION,
+    detect_and_build_column_mapping,
+)
 from aegismar.ingestion.storage import (
     canonical_pings_to_arrow_table,
     write_manifest,
     write_parquet_dataset,
 )
-
-
-def compute_file_sha256(file_path: Path | str) -> str:
-    """Compute the SHA-256 hash of a file efficiently in 1MB chunks."""
-    h = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        while chunk := f.read(1024 * 1024):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def run_ingestion_pipeline(
@@ -127,7 +128,16 @@ def run_ingestion_pipeline(
     arrow_table = canonical_pings_to_arrow_table(cleaned_pings)
     write_parquet_dataset(table=arrow_table, output_parquet_path=output_parquet)
 
-    # 6. Extract summary metadata
+    # 6. Provenance over the written file (ADR-011): file bytes + logical content
+    output_parquet_sha256 = compute_file_sha256(output_parquet)
+    fingerprint = compute_content_fingerprint(output_parquet)
+    if not fingerprint.canonical_order_verified:
+        raise RuntimeError(
+            f"Written Parquet violates canonical row order {CANONICAL_ROW_ORDER}: {output_parquet}"
+        )
+    runtime = collect_runtime_provenance()
+
+    # 7. Extract summary metadata
     if cleaned_pings:
         min_ts = min(p.timestamp_utc for p in cleaned_pings).isoformat()
         max_ts = max(p.timestamp_utc for p in cleaned_pings).isoformat()
@@ -153,9 +163,19 @@ def run_ingestion_pipeline(
         unique_vessels_count=summary["unique_mmsis"],
         processing_time_seconds=t_elapsed,
         output_parquet_path=str(output_parquet.resolve()),
+        output_parquet_sha256=output_parquet_sha256,
+        content_fingerprint_sha256=fingerprint.content_fingerprint_sha256,
+        content_fingerprint_version=fingerprint.content_fingerprint_version,
+        row_order_contract=list(CANONICAL_ROW_ORDER),
+        schema_contract_version=SCHEMA_CONTRACT_VERSION,
+        git_commit_sha=runtime.git_commit_sha,
+        git_dirty=runtime.git_dirty,
+        python_version=runtime.python_version,
+        pyarrow_version=runtime.pyarrow_version,
+        generated_at_utc=runtime.generated_at_utc,
     )
 
-    # 7. Write manifest JSON
+    # 8. Write manifest JSON
     write_manifest(manifest=manifest, output_manifest_path=output_manifest)
 
     return manifest

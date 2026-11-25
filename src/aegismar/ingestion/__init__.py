@@ -8,10 +8,21 @@ from aegismar.ingestion.cleaner import (
     process_and_clean_observations,
     sanitize_mmsi,
 )
-from aegismar.ingestion.pipeline import compute_file_sha256, run_ingestion_pipeline
+from aegismar.ingestion.pipeline import run_ingestion_pipeline
+from aegismar.ingestion.provenance import (
+    CONTENT_FINGERPRINT_VERSION,
+    ContentFingerprintResult,
+    RuntimeProvenance,
+    collect_runtime_provenance,
+    compute_content_fingerprint,
+    compute_file_sha256,
+    verify_canonical_row_order,
+)
 from aegismar.ingestion.schema import (
+    CANONICAL_ROW_ORDER,
     NOAA_2025_MAPPINGS,
     NOAA_LEGACY_MAPPINGS,
+    SCHEMA_CONTRACT_VERSION,
     SchemaAdapterError,
     detect_and_build_column_mapping,
     get_canonical_arrow_schema,
@@ -26,11 +37,18 @@ from aegismar.ingestion.storage import (
 )
 
 __all__ = [
+    "CANONICAL_ROW_ORDER",
+    "CONTENT_FINGERPRINT_VERSION",
     "NOAA_2025_MAPPINGS",
     "NOAA_LEGACY_MAPPINGS",
+    "SCHEMA_CONTRACT_VERSION",
+    "ContentFingerprintResult",
     "RecordValidator",
+    "RuntimeProvenance",
     "SchemaAdapterError",
     "canonical_pings_to_arrow_table",
+    "collect_runtime_provenance",
+    "compute_content_fingerprint",
     "compute_file_sha256",
     "detect_and_build_column_mapping",
     "get_canonical_arrow_schema",
@@ -41,6 +59,7 @@ __all__ = [
     "read_parquet_dataset",
     "run_ingestion_pipeline",
     "sanitize_mmsi",
+    "verify_canonical_row_order",
     "write_manifest",
     "write_parquet_dataset",
 ]

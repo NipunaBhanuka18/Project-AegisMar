@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from aegismar.common.constants import (
@@ -25,8 +28,17 @@ from aegismar.ingestion.cleaner import (
     process_and_clean_observations,
     sanitize_mmsi,
 )
+from aegismar.ingestion.pipeline import compute_file_sha256 as pipeline_compute_file_sha256
 from aegismar.ingestion.pipeline import run_ingestion_pipeline
+from aegismar.ingestion.provenance import (
+    CONTENT_FINGERPRINT_VERSION,
+    compute_content_fingerprint,
+    compute_file_sha256,
+    verify_canonical_row_order,
+)
 from aegismar.ingestion.schema import (
+    CANONICAL_ROW_ORDER,
+    SCHEMA_CONTRACT_VERSION,
     SchemaAdapterError,
     detect_and_build_column_mapping,
     get_canonical_arrow_schema,
@@ -553,3 +565,131 @@ def test_20_mixed_and_ambiguous_legacy_modern_headers() -> None:
         "longitude": "longitude",
         "SOG": "sog",
     }
+
+
+EXPECTED_CANONICAL_FIELDS: list[tuple[str, pa.DataType]] = [
+    ("source_row", pa.int64()),
+    ("mmsi", pa.string()),
+    ("timestamp_utc", pa.timestamp("us", tz="UTC")),
+    ("latitude", pa.float64()),
+    ("longitude", pa.float64()),
+    ("sog", pa.float32()),
+    ("cog", pa.float32()),
+    ("heading", pa.float32()),
+    ("nav_status", pa.int8()),
+    ("vessel_type", pa.int16()),
+    ("vessel_name", pa.string()),
+    ("imo", pa.string()),
+    ("call_sign", pa.string()),
+    ("transceiver_class", pa.string()),
+    ("prev_source_row", pa.int64()),
+    ("elapsed_seconds", pa.float64()),
+    ("distance_nm", pa.float64()),
+    ("implied_speed_knots", pa.float64()),
+    ("quality_flags", pa.list_(pa.string())),
+]
+
+
+def test_21_canonical_row_order_tie_break_on_written_parquet(tmp_path: Path) -> None:
+    """Written Parquet is sorted by (mmsi, timestamp_utc, source_row) across vessels and ties."""
+    assert CANONICAL_ROW_ORDER == ("mmsi", "timestamp_utc", "source_row")
+    csv_path = tmp_path / "ties.csv"
+    csv_path.write_text(
+        "mmsi,base_date_time,latitude,longitude\n"
+        "222222222,2025-01-01 00:05:00,33.70,-118.20\n"  # row 1
+        "111111111,2025-01-01 00:01:00,33.71,-118.21\n"  # row 2
+        "222222222,2025-01-01 00:00:00,33.72,-118.22\n"  # row 3
+        "111111111,2025-01-01 00:01:00,33.75,-118.25\n"  # row 4: same ts as row 2, conflict
+        "111111111,2025-01-01 00:00:00,33.73,-118.23\n",  # row 5
+        encoding="utf-8",
+    )
+    manifest = run_ingestion_pipeline(csv_path, tmp_path / "out")
+    table = pq.read_table(manifest.output_parquet_path)
+
+    assert table.column("mmsi").to_pylist() == [
+        "111111111",
+        "111111111",
+        "111111111",
+        "222222222",
+        "222222222",
+    ]
+    assert table.column("source_row").to_pylist() == [5, 2, 4, 3, 1]
+    assert verify_canonical_row_order(manifest.output_parquet_path) is True
+
+
+def test_22_full_canonical_schema_names_and_types(tmp_path: Path) -> None:
+    """All 19 canonical columns have exact names, order, and PyArrow types on disk."""
+    schema = get_canonical_arrow_schema()
+    assert len(schema) == 19
+    assert [(f.name, f.type) for f in schema] == EXPECTED_CANONICAL_FIELDS
+
+    manifest = run_ingestion_pipeline(FIXTURES_DIR / "synthetic_2025_sample.csv", tmp_path / "s")
+    written = pq.ParquetFile(manifest.output_parquet_path).schema_arrow
+    assert written.names == [name for name, _ in EXPECTED_CANONICAL_FIELDS]
+    for field, (name, expected_type) in zip(written, EXPECTED_CANONICAL_FIELDS, strict=True):
+        assert field.name == name
+        if pa.types.is_list(expected_type):
+            assert pa.types.is_list(field.type)
+            assert field.type.value_type == expected_type.value_type
+        else:
+            assert field.type == expected_type, name
+
+
+def test_23_manifest_provenance_fields(tmp_path: Path) -> None:
+    """manifest.json records file hash, logical fingerprint, contracts, and runtime metadata."""
+    output_dir = tmp_path / "prov"
+    manifest = run_ingestion_pipeline(FIXTURES_DIR / "synthetic_2025_sample.csv", output_dir)
+    parquet_path = output_dir / "cleaned_ais.parquet"
+
+    on_disk = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert on_disk == manifest.to_dict()
+
+    fingerprint = compute_content_fingerprint(parquet_path)
+    assert on_disk["output_parquet_sha256"] == compute_file_sha256(parquet_path)
+    assert on_disk["content_fingerprint_sha256"] == fingerprint.content_fingerprint_sha256
+    assert on_disk["content_fingerprint_version"] == CONTENT_FINGERPRINT_VERSION
+    assert on_disk["row_order_contract"] == ["mmsi", "timestamp_utc", "source_row"]
+    assert on_disk["schema_contract_version"] == SCHEMA_CONTRACT_VERSION
+    assert on_disk["pyarrow_version"] == pa.__version__
+    assert on_disk["python_version"].startswith("3.11")
+    assert on_disk["generated_at_utc"].endswith("Z")
+    assert on_disk["git_commit_sha"] is None or len(on_disk["git_commit_sha"]) == 40
+    assert on_disk["git_dirty"] in (True, False, None)
+    assert fingerprint.row_count == on_disk["output_row_count"]
+
+    # Pre-existing manifest keys are preserved
+    for key in ("source_sha256", "output_parquet_path", "output_row_count", "field_mappings"):
+        assert key in on_disk
+
+    # No new Parquet footer key-value metadata beyond the standard Arrow schema entry
+    footer_kv = pq.ParquetFile(parquet_path).metadata.metadata or {}
+    assert set(footer_kv.keys()) <= {b"ARROW:schema"}
+
+    # Backward-compatible re-export from pipeline
+    assert pipeline_compute_file_sha256 is compute_file_sha256
+
+
+def test_24_pipeline_fails_closed_on_row_order_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A written Parquet that violates the row-order contract aborts before manifest write."""
+    import aegismar.ingestion.pipeline as pipeline_module
+    from aegismar.ingestion.provenance import ContentFingerprintResult
+
+    def _unordered(source: Path | str) -> ContentFingerprintResult:
+        r = compute_content_fingerprint(source)
+        return ContentFingerprintResult(
+            content_fingerprint_sha256=r.content_fingerprint_sha256,
+            content_fingerprint_version=r.content_fingerprint_version,
+            row_count=r.row_count,
+            column_count=r.column_count,
+            schema=r.schema,
+            canonical_row_order=r.canonical_row_order,
+            canonical_order_verified=False,
+        )
+
+    monkeypatch.setattr(pipeline_module, "compute_content_fingerprint", _unordered)
+    output_dir = tmp_path / "bad_order"
+    with pytest.raises(RuntimeError, match="canonical row order"):
+        run_ingestion_pipeline(FIXTURES_DIR / "synthetic_2025_sample.csv", output_dir)
+    assert not (output_dir / "manifest.json").exists()

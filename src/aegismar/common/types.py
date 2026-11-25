@@ -51,6 +51,17 @@ class IngestionManifest:
     unique_vessels_count: int
     processing_time_seconds: float
     output_parquet_path: str
+    # W3-02A provenance fields (ADR-011): manifest.json is the authoritative record.
+    output_parquet_sha256: str
+    content_fingerprint_sha256: str
+    content_fingerprint_version: str
+    row_order_contract: list[str]
+    schema_contract_version: str
+    git_commit_sha: str | None
+    git_dirty: bool | None
+    python_version: str
+    pyarrow_version: str
+    generated_at_utc: str
 
     def to_dict(self) -> dict[str, Any]:
         """Convert manifest to serializable dictionary."""
@@ -70,4 +81,14 @@ class IngestionManifest:
             "unique_vessels_count": self.unique_vessels_count,
             "processing_time_seconds": round(self.processing_time_seconds, 3),
             "output_parquet_path": self.output_parquet_path,
+            "output_parquet_sha256": self.output_parquet_sha256,
+            "content_fingerprint_sha256": self.content_fingerprint_sha256,
+            "content_fingerprint_version": self.content_fingerprint_version,
+            "row_order_contract": list(self.row_order_contract),
+            "schema_contract_version": self.schema_contract_version,
+            "git_commit_sha": self.git_commit_sha,
+            "git_dirty": self.git_dirty,
+            "python_version": self.python_version,
+            "pyarrow_version": self.pyarrow_version,
+            "generated_at_utc": self.generated_at_utc,
         }

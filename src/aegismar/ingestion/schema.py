@@ -48,6 +48,13 @@ REQUIRED_CANONICAL_FIELDS: tuple[str, ...] = (
     "longitude",
 )
 
+# Canonical row-order contract for cleaned AIS datasets (ADR-011). Rows are sorted
+# strictly ascending by this key; ``source_row`` breaks same-vessel, same-timestamp ties.
+CANONICAL_ROW_ORDER: tuple[str, ...] = ("mmsi", "timestamp_utc", "source_row")
+
+# Version of the canonical schema + row-order contract recorded in manifest.json.
+SCHEMA_CONTRACT_VERSION: str = "1.0"
+
 
 def get_canonical_arrow_schema() -> pa.Schema:
     """Return the official PyArrow schema for cleaned canonical AIS records."""
