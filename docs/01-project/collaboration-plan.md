@@ -5,7 +5,7 @@
 > **Lifecycle Status:** Active Collaboration & Governance Baseline  
 > **Research Team:**  
 > - **NipunaBhanuka18**: Project Lead & Geospatial Clustering Track Lead  
-> - **Kishakya**: Proposed ML Research Collaborator *(participation, schedule, and attribution pending review)*  
+> - **Kishakya**: ML Research Collaborator & Track B Lead  
 > **Date:** 2026-11-22  
 
 ---
@@ -35,7 +35,7 @@ flowchart TD
         H1Eval["Comparative H1 Benchmarks (Recall/Runtime)"]
     end
 
-    subgraph TrackB ["Track B: Vessel Behavior ML (Proposed Lead: Kishakya)"]
+    subgraph TrackB ["Track B: Vessel Behavior ML (Lead: Kishakya)"]
         TrajFeat["Vessel Trajectory Feature Engineering"]
         RuleScorer["Rule-Based Kinematic Baseline"]
         IsoForest["Unsupervised Isolation Forest / LOF"]
@@ -78,7 +78,7 @@ flowchart TD
   - Primary platform architecture maintenance and pre-commit quality gate enforcement.
 
 ### Track B: ML-Based Vessel Behavior Intelligence
-- **Proposed Track Lead**: Kishakya *(participation pending review)*
+- **Track Lead**: Kishakya
 - **Core Responsibilities**:
   - Trajectory windowing and kinematic feature extraction (`aegismar.anomaly.features`).
   - Transparent rule-based kinematic anomaly scoring (`aegismar.anomaly.rules`).
@@ -106,7 +106,7 @@ Interoperability between the two tracks is governed by two versioned contracts:
 ### 4.1 Ingestion Contract (Input to ML Track)
 - **Source**: `data/processed/<dataset_id>/cleaned_ais.parquet`
 - **Schema**: 19 canonical fields defined in `src/aegismar/ingestion/schema.py`
-- **Guarantee**: Sorted in canonical total order `(timestamp_utc, mmsi, latitude, longitude, source_row)`. Quality flags provided for each ping.
+- **Guarantee**: Rows are written in `(mmsi, timestamp_utc, source_row)` order by the ingestion cleaner; consumers must not rely on file order (the clustering loader re-sorts into its canonical total order `(timestamp_utc, mmsi, latitude, longitude, source_row)`, and Track B re-sorts per vessel per ML-02 §4.1). Quality flags provided for each ping.
 
 ### 4.2 Anomaly Output Contract (Input to Serving Layer)
 - **Specification**: `vessel_anomaly_v1` GeoJSON FeatureCollection (Provisional baseline).
@@ -130,4 +130,4 @@ Interoperability between the two tracks is governed by two versioned contracts:
 1. **Equal Intellectual Respect**: Both researchers are treated as primary academic contributors to the AegisMar initiative.
 2. **Publication Co-Authorship**: Any research paper, conference submission, or technical thesis derived from Project AegisMar will include both researchers as co-authors, with lead authorship on specific papers reflecting track leadership (e.g., spatial clustering paper led by NipunaBhanuka18; anomaly detection paper led by Kishakya).
 3. **Transparent Contribution Tracking**: Git commit histories, development logs, and the [Research Evidence Register](../03-research/evidence-register.md) will accurately document individual contributions.
-4. **Prospective Status**: Kishakya's name is noted as the proposed collaborator. Her formal attribution and participation will be updated upon her review and acceptance of this plan.
+4. **Confirmed Status**: Kishakya reviewed and accepted this plan. Kishakya's participation and Track B leadership were confirmed on 2026-11-24, and attribution follows the principles above.

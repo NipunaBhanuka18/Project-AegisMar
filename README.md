@@ -18,19 +18,19 @@
 
 The platform operates as a collaborative, multi-engine modular monolith structured around two complementary research tracks:
 1. **Clustering & Spatial Indexing Track (Track Lead: NipunaBhanuka18)**: Scalable spatiotemporal density clustering (ST-DBSCAN) comparing discrete hexagonal indexing (Uber H3) against a geodesic Haversine BallTree baseline, combined with vessel-aware stay-point and anchorage intelligence.
-2. **Vessel Behavior Anomaly Detection Track (Proposed Track Lead: Kishakya, *pending review*)**: Trajectory-aware kinematic feature engineering and unsupervised anomaly detection (multi-factor kinematic scoring and Isolation Forest / LOF baselines) producing explainable physical justifications for alerts.
+2. **Vessel Behavior Anomaly Detection Track (Track Lead: Kishakya)**: Trajectory-aware kinematic feature engineering and unsupervised anomaly detection (multi-factor kinematic scoring and Isolation Forest / LOF baselines) producing explainable physical justifications for alerts.
 
 ---
 
 <a id="current-status"></a>
 ## 2. Current Status & Research Tracks
 
-- **Phase**: Milestone **W2-01 & W2-CLOSE (Completed)**; Collaboration Foundation established.
-- **State**: Validated in-memory AIS ingestion pipeline (`zstd` Parquet + manifest), hardened MMSI/conflict/schema checks, reference Haversine `BallTree` ST-DBSCAN (`stdbscan-core-first-v1.0`), independent $O(N^2)$ brute-force oracle, and exploratory LA/LB baseline completed and verified (52 unit/oracle tests, 95% coverage).
+- **Phase**: Track A **W3-01 / W3-01A / W3-01B (H3) completed**; Track B **ML-02 and ML-03 completed** (ML-01 data profiling completed, literature review pending). Next: W3-02 (Track A) and ML-04 (Track B).
+- **State**: Validated in-memory AIS ingestion pipeline (`zstd` Parquet + manifest), hardened MMSI/conflict/schema checks, reference Haversine `BallTree` ST-DBSCAN (`stdbscan-core-first-v1.0`), independent $O(N^2)$ brute-force oracle, exploratory LA/LB baseline, and the Uber H3 candidate neighborhood provider (Option B correctness contract, neighborhood parity with BallTree on LA/LB) — 92 automated tests, 94% coverage (2026-11-24). Track B: dataset profiling tooling, accepted feature specification (ML-02 v1.0) and frozen evaluation protocol (ML-03 v1.0); no anomaly models implemented yet.
 - **Codebase Implementation**: Pre-alpha (`0.1.0.dev1`).
 - **Research Tracks**:
-  - **Track A (Clustering & Platform Lead: NipunaBhanuka18)**: Uber H3 candidate optimization, comparative H1 benchmarks, and stay-point/anchorage analytics (Weeks 3–4).
-  - **Track B (ML Anomaly Detection: Kishakya, *proposed*)**: Trajectory feature engineering and ML behavior anomaly detection (independent track; see [ML Research Proposal](docs/03-research/vessel-behavior-ml.md) and [Collaborator Onboarding Guide](docs/05-guides/ml-research-onboarding.md)).
+  - **Track A (Clustering & Platform Lead: NipunaBhanuka18)**: Comparative H1 benchmarks (W3-02) and stay-point/anchorage analytics (Week 4).
+  - **Track B (ML Anomaly Detection Lead: Kishakya)**: Trajectory feature engineering and ML behavior anomaly detection (independent track; see [ML Research Proposal](docs/03-research/vessel-behavior-ml.md), [ML-02 Feature Specification](docs/03-research/ml-02-feature-spec.md), [ML-03 Evaluation Protocol](docs/03-research/ml-03-evaluation-protocol.md) and [Collaborator Onboarding Guide](docs/05-guides/ml-research-onboarding.md)).
   - Shared analytical storage (DuckDB), read-only FastAPI service, and geospatial map dashboard planned for Weeks 6–7.
 
 ---
@@ -84,7 +84,7 @@ flowchart TD
         H3 --> StayPoint["Stay-Point & Anchorage Intelligence"]
     end
 
-    subgraph TrackB ["Track B: Vessel Behavior ML (Proposed Lead: Kishakya)"]
+    subgraph TrackB ["Track B: Vessel Behavior ML (Lead: Kishakya)"]
         CleanParquet --> TrajFeat["Kinematic Feature Extractor"]
         TrajFeat --> RuleEngine["Rule-Based Kinematic Scorer"]
         TrajFeat --> IsoForest["Isolation Forest & LOF Baselines"]
@@ -132,7 +132,7 @@ Estimated 200 hours (25 h/week) across an 8-week engineering baseline:
 - **Week 7**: Geospatial dashboard implementation and end-to-end analytical validation.
 - **Week 8**: Performance benchmarking, reproducibility report, and research paper completion.
 
-### Track B: Vessel Behavior ML & Anomaly Detection (Proposed Lead: Kishakya)
+### Track B: Vessel Behavior ML & Anomaly Detection (Lead: Kishakya)
 Independent parallel research track with its own flexible milestone backlog (`ML-01` to `ML-05`):
 - Trajectory kinematic feature engineering, rule-based explainability scoring, unsupervised Isolation Forest/LOF baselines, and `vessel_anomaly_v1` GeoJSON contract export. Operates on an independent schedule decoupled from Track A's critical path.
 
@@ -161,13 +161,13 @@ Independent parallel research track with its own flexible milestone backlog (`ML
 | **W7-01** | Geospatial Incident Dashboard & End-to-End Demo | Week 7 | Planned |
 | **W8-01** | Benchmark Execution, Reproducibility & Research Report | Week 8 | Planned |
 
-### Track B Milestones (Behavioral ML & Anomaly Detection — Kishakya, *proposed*)
+### Track B Milestones (Behavioral ML & Anomaly Detection — Kishakya)
 
 | Milestone | Title | Target Phase | Status |
 |---|---|---|---|
-| **ML-01** | Domain Literature, AIS Schema & Telemetry Review | Phase 1 | Planned |
-| **ML-02** | Vessel Trajectory Kinematic Feature Specification | Phase 2 | Planned |
-| **ML-03** | Baseline Models & Evaluation Protocol Freezing | Phase 3 | Planned |
+| **ML-01** | Domain Literature, AIS Schema & Telemetry Review | Phase 1 | **In Progress** (data profiling completed; literature review pending) |
+| **ML-02** | Vessel Trajectory Kinematic Feature Specification | Phase 2 | **Completed** ([v1.0](docs/03-research/ml-02-feature-spec.md)) |
+| **ML-03** | Baseline Models & Evaluation Protocol Freezing | Phase 3 | **Completed** ([v1.0](docs/03-research/ml-03-evaluation-protocol.md)) |
 | **ML-04** | Feature Engineering Module & Baseline Experiments | Phase 4 | Planned |
 | **ML-05** | Anomaly Model Evaluation & `vessel_anomaly_v1` Export | Phase 5 | Planned |
 
@@ -185,7 +185,7 @@ Independent parallel research track with its own flexible milestone backlog (`ML
 **Recorded Pre-Week 3 Reference Baseline (`balltree_haversine`, commit `3ece859`):**
 - **Uninstrumented wall time (`143,116` analyzed rows):** `13.680 s` total (`0.077 s` BallTree build, `13.341 s` batched radius query + exact Haversine/temporal pruning, `0.262 s` deterministic core-first clustering).
 - **Instrumented memory check (`tracemalloc`):** `38.014 s` total wall time, `225.83 MB` peak Python heap.
-- **Next research milestone (Week 3):** Implement correctness-preserving Uber H3 candidate indexing (`H3NeighborhoodProvider`) on the shared ST-DBSCAN core and run formal comparative H1 benchmarks against this BallTree baseline (H3 is not yet implemented).
+- **Follow-up:** The Uber H3 candidate provider (`H3NeighborhoodProvider`) has since been implemented and verified (W3-01 / W3-01B). Formal comparative H1 benchmarking against this BallTree baseline is milestone W3-02 (planned).
 
 ---
 
@@ -239,7 +239,7 @@ uv run python -m aegismar verify-parity --input data/processed/lalb_20250101/cle
 1. **Independent Verification Oracle**: A brute-force $O(N^2)$ geodesic distance comparator serves as the ground-truth test oracle in automated unit testing.
 2. **Correctness Contract (Option B)**: H3 candidate neighbor sets operate under an empirical correctness contract backed by conservative clearance tables on calibrated resolutions (7, 8, 9) and fail-closed BallTree fallback, verified bit-for-bit against the BallTree reference on the San Pedro Bay research sector ($\text{Recall} = 1.0$). Uncalibrated resolutions require explicit experimental opt-in.
 3. **Vessel-Aware Metrics**: Anchorage utilization and dwell times are computed per unique vessel (`MMSI`), avoiding raw ping density bias.
-4. **Leakage-Free Anomaly Evaluation**: Trajectory anomaly detectors are evaluated using chronological and vessel-disjoint splits with physically plausible synthetic perturbations.
+4. **Leakage-Free Anomaly Evaluation**: Trajectory anomaly detectors are fitted and tuned on a vessel-disjoint split of a development day (2025-01-01) and evaluated once on two separate held-out days (2025-01-14, 2025-01-22) with documented synthetic perturbations, per the frozen [ML-03 protocol](docs/03-research/ml-03-evaluation-protocol.md).
 
 ---
 
@@ -266,6 +266,8 @@ The repository maintains comprehensive, verified technical documentation:
   - [Research Evidence Register](docs/03-research/evidence-register.md) *(Claims verification matrix)*
   - [Research Plan & Hypotheses](docs/03-research/research-plan.md)
   - [ML Research Proposal: Vessel Behavior Anomaly Detection](docs/03-research/vessel-behavior-ml.md)
+  - [ML-02 Vessel Trajectory Feature Specification (v1.0)](docs/03-research/ml-02-feature-spec.md)
+  - [ML-03 Track B Evaluation Protocol (v1.0)](docs/03-research/ml-03-evaluation-protocol.md)
   - [Scientific Evaluation Protocol](docs/03-research/evaluation-protocol.md)
   - [Dataset Management & Quality Protocol](docs/03-research/datasets.md)
 - **Development & Verification**:
@@ -293,6 +295,6 @@ To ensure successful delivery within the 8-week developer capacity, the followin
 - **License**: Pending formal selection. All rights currently reserved.
 - **Research Team & Track Leadership**:
   - **Project Lead & Geospatial Clustering Track**: NipunaBhanuka18
-  - **Proposed ML Research Collaborator**: Kishakya *(participation, schedule, and attribution pending review)*
+  - **ML Research Collaborator & Vessel Behavior ML Track Lead**: Kishakya
 - **Academic Context**: Undergraduate AI Research & Software Engineering Capstone Collaboration.
 

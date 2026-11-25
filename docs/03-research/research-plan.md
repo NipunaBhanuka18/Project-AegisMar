@@ -6,7 +6,7 @@
 **Status:** Approved Research Plan (Collaborative Dual-Track Model)  
 **Research Tracks & Leadership:**  
 - **Track A (Geospatial Clustering Lead & Platform Architect):** NipunaBhanuka18  
-- **Track B (Vessel Behavior ML Track):** Kishakya *(proposed collaborator; participation pending review)*  
+- **Track B (Vessel Behavior ML Track):** Kishakya *(Track Lead)*  
 **Academic Focus:** Geospatial Machine Learning, Spatial Indexing & Maritime Domain Awareness  
 
 ---
@@ -28,7 +28,7 @@ Furthermore, existing maritime anomaly detection literature frequently suffers f
 ## 2. Research Questions (RQ)
 
 - **Primary Research Question (RQ1 — Track A Lead: NipunaBhanuka18)**: Can an H3-accelerated candidate neighbor generation mechanism for ST-DBSCAN achieve a statistically significant reduction in total execution time compared to a Haversine BallTree baseline while strictly preserving spatial neighborhood recall ($\ge 99.9\%$) across varying AIS density distributions?
-- **Secondary Research Question (RQ2 — Track B Proposed Lead: Kishakya)**: Does a trajectory-aware, explainable rule-based kinematic scoring engine achieve superior precision and reduced false alarm rates in identifying behavioral vessel anomalies compared to spatial point-density outlier baselines and unsupervised Isolation Forests? *(See detailed proposal in [vessel-behavior-ml.md](vessel-behavior-ml.md)).*
+- **Secondary Research Question (RQ2 — Track B Lead: Kishakya)**: Does a trajectory-aware, explainable rule-based kinematic scoring engine achieve superior precision and reduced false alarm rates in identifying behavioral vessel anomalies compared to spatial point-density outlier baselines and unsupervised Isolation Forests? *(See detailed proposal in [vessel-behavior-ml.md](vessel-behavior-ml.md)).*
 
 ---
 

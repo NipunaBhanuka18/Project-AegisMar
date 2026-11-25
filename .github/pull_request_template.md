@@ -5,7 +5,7 @@
 ## Research Track
 
 - [ ] **Clustering & Spatial Indexing** (Track Lead: NipunaBhanuka18)
-- [ ] **Vessel Behavior Anomaly Detection** (Proposed Track Lead: Kishakya)
+- [ ] **Vessel Behavior Anomaly Detection** (Track Lead: Kishakya)
 - [ ] **Shared Platform Infrastructure & Documentation**
 
 ## Type of Change

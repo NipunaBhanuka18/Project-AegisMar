@@ -56,6 +56,17 @@ To prevent circular reasoning between spatial indexing data structures:
 
 ## 3. Trajectory Anomaly Detection Evaluation Protocol
 
+> [!IMPORTANT]
+> **Superseded for Track B (2026-11-24).** The frozen [ML-03 Track B Evaluation Protocol v1.0](ml-03-evaluation-protocol.md)
+> is the authoritative anomaly-evaluation procedure. In particular:
+> - §3.1 "Days 1–14 / Days 15–21" is replaced by one development day (2025-01-01, vessel-disjoint
+>   70/30 split) plus two held-out test days (2025-01-14, 2025-01-22) (ML-03 §3).
+> - §3.2 perturbation bounds are replaced by five perturbation types with severity sweeps (ML-03 §4).
+> - §3.3 "optimal $F_1$ threshold" is replaced by thresholds selected on the validation split; the
+>   test-day optimum is reported only as a labelled oracle bound (ML-03 §6.3).
+>
+> The text below is kept for traceability.
+
 ### 3.1 Data Partitioning & Leakage Prevention
 To prevent information leakage between historical trajectory baselines and anomaly evaluations:
 1. **Chronological Holdout**: The dataset is split chronologically into an initial baseline observation window (e.g., Days 1–14) and an evaluation window (e.g., Days 15–21).

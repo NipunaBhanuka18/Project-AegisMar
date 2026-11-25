@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation - Track B Documentation Sync after ML-01–ML-03 (2026-11-24)
+- **README / START-HERE / Roadmap / Milestones**: Track B statuses updated (ML-01 in progress: data profiling completed, literature review pending; ML-02 and ML-03 completed; ML-04 next). Current-state test figures updated to 92 tests / 94% coverage. Stale "H3 not yet implemented" statements updated. ML-02/ML-03 linked from the documentation indexes.
+- **Milestones**: Removed a stale duplicate copy of the W7-02, W8-01 and W8-02 specifications that sat after the Track B section, including a misplaced dashboard acceptance bullet under ML-05. The current versions in the Track A section are unchanged.
+- **ML Onboarding Guide (v1.2)**: Corrected the Haversine import example (`haversine_distance_meters`); documented the on-disk Parquet row order `(mmsi, timestamp_utc, source_row)`; replaced the undocumented "decompress and slice" step with `scripts/slice_noaa_bbox.py` plus verified expected results; added the held-out test days, feed-wide outage and reporting-cadence limitations.
+- **ML Proposal (v1.2)**: Added notes marking the parts superseded by ML-02 (low-speed guard, features) and ML-03 (rule thresholds, within-day split, perturbations). Corrected the input-contract row-order statement.
+- **Evaluation Protocol §3 / Collaboration Plan §4.1**: Added a pointer to ML-03 as the authoritative Track B protocol; corrected the input-contract row-order statement.
+- **Evidence Register**: CLM-ANO-01 now references the frozen ML-03 decision rules; the reproduction step no longer hard-codes 52 tests.
+- **Track B leadership confirmed**: Kishakya reviewed and accepted the collaboration plan; "Proposed / pending review" qualifiers removed across README, CONTRIBUTING, the PR template, vision, scope, roadmap, collaboration plan, system architecture, research plan, ML proposal, evidence register, milestones, START-HERE and the onboarding guide. ADR-010 is unchanged as a historical record of its decision date.
+
+### Added - Track B Milestones ML-01 (partial), ML-02, ML-03 (2026-11-23)
+- **ML-01 data profiling** (`experiments/anomaly/ml01_profile_dataset.py`, PR #2): reproducible profile of the cleaned dataset (reporting cadence, SOG distribution, field availability, segmentation, kinematic ranges, feed-wide silences), recording the git commit and input SHA-256. Literature review still pending.
+- **ML-02 feature specification v1.0** (`docs/03-research/ml-02-feature-spec.md`, PR #3) and supporting `experiments/anomaly/ml02_drift_breakdown.py`.
+- **ML-03 evaluation protocol v1.0, frozen** (`docs/03-research/ml-03-evaluation-protocol.md`, PR #4): held-out test days 2025-01-14 and 2025-01-22, stratified vessel-disjoint split, perturbation framework, baselines, metrics and statistical decision rules.
+- **NOAA slicer** (`scripts/slice_noaa_bbox.py`): stream-decompresses a NOAA `.csv.zst` daily extract with pyarrow (no new dependency) and slices a bounding box byte-for-byte. Reproduces the documented 2025-01-01 sample exactly (143,156 rows, 362 vessels, SHA-256 `42e4f766…`).
+
 ### Fixed & Hardened - Milestone W3-01B: H3 Correctness Contract Finalization (2026-11-23)
 - **H3 Correctness Contract Finalization**:
   - Removed all statements claiming unconditional global mathematical completeness for H3 discrete hexagonal candidate generation.
