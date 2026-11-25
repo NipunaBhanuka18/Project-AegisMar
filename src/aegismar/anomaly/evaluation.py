@@ -262,18 +262,20 @@ def split_vessels(
 
 
 # =========================================================================== perturbation harness
-# ML-03 section 4. Perturbations are applied to raw-equivalent copies of the canonical records and
-# the movement columns are re-derived with the production cleaner, so perturbed data follows the
-# same derivation as real data. Implementation choices where ML-03 v1.0 leaves a detail open:
+# ML-03 v1.1 section 4. Perturbations are applied to raw-equivalent copies of the canonical records
+# and the movement columns are re-derived with the production cleaner, so perturbed data follows the
+# same derivation as real data. Implementation choices where ML-03 v1.1 leaves a detail open:
 #
 # * The eligibility region of an injection is [span_start - 30 min, span_end + 30 min], where the
 #   span is the target observation (A1/A2), the K drift observations (B), or the removed interval up
 #   to the reappearance observation (C1/C2). Every observation of the vessel's segment in the
-#   region must have SOG >= 2.0 kt and no pre-existing quality flag other than MISSING_*; the
+#   region must have SOG >= 1.5 kt (D17) and no pre-existing quality flag other than MISSING_*; the
 #   region must not intersect a feed-wide outage window. The target needs a segment predecessor.
-# * Placement: segments are visited in global segment order (MMSI, then time); candidates closer
-#   than 60 min to an already chosen injection of the same vessel are dropped; one candidate is
-#   drawn with ``rng.integers``; B and C2 then draw a side/sign with ``rng.choice([-1, 1])``.
+#   C1/C2 also need at least two further observations after the reappearance (D17).
+# * Placement (D17, several per segment): segments are visited in global segment order (MMSI, then
+#   time). Within a segment, candidates closer than 60 min to an already chosen injection of the
+#   same vessel are dropped; one remaining candidate is drawn with ``rng.integers`` (B and C2 then
+#   draw a side/sign with ``rng.choice([-1, 1])``), and this repeats until no candidate remains.
 # * C1/C2 remove observations with t in [t_target, t_target + G] (inclusive). The label row is the
 #   first remaining observation after the gap (ML-03 section 4.4).
 # * B headings are rounded to whole degrees modulo 360, because AIS headings are integers and the
@@ -282,7 +284,8 @@ def split_vessels(
 #   the clean file; verified on the development day). Eligibility and masking use the clean flags.
 
 PERTURBATION_KINDS: tuple[str, ...] = ("A1", "A2", "B", "C1", "C2")
-ELIGIBILITY_MIN_SOG_KT: float = 2.0  # ML-03 section 4.1
+ELIGIBILITY_MIN_SOG_KT: float = MOVING_SOG_KT  # 1.5 kt, ML-03 v1.1 D17 (was 2.0 kt in v1.0)
+MIN_OBS_AFTER_REAPPEARANCE: int = 2  # ML-03 v1.1 D17: reappearance + 2 obs -> a window can exist
 ELIGIBILITY_MARGIN_S: float = 1800.0  # +/- 30 min
 INJECTION_MIN_SPACING_S: float = 3600.0  # 2 x W
 DRIFT_RUN_LENGTH: int = 5  # K for type B
@@ -349,8 +352,8 @@ SWEEP_CONFIGS: tuple[PerturbationConfig, ...] = (
     *(PerturbationConfig("A1", v) for v in (5.0, 10.0, 15.0, 20.0, 25.0)),
     *(PerturbationConfig("A2", v) for v in (5.0, 10.0, 15.0, 20.0, 25.0)),
     *(PerturbationConfig("B", v) for v in (30.0, 45.0, 60.0, 85.0)),
-    *(PerturbationConfig("C1", g) for g in (30.0, 60.0, 120.0)),
-    *(PerturbationConfig("C2", g, 1.0) for g in (30.0, 60.0, 120.0)),
+    *(PerturbationConfig("C1", g) for g in (30.0, 60.0)),  # G = 120 min removed (ML-03 v1.1 D18)
+    *(PerturbationConfig("C2", g, 1.0) for g in (30.0, 60.0)),
     PerturbationConfig("C2", 60.0, 0.5),
     PerturbationConfig("C2", 60.0, 2.0),
 )
@@ -491,7 +494,7 @@ def _candidate_plans(
         else:
             gap_end = float(t[p]) + 60.0 * config.magnitude
             q = int(np.searchsorted(t, gap_end, side="right"))
-            if q >= n:
+            if q + MIN_OBS_AFTER_REAPPEARANCE >= n:  # D17: a scorable window must follow the gap
                 break
             reappear = int(idx[q])
             if config.kind == "C2" and not np.isfinite(obs.cog[reappear]):
@@ -540,16 +543,17 @@ def plan_injections(
         if candidates:
             eligible_segments += 1
         taken = spans_by_vessel.setdefault(mmsi, [])
-        candidates = [c for c in candidates if _far_enough(c, taken)]
-        if not candidates:
-            continue
-        plan = candidates[int(rng.integers(len(candidates)))]
-        if config.kind in ("B", "C2"):
-            plan = InjectionPlan(
-                plan.rows, plan.label_row, plan.span, plan.shift_rows, int(rng.choice([-1, 1]))
-            )
-        chosen.append(plan)
-        taken.append(plan.span)
+        while True:  # D17: several injections per segment, >= 60 min apart
+            candidates = [c for c in candidates if _far_enough(c, taken)]
+            if not candidates:
+                break
+            plan = candidates[int(rng.integers(len(candidates)))]
+            if config.kind in ("B", "C2"):
+                plan = InjectionPlan(
+                    plan.rows, plan.label_row, plan.span, plan.shift_rows, int(rng.choice([-1, 1]))
+                )
+            chosen.append(plan)
+            taken.append(plan.span)
     return chosen, eligible_segments, obs
 
 

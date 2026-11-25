@@ -23,7 +23,7 @@ Feature extraction never imputes: a feature is NaN whenever an input is missing 
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -291,23 +291,26 @@ def _motion_state_of(sog: FloatArray) -> NDArray[np.object_]:
 
 
 def fit_expected_intervals(
-    obs: Observations, train_mmsis: Iterable[str]
+    obs: Observations | Sequence[Observations], train_mmsis: Iterable[str]
 ) -> dict[tuple[str, str], float]:
-    """F10 medians per (transceiver class, motion state of ``p_j``), from training vessels only."""
+    """F10 medians per (transceiver class, motion state of ``p_j``), from training vessels only.
+
+    Accepts one or several days; with several days the intervals are pooled before the median.
+    """
     train = set(train_mmsis)
-    has_pair = obs.prev_idx >= 0
-    in_train = np.asarray([m in train for m in obs.mmsi], dtype=bool)
-    sel = np.flatnonzero(has_pair & in_train & np.isfinite(obs.elapsed_s) & (obs.elapsed_s > 0))
-    j = obs.prev_idx[sel]
-    cls = obs.transceiver_class[j]
-    state = _motion_state_of(obs.sog[j])
-    out: dict[tuple[str, str], float] = {}
-    for key in sorted({(str(c), str(s)) for c, s in zip(cls, state, strict=True)}):
-        if not key[0] or not key[1]:
-            continue
-        mask = (cls == key[0]) & (state == key[1])
-        out[key] = float(np.median(obs.elapsed_s[sel][mask]))
-    return out
+    samples: dict[tuple[str, str], list[FloatArray]] = {}
+    for day in [obs] if isinstance(obs, Observations) else list(obs):
+        has_pair = day.prev_idx >= 0
+        in_train = np.asarray([m in train for m in day.mmsi], dtype=bool)
+        sel = np.flatnonzero(has_pair & in_train & np.isfinite(day.elapsed_s) & (day.elapsed_s > 0))
+        j = day.prev_idx[sel]
+        cls = day.transceiver_class[j]
+        state = _motion_state_of(day.sog[j])
+        dt = day.elapsed_s[sel]
+        for key in {(str(c), str(s)) for c, s in zip(cls, state, strict=True)}:
+            if key[0] and key[1]:
+                samples.setdefault(key, []).append(dt[(cls == key[0]) & (state == key[1])])
+    return {key: float(np.median(np.concatenate(samples[key]))) for key in sorted(samples)}
 
 
 def compute_pair_features(

@@ -1,4 +1,5 @@
-"""Unit tests for Track B features (ML-02 v1.0) and the D0 vessel partition (ML-03 v1.0).
+"""Unit tests for Track B features (ML-02 v1.0), the vessel partition and the perturbation
+harness (ML-03 v1.1).
 
 Synthetic trajectories are passed through the production ingestion cleaner
 (``process_and_clean_observations``) so that pair pointers, elapsed time, distance and implied
@@ -20,12 +21,27 @@ import pyarrow.parquet as pq
 import pytest
 
 from aegismar.anomaly.evaluation import (
+    DRIFT_RUN_LENGTH,
+    ELIGIBILITY_MIN_SOG_KT,
+    HEADLINE_CONFIGS,
+    INJECTION_MIN_SPACING_S,
+    LABEL_NEGATIVE,
+    LABEL_POSITIVE,
+    LABEL_UNKNOWN,
     MERGED_GROUP,
+    SWEEP_CONFIGS,
     TEST_DAYS,
+    PerturbationConfig,
     TestDayFirewallError,
     _as_utc,
+    canonical_to_raw_rows,
     check_test_day_firewall,
     dataset_days,
+    label_windows,
+    perturb_dataset,
+    plan_injections,
+    preexisting_flagged_rows,
+    rederive,
     split_vessels,
     vessel_attributes,
     vessel_group,
@@ -56,7 +72,7 @@ from aegismar.spatial.haversine import haversine_distance_meters
 
 T0 = datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC)
 NM = 1852.0
-D0_PARQUET = Path("data/processed/lalb_20250101/cleaned_ais.parquet")
+D0_PARQUET = Path("data/processed/lalb_20250101_v1_1/cleaned_ais.parquet")
 
 
 # --------------------------------------------------------------------------- helpers
@@ -662,3 +678,202 @@ def test_timestamp_statistic_conversion() -> None:
     assert _as_utc(datetime(2025, 1, 14, 5)) == datetime(2025, 1, 14, 5, tzinfo=UTC)
     with pytest.raises(TypeError):
         _as_utc("2025-01-14")
+
+
+# ============================================================== multi-day partition (D16)
+def test_split_is_joint_over_days_and_vessel_grouped() -> None:
+    day1 = _ingest(_partition_rows())
+    shifted = [
+        dict(r, timestamp_utc=r["timestamp_utc"] + timedelta(days=7)) for r in _partition_rows()
+    ]
+    shifted += _track("366000199", 3, 60.0, 9.0, 0.0, start_s=7 * 86400.0, lat0=33.8)
+    day2 = _ingest(shifted)
+    p = split_vessels([day1, day2])
+    assert len(p.train) + len(p.val) == 33
+    assert set(p.train).isdisjoint(p.val)
+    assert split_vessels([day2, day1]).partition_hash == p.partition_hash  # day order irrelevant
+
+
+def test_vessel_attributes_pool_days() -> None:
+    m = "366000031"
+    day1 = _ingest([_row(m, 0.0, 33.6, -118.2, sog=0.0, cog=0.0, vessel_type=None)])
+    day2 = _ingest([_row(m, 7 * 86400.0, 33.6, -118.2, sog=3.0, cog=0.0, vessel_type=52)])
+    assert vessel_attributes([day1, day2]) == {m: ("tug_towing", True)}
+
+
+def test_expected_intervals_pool_days() -> None:
+    a = prepare_observations(_ingest(_track("366000032", 4, 60.0, 10.0, 0.0)))
+    b = prepare_observations(_ingest(_track("366000032", 4, 90.0, 10.0, 0.0, start_s=7 * 86400.0)))
+    assert fit_expected_intervals([a, b], ["366000032"]) == {("A", "moving"): 75.0}
+
+
+# =========================================================================== perturbation harness
+LONG = "366000050"
+OTHER = "366000051"
+
+
+def _long_track() -> list[dict[str, Any]]:
+    return _track(LONG, 240, 60.0, 10.0, 0.0, heading=0.0)  # 4 h at a 60 s cadence
+
+
+def _by_original(d: Any) -> dict[int, dict[str, Any]]:
+    return {d.new_to_original[r["source_row"]]: r for r in d.table.to_pylist()}
+
+
+def test_configs_match_protocol_v1_1() -> None:
+    assert [c.label for c in HEADLINE_CONFIGS] == ["A1_20kt", "A2_20kt", "B_85deg", "C2_60min_1nm"]
+    gaps = sorted({c.magnitude for c in SWEEP_CONFIGS if c.kind in ("C1", "C2")})
+    assert gaps == [30.0, 60.0]  # D18: 120 min removed
+    assert len(SWEEP_CONFIGS) == 20
+    assert ELIGIBILITY_MIN_SOG_KT == 1.5  # D17
+    with pytest.raises(ValueError, match="unknown"):
+        PerturbationConfig("Z", 1.0)
+    with pytest.raises(ValueError, match="positive"):
+        PerturbationConfig("A1", 0.0)
+    with pytest.raises(ValueError, match="displacement"):
+        PerturbationConfig("C1", 30.0, 1.0)
+
+
+def test_rederive_without_perturbation_reproduces_derived_columns() -> None:
+    table = _ingest(_long_track() + _track(OTHER, 50, 60.0, 0.0, 0.0, lat0=33.7))
+    raw, order = canonical_to_raw_rows(table)
+    again, new_to_orig = rederive(raw, order)
+    orig = {r["source_row"]: r for r in table.to_pylist()}
+    cols = ("latitude", "longitude", "sog", "elapsed_seconds", "distance_nm", "implied_speed_knots")
+    for r in again.to_pylist():
+        o = orig[new_to_orig[r["source_row"]]]
+        prev = None if r["prev_source_row"] is None else new_to_orig[r["prev_source_row"]]
+        assert prev == o["prev_source_row"]
+        for c in cols:
+            assert r[c] == o[c]
+
+
+def test_a1_spikes_reported_speed_only() -> None:
+    table = _ingest(_long_track())
+    d = perturb_dataset(table, PerturbationConfig("A1", 20.0), [LONG], seed=1000)
+    assert len(d.injections) >= 2  # D17: several injections per segment
+    clean = {r["source_row"]: r for r in table.to_pylist()}
+    targets = {s for inj in d.injections for s in inj.label_source_rows}
+    for s, r in _by_original(d).items():
+        expected = clean[s]["sog"] + 20.0 if s in targets else clean[s]["sog"]
+        assert r["sog"] == pytest.approx(expected)
+        assert (r["latitude"], r["longitude"]) == (clean[s]["latitude"], clean[s]["longitude"])
+
+
+def test_injections_are_spaced_and_deterministic() -> None:
+    table = _ingest(_long_track())
+    cfg = PerturbationConfig("A1", 10.0)
+    a = perturb_dataset(table, cfg, [LONG], seed=1000)
+    b = perturb_dataset(table, cfg, [LONG], seed=1000)
+    assert [i.to_dict() for i in a.injections] == [i.to_dict() for i in b.injections]
+    starts = sorted(datetime.fromisoformat(i.span_start_utc).timestamp() for i in a.injections)
+    gaps = [y - x for x, y in zip(starts, starts[1:], strict=False)]
+    assert all(g >= INJECTION_MIN_SPACING_S for g in gaps)
+    assert a.manifest()["n_injections"] == len(a.injections)
+    assert perturb_dataset(table, cfg, [OTHER], seed=1000).injections == ()
+
+
+def test_a2_moves_position_along_course() -> None:
+    table = _ingest(_long_track())
+    d = perturb_dataset(table, PerturbationConfig("A2", 20.0), [LONG], seed=1001)
+    clean = {r["source_row"]: r for r in table.to_pylist()}
+    moved_rows = _by_original(d)
+    assert d.injections
+    for inj in d.injections:
+        (s,) = inj.label_source_rows
+        a, b = clean[s], moved_rows[s]
+        moved = haversine_distance_meters(
+            a["latitude"], a["longitude"], b["latitude"], b["longitude"]
+        )
+        assert moved == pytest.approx(20.0 * 60.0 / 3600.0 * NM, rel=1e-9)
+        assert b["latitude"] > a["latitude"]  # COG 0 -> moved north
+        assert inj.parameters["shift_nm"] == pytest.approx(20.0 * 60.0 / 3600.0)
+
+
+def test_b_sets_heading_off_course_for_k_observations() -> None:
+    table = _ingest(_long_track())
+    d = perturb_dataset(table, PerturbationConfig("B", 85.0), [LONG], seed=1002)
+    rows = _by_original(d)
+    assert d.injections
+    for inj in d.injections:
+        assert len(inj.label_source_rows) == DRIFT_RUN_LENGTH
+        expected = 85.0 if inj.parameters["sign"] > 0 else 275.0
+        assert all(rows[s]["heading"] == expected for s in inj.label_source_rows)
+
+
+def test_b_requires_heading() -> None:
+    table = _ingest(_track(LONG, 240, 60.0, 10.0, 0.0, heading=None))
+    assert perturb_dataset(table, PerturbationConfig("B", 85.0), [LONG], seed=1000).injections == ()
+
+
+def test_c1_removes_gap_and_c2_displaces_reappearance() -> None:
+    table = _ingest(_long_track())
+    c1 = perturb_dataset(table, PerturbationConfig("C1", 30.0), [LONG], seed=1000)
+    assert c1.injections
+    assert all(len(i.removed_source_rows) == 31 for i in c1.injections)  # 30 min at 60 s, inclusive
+    removed = sum(len(i.removed_source_rows) for i in c1.injections)
+    assert c1.table.num_rows == table.num_rows - removed
+
+    c2 = perturb_dataset(table, PerturbationConfig("C2", 30.0, 1.0), [LONG], seed=1000)
+    clean = {r["source_row"]: r for r in table.to_pylist()}
+    rows = _by_original(c2)
+    inj = c2.injections[0]
+    (label,) = inj.label_source_rows
+    assert label in inj.modified_source_rows
+    a, b = clean[label], rows[label]
+    moved = haversine_distance_meters(a["latitude"], a["longitude"], b["latitude"], b["longitude"])
+    assert moved == pytest.approx(NM, rel=1e-9)
+    r = extract_features(c2.table, outages=[])
+    new_row = next(k for k, v in c2.new_to_original.items() if v == label)
+    i = int(np.flatnonzero(r.observations.source_row == new_row)[0])
+    assert r.pair_features["dr_error_nm"][i] == pytest.approx(1.0, rel=1e-3)
+
+
+def test_c_requires_observations_after_reappearance() -> None:
+    # 33 obs at 60 s: under v1.0 the only C1-30 site is t0 = 1 min with reappearance at 32 min,
+    # which is the last observation, so no window could ever contain it. D17 rejects it.
+    table = _ingest(_track(LONG, 33, 60.0, 10.0, 0.0))
+    cfg = PerturbationConfig("C1", 30.0)
+    assert perturb_dataset(table, cfg, [LONG], seed=1000).injections == ()
+    longer = _ingest(_track(LONG, 35, 60.0, 10.0, 0.0))  # two more observations -> scorable
+    assert perturb_dataset(longer, cfg, [LONG], seed=1000).injections != ()
+
+
+def test_eligibility_excludes_slow_flagged_and_outage_regions() -> None:
+    slow = _ingest(_track(LONG, 240, 60.0, 1.4, 0.0))  # below the 1.5 kt guard
+    assert perturb_dataset(slow, PerturbationConfig("A1", 20.0), [LONG], seed=1000).injections == ()
+
+    rows = _long_track()
+    for k in range(0, 240, 20):  # a pre-existing implied-speed violation every 20 min
+        rows[k] = dict(rows[k], latitude=rows[k]["latitude"] + 0.5)
+    flagged = _ingest(rows)
+    cfg = PerturbationConfig("A1", 20.0)
+    assert perturb_dataset(flagged, cfg, [LONG], seed=1000).injections == ()
+
+    gappy = _ingest([r for k, r in enumerate(_long_track()) if k % 40 != 20])  # 120 s silences
+    plans, _, _ = plan_injections(cfg, gappy, [LONG], seed=1000)
+    assert plans == []  # every +/-30 min region meets a feed-wide silence (single vessel)
+
+
+def test_label_windows_positive_negative_and_masked() -> None:
+    table = _ingest(_long_track())
+    d = perturb_dataset(table, PerturbationConfig("A1", 20.0), [LONG], seed=1000)
+    r = extract_features(d.table, outages=[])
+    labels, by_inj = label_windows(r.windows, d.new_to_original, d.injections, frozenset())
+    assert set(labels.tolist()) == {LABEL_POSITIVE, LABEL_NEGATIVE}
+    for inj in d.injections:
+        assert by_inj[inj.injection_id]
+        assert all(labels[w] == LABEL_POSITIVE for w in by_inj[inj.injection_id])
+
+    first = d.injections[0]
+    masked, _ = label_windows(
+        r.windows, d.new_to_original, d.injections, frozenset(first.label_source_rows)
+    )
+    assert all(masked[w] == LABEL_UNKNOWN for w in by_inj[first.injection_id])
+
+
+def test_preexisting_flagged_rows() -> None:
+    rows = _long_track()
+    rows[10] = dict(rows[10], latitude=rows[10]["latitude"] + 0.5)
+    assert len(preexisting_flagged_rows(_ingest(rows))) >= 1
+    assert preexisting_flagged_rows(_ingest(_long_track())) == frozenset()
