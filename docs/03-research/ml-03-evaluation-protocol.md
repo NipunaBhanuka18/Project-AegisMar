@@ -1,16 +1,16 @@
 # ML-03: Track B Evaluation Protocol (Baselines, Splits, Perturbations, Metrics)
 
 > **Project AegisMar — Track B (Vessel Behavior ML & Anomaly Detection)**
-> **Document Version:** 1.1 (DRAFT amendment — under review by Kishakya; v1.0 frozen 2026-11-23)
+> **Document Version:** 1.1 (Accepted by Track Lead — frozen; amends v1.0 of 2026-11-23)
 > **Milestone:** ML-03
 > **Track Lead:** Kishakya
-> **Date:** 2026-11-23 (v1.0); amended 2026-11-25 (v1.1 draft)
+> **Date:** 2026-11-23 (v1.0); amended 2026-11-25 (v1.1)
 > **Builds on:** [ML-02 Feature Specification v1.0.1](ml-02-feature-spec.md); canonical dataset v1.1 ([evidence-register.md §2.1](evidence-register.md))
 
 > [!IMPORTANT]
 > **Frozen protocol.** Decisions D7–D14 were accepted by the Track B lead on 2026-11-23 (Section 12).
-> **v1.1 draft:** Section 0 lists the proposed amendments (decisions D15–D18, marked **⚑ DECISION**
-> until accepted). They are made **before any test-day inspection**, as Section 3.4 permits.
+> **v1.1:** Amendments D15–D18 (Section 0) were accepted by the Track B lead on 2026-11-25, **before
+> any test-day inspection**, as Section 3.4 permits. v1.1 is now the frozen protocol.
 > This protocol was frozen **before any held-out test day was inspected** (Section 3.4). Any later
 > change requires a new document version and is subject to the test-day firewall rules. This document
 > contains no experimental results. All dataset numbers it cites come from executed ML-01 / ML-02
@@ -108,7 +108,7 @@ Negative or null outcomes are reported with equal prominence (onboarding §9.4).
 
 **Decision D7 (accepted):** test days T1 = 2025-01-14 and T2 = 2025-01-22.
 
-**⚑ DECISION D15 (v1.1):** add development day D0B = 2025-01-08; DEV = D0 ∪ D0B.
+**Decision D15 (accepted, v1.1):** add development day D0B = 2025-01-08; DEV = D0 ∪ D0B.
 
 All four days use the same bounding box (lat [33.5, 33.9], lon [-118.4, -118.0]), the same slicing
 procedure (`scripts/slice_noaa_bbox.py`), and `aegismar ingest`. Each day is a separate dataset
@@ -131,7 +131,7 @@ days, ML-02 §6).
 **Decision D8 (accepted; amended by D16):** stratified 70/30 MMSI split with seed 42, the validation
 part used as the tuning set.
 
-**⚑ DECISION D16 (v1.1):** the split is computed jointly over both development days (replaces the
+**Decision D16 (accepted, v1.1):** the split is computed jointly over both development days (replaces the
 single-day D0 split).
 
 ### 3.3 What each partition may be used for
@@ -193,7 +193,7 @@ training and validation (Section 0.1). It does not replace the test days and is 
    per segment — amended by D17). Injections in the same vessel are at least 60 min (2 × W) apart
    between their spans, so window labels never overlap.
 
-**⚑ DECISION D17 (v1.1):** SOG guard 1.5 kt, several injections per segment ≥ 60 min apart, C
+**Decision D17 (accepted, v1.1):** SOG guard 1.5 kt, several injections per segment ≥ 60 min apart, C
 scorability requirement; the ±30 min clean margin is unchanged.
 4. **One type and magnitude per copy.** Each perturbed copy of a dataset contains one perturbation
    type at one magnitude. This keeps the effects separable and the attribution unambiguous.
@@ -222,7 +222,7 @@ Notes:
   pooled over its two days; each test day separately) are reported as descriptive only.
 - G = 120 min was removed in v1.1 (no eligible site on the D0 validation vessels under v1.0).
 
-**⚑ DECISION D18 (v1.1):** C1/C2 sweeps use G ∈ {30, 60} min.
+**Decision D18 (accepted, v1.1):** C1/C2 sweeps use G ∈ {30, 60} min.
 - **Physical realism caveat:** C2 shifts are not checked against the coastline and may move a track
   over land. This is accepted as a limitation of a controlled sensitivity benchmark (vessel-behavior-ml.md §8.4).
 
@@ -415,7 +415,7 @@ Each run writes to `experiments/outputs/anomaly/<experiment_id>/` (gitignored):
 
 ## 12. Design Decisions (Accepted)
 
-All decisions below were accepted by the Track B lead (Kishakya) on 2026-11-23.
+Decisions D7–D14 were accepted by the Track B lead (Kishakya) on 2026-11-23; D15–D18 on 2026-11-25.
 
 | # | Decision | Accepted choice |
 |---|---|---|
@@ -427,10 +427,10 @@ All decisions below were accepted by the Track B lead (Kishakya) on 2026-11-23.
 | D12 | Rule baseline | ECDF-calibrated, max-composite R1 (R1-lin reported) |
 | D13 | Models | M1 Isolation Forest (primary), M2 LOF (secondary), fixed hyperparameters |
 | D14 | Metrics and seeds | Window PR-AUC primary; DEV-val threshold; 10 headline / 3 sweep seeds |
-| D15 ⚑ | Extra development day *(v1.1, pending)* | D0B = 2025-01-08; DEV = D0 ∪ D0B |
-| D16 ⚑ | Joint split *(v1.1, pending)* | One MMSI-grouped stratified split over both development days |
-| D17 ⚑ | Eligibility and density *(v1.1, pending)* | SOG ≥ 1.5 kt; several injections per segment ≥ 60 min apart; C scorability; ±30 min margin kept |
-| D18 ⚑ | Gap configurations *(v1.1, pending)* | G ∈ {30, 60} min (120 min removed) |
+| D15 | Extra development day *(v1.1)* | D0B = 2025-01-08; DEV = D0 ∪ D0B |
+| D16 | Joint split *(v1.1)* | One MMSI-grouped stratified split over both development days |
+| D17 | Eligibility and density *(v1.1)* | SOG ≥ 1.5 kt; several injections per segment ≥ 60 min apart; C scorability; ±30 min margin kept |
+| D18 | Gap configurations *(v1.1)* | G ∈ {30, 60} min (120 min removed) |
 
 ---
 
@@ -452,4 +452,4 @@ All decisions below were accepted by the Track B lead (Kishakya) on 2026-11-23.
 |---|---|---|
 | 0.1 | 2026-11-23 | Initial draft. |
 | 1.0 | 2026-11-23 | Decisions D7–D14 accepted by the Track B lead; protocol frozen before any test-day inspection. |
-| 1.1 (draft) | 2026-11-25 | Amendments D15–D18 (Section 0): second development day, joint vessel split, relaxed eligibility and density, G = 120 min removed. Made before any test-day inspection. |
+| 1.1 | 2026-11-25 | Amendments D15–D18 (Section 0) accepted by the Track B lead: second development day, joint vessel split, relaxed eligibility and density, G = 120 min removed. Made and frozen before any test-day inspection. |
