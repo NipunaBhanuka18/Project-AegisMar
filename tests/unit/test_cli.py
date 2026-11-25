@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from aegismar import __version__
 from aegismar.cli import build_parser, main
+from aegismar.ingestion.provenance import compute_content_fingerprint, compute_file_sha256
 
 FIXTURE_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 SYNTHETIC_2025 = FIXTURE_DIR / "synthetic_2025_sample.csv"
@@ -182,4 +186,79 @@ def test_cli_verify_parity_command(tmp_path: Path, capsys: pytest.CaptureFixture
     # Missing file returns 1
     ret_missing = main(["verify-parity", "-i", str(tmp_path / "missing.parquet")])
     assert ret_missing == 1
+    assert "Error: Input file not found" in capsys.readouterr().err
+
+
+def _ingested_parquet(tmp_path: Path) -> Path:
+    ingest_dir = tmp_path / "fp_ingest"
+    assert main(["ingest", "-i", str(SYNTHETIC_2025), "-o", str(ingest_dir)]) == 0
+    return ingest_dir / "cleaned_ais.parquet"
+
+
+def test_cli_fingerprint_json_is_read_only(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """fingerprint --json reports hashes and contracts without touching the file."""
+    parquet_file = _ingested_parquet(tmp_path)
+    capsys.readouterr()
+    before_bytes = parquet_file.read_bytes()
+    before_mtime = parquet_file.stat().st_mtime_ns
+
+    ret = main(["fingerprint", "-i", str(parquet_file), "--json"])
+    assert ret == 0
+    report = json.loads(capsys.readouterr().out)
+
+    expected = compute_content_fingerprint(parquet_file)
+    assert report["path"] == str(parquet_file.resolve())
+    assert report["file_sha256"] == compute_file_sha256(parquet_file)
+    assert report["content_fingerprint_sha256"] == expected.content_fingerprint_sha256
+    assert report["content_fingerprint_version"] == "aegismar-logical-v1"
+    assert report["row_count"] == expected.row_count
+    assert report["column_count"] == 19
+    assert report["canonical_row_order"] == ["mmsi", "timestamp_utc", "source_row"]
+    assert report["canonical_order_verified"] is True
+    assert report["schema"][0] == {"name": "source_row", "type": "int64"}
+
+    assert parquet_file.stat().st_mtime_ns == before_mtime
+    assert parquet_file.read_bytes() == before_bytes
+
+
+def test_cli_fingerprint_text_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Default text output lists the fingerprint fields and schema."""
+    parquet_file = _ingested_parquet(tmp_path)
+    before_mtime = parquet_file.stat().st_mtime_ns
+    capsys.readouterr()
+
+    ret = main(["fingerprint", "--input", str(parquet_file)])
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "Dataset Fingerprint (read-only)" in out
+    assert f"File SHA-256:              {compute_file_sha256(parquet_file)}" in out
+    assert "Fingerprint Version:       aegismar-logical-v1" in out
+    assert "Canonical Row Order:       mmsi, timestamp_utc, source_row" in out
+    assert "Canonical Order Verified:  True" in out
+    assert "  - timestamp_utc: timestamp[us, tz=UTC]" in out
+    assert parquet_file.stat().st_mtime_ns == before_mtime
+
+
+def test_cli_fingerprint_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Missing, non-Parquet, and unsupported-schema inputs return exit code 1."""
+    missing = tmp_path / "missing.parquet"
+    assert main(["fingerprint", "-i", str(missing)]) == 1
+    assert "Error: Input file not found" in capsys.readouterr().err
+
+    not_parquet = tmp_path / "bogus.parquet"
+    not_parquet.write_bytes(b"this is not parquet")
+    assert main(["fingerprint", "-i", str(not_parquet), "--json"]) == 1
+    captured = capsys.readouterr()
+    assert "Error: Cannot read input as Parquet" in captured.err
+    assert captured.out == ""
+    assert not_parquet.read_bytes() == b"this is not parquet"
+
+    unsupported = tmp_path / "uint.parquet"
+    pq.write_table(pa.table({"x": pa.array([1], type=pa.uint32())}), str(unsupported))
+    assert main(["fingerprint", "-i", str(unsupported)]) == 1
+    assert "Error: Unsupported dataset schema" in capsys.readouterr().err
+
+    assert main(["fingerprint", "-i", str(tmp_path)]) == 1
     assert "Error: Input file not found" in capsys.readouterr().err

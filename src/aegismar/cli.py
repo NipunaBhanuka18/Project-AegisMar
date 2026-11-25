@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from aegismar import __version__
 from aegismar.clustering.config import (
@@ -22,6 +24,7 @@ from aegismar.clustering.st_dbscan import run_balltree_st_dbscan, run_h3_st_dbsc
 from aegismar.clustering.types import load_clustering_dataset_from_parquet
 from aegismar.common.constants import DEFAULT_IMPLIED_SPEED_THRESHOLD_KNOTS
 from aegismar.ingestion.pipeline import run_ingestion_pipeline
+from aegismar.ingestion.provenance import compute_content_fingerprint, compute_file_sha256
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -207,6 +210,25 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Optional deterministic row limit",
+    )
+
+    # Read-only dataset fingerprint subcommand (W3-02A, ADR-011)
+    fingerprint_parser = subparsers.add_parser(
+        "fingerprint",
+        help="Read-only: report file SHA-256 and logical content fingerprint of a Parquet file",
+    )
+    fingerprint_parser.add_argument(
+        "--input",
+        "-i",
+        type=str,
+        required=True,
+        help="Path to Parquet dataset file (never modified)",
+    )
+    fingerprint_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit the fingerprint report as JSON",
     )
 
     return parser
@@ -449,6 +471,57 @@ def handle_verify_parity(args: argparse.Namespace) -> int:
     return 1
 
 
+def handle_fingerprint(args: argparse.Namespace) -> int:
+    """Execute the read-only fingerprint subcommand."""
+    input_path = Path(args.input)
+    if not input_path.is_file():
+        print(f"Error: Input file not found: {input_path}", file=sys.stderr)
+        return 1
+
+    try:
+        fingerprint = compute_content_fingerprint(input_path)
+        file_sha256 = compute_file_sha256(input_path)
+    except TypeError as e:
+        print(f"Error: Unsupported dataset schema: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Error: Cannot read input as Parquet: {input_path}: {e}", file=sys.stderr)
+        return 1
+
+    report: dict[str, Any] = {
+        "path": str(input_path.resolve()),
+        "file_sha256": file_sha256,
+        "content_fingerprint_sha256": fingerprint.content_fingerprint_sha256,
+        "content_fingerprint_version": fingerprint.content_fingerprint_version,
+        "row_count": fingerprint.row_count,
+        "column_count": fingerprint.column_count,
+        "canonical_row_order": fingerprint.canonical_row_order,
+        "canonical_order_verified": fingerprint.canonical_order_verified,
+        "schema": fingerprint.schema,
+    }
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return 0
+
+    print("=================================================================")
+    print("Project AegisMar - Dataset Fingerprint (read-only)")
+    print("=================================================================")
+    print(f"Path:                      {report['path']}")
+    print(f"File SHA-256:              {report['file_sha256']}")
+    print(f"Content Fingerprint:       {report['content_fingerprint_sha256']}")
+    print(f"Fingerprint Version:       {report['content_fingerprint_version']}")
+    print(f"Row Count:                 {report['row_count']:,}")
+    print(f"Column Count:              {report['column_count']}")
+    print(f"Canonical Row Order:       {', '.join(report['canonical_row_order'])}")
+    print(f"Canonical Order Verified:  {report['canonical_order_verified']}")
+    print("Schema:")
+    for field in fingerprint.schema:
+        print(f"  - {field['name']}: {field['type']}")
+    print("=================================================================")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main CLI entrypoint."""
     parser = build_parser()
@@ -460,6 +533,8 @@ def main(argv: list[str] | None = None) -> int:
         return handle_cluster(args)
     if args.command == "verify-parity":
         return handle_verify_parity(args)
+    if args.command == "fingerprint":
+        return handle_fingerprint(args)
     parser.print_help()
     return 0
 
