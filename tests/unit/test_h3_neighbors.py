@@ -670,7 +670,10 @@ def test_20_fallback_correctness_and_metrics() -> None:
     ]
     p_ds = build_clustering_dataset(p_records)
 
-    prov = H3NeighborhoodProvider(p_ds, cfg, resolution=8, fallback_on_pentagons=True)
+    # detailed_timing=True: fallback_time_seconds is only measured in diagnostic mode
+    prov = H3NeighborhoodProvider(
+        p_ds, cfg, resolution=8, fallback_on_pentagons=True, detailed_timing=True
+    )
     metrics_before = prov.get_metrics()
     assert metrics_before["fallback_count"] == 0
 

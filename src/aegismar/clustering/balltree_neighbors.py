@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -69,6 +71,16 @@ class BallTreeNeighborhoodProvider:
     bounded batches against the BallTree, apply exact temporal filtering first,
     and verify exact spherical Haversine distance ``<= eps_spatial_m`` on the
     surviving candidates.
+
+    Timing instrumentation
+    ----------------------
+    ``build_time_seconds`` (whole tree construction) is always recorded. When
+    ``detailed_timing=False`` (default, used for official benchmark trials),
+    ``build_neighborhood_graph`` performs zero per-batch or per-point
+    ``perf_counter`` calls. When ``detailed_timing=True``, candidate retrieval
+    (``query_radius``), temporal filtering, and distance filtering are timed
+    separately and candidates are counted. Neighborhood results are identical
+    in both modes.
     """
 
     def __init__(
@@ -77,11 +89,20 @@ class BallTreeNeighborhoodProvider:
         config: STDBSCANConfig,
         leaf_size: int = 40,
         query_batch_size: int = DEFAULT_QUERY_BATCH_SIZE,
+        detailed_timing: bool = False,
     ) -> None:
         if isinstance(leaf_size, bool) or leaf_size < 1:
             raise ValueError(f"leaf_size must be an integer >= 1, got {leaf_size!r}")
         if isinstance(query_batch_size, bool) or query_batch_size < 1:
             raise ValueError(f"query_batch_size must be an integer >= 1, got {query_batch_size!r}")
+        if not isinstance(detailed_timing, bool):
+            raise ValueError(f"detailed_timing must be a boolean, got {detailed_timing!r}")
+
+        self._detailed_timing = detailed_timing
+        self._candidate_retrieval_time_s = 0.0
+        self._temporal_filtering_time_s = 0.0
+        self._distance_filtering_time_s = 0.0
+        self._candidates_evaluated = 0
 
         self._dataset = dataset
         self._config = config
@@ -131,6 +152,70 @@ class BallTreeNeighborhoodProvider:
         """Wall-clock seconds spent building the BallTree."""
         return self._build_time_seconds
 
+    @property
+    def detailed_timing(self) -> bool:
+        """Whether per-stage timers are recorded during neighborhood queries."""
+        return self._detailed_timing
+
+    def get_metrics(self) -> dict[str, Any]:
+        """Return coarse build time and (if ``detailed_timing``) stage timers.
+
+        Stage timers and ``candidates_evaluated`` are ``None`` when
+        ``detailed_timing=False`` because they are not measured.
+        """
+        detailed = self._detailed_timing
+        return {
+            "provider": "balltree",
+            "detailed_timing": detailed,
+            "build_time_s": round(self._build_time_seconds, 6),
+            "candidate_retrieval_time_s": (
+                round(self._candidate_retrieval_time_s, 6) if detailed else None
+            ),
+            "temporal_filtering_time_s": (
+                round(self._temporal_filtering_time_s, 6) if detailed else None
+            ),
+            "distance_filtering_time_s": (
+                round(self._distance_filtering_time_s, 6) if detailed else None
+            ),
+            "candidates_evaluated": self._candidates_evaluated if detailed else None,
+            "leaf_size": self._leaf_size,
+            "query_batch_size": self._query_batch_size,
+        }
+
+    def _filter_candidates_timed(
+        self, index: int, spatial_candidates: NDArray[np.int64]
+    ) -> NDArray[np.int64]:
+        """Instrumented twin of ``_filter_candidates`` (identical results, stage timers)."""
+        self._candidates_evaluated += int(spatial_candidates.size)
+        if spatial_candidates.size == 0:
+            return np.array([index], dtype=np.int64)
+
+        timestamps_us = self._dataset.timestamps_us
+        t_i = timestamps_us[index]
+
+        t_temp_0 = time.perf_counter()
+        dt_us = np.abs(timestamps_us[spatial_candidates] - t_i)
+        time_mask = dt_us <= self._eps_temporal_us
+        time_cands = spatial_candidates[time_mask]
+        self._temporal_filtering_time_s += time.perf_counter() - t_temp_0
+
+        if time_cands.size == 0:
+            return np.array([index], dtype=np.int64)
+
+        t_dist_0 = time.perf_counter()
+        dists_m = _exact_haversine_to_candidates_m(
+            float(self._dataset.latitudes_deg[index]),
+            float(self._dataset.longitudes_deg[index]),
+            float(self._lats_rad[index]),
+            self._dataset.latitudes_deg[time_cands],
+            self._dataset.longitudes_deg[time_cands],
+            self._lats_rad[time_cands],
+        )
+        exact_mask = (dists_m <= self._eps_spatial_m) | (time_cands == index)
+        eligible: NDArray[np.int64] = np.sort(time_cands[exact_mask].astype(np.int64, copy=False))
+        self._distance_filtering_time_s += time.perf_counter() - t_dist_0
+        return eligible
+
     def _filter_candidates(
         self, index: int, spatial_candidates: NDArray[np.int64]
     ) -> NDArray[np.int64]:
@@ -178,6 +263,8 @@ class BallTreeNeighborhoodProvider:
             return_distance=False,
         )
         candidates = np.asarray(raw_result[0], dtype=np.int64)
+        if self._detailed_timing:
+            return self._filter_candidates_timed(index, candidates)
         return self._filter_candidates(index, candidates)
 
     def build_neighborhood_graph(self) -> NeighborhoodGraph:
@@ -194,17 +281,27 @@ class BallTreeNeighborhoodProvider:
         neighbor_chunks: list[NDArray[np.int64]] = []
         running_offset = 0
 
+        # Select the filter once so the official (untimed) path pays no per-point toggle cost.
+        detailed = self._detailed_timing
+        filter_candidates: Callable[[int, NDArray[np.int64]], NDArray[np.int64]] = (
+            self._filter_candidates_timed if detailed else self._filter_candidates
+        )
+
         for batch_start in range(0, n, self._query_batch_size):
             batch_end = min(n, batch_start + self._query_batch_size)
+            if detailed:
+                t_ret_0 = time.perf_counter()
             batch_raw = self._tree.query_radius(
                 self._coords_rad[batch_start:batch_end],
                 r=self._query_radius_rad,
                 return_distance=False,
             )
+            if detailed:
+                self._candidate_retrieval_time_s += time.perf_counter() - t_ret_0
             for local_offset, raw_cands in enumerate(batch_raw):
                 idx = batch_start + local_offset
                 candidates = np.asarray(raw_cands, dtype=np.int64)
-                eligible = self._filter_candidates(idx, candidates)
+                eligible = filter_candidates(idx, candidates)
                 neighbor_chunks.append(eligible)
                 running_offset += int(eligible.shape[0])
                 indptr[idx + 1] = running_offset
