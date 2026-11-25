@@ -249,8 +249,13 @@ def run_balltree_st_dbscan(
     leaf_size: int = 40,
     query_batch_size: int = 2048,
     measure_memory: bool = False,
+    detailed_timing: bool = False,
 ) -> STDBSCANResult:
-    """Convenience runner executing reference BallTree-backed ST-DBSCAN on a dataset."""
+    """Convenience runner executing reference BallTree-backed ST-DBSCAN on a dataset.
+
+    ``detailed_timing`` enables per-stage provider timers (diagnostics only; results
+    are identical). Official benchmark timing uses the default ``False``.
+    """
     started_tracemalloc = False
     if measure_memory and not tracemalloc.is_tracing():
         tracemalloc.start()
@@ -263,6 +268,7 @@ def run_balltree_st_dbscan(
         config=config,
         leaf_size=leaf_size,
         query_batch_size=query_batch_size,
+        detailed_timing=detailed_timing,
     )
     result = run_st_dbscan(
         dataset=dataset,
@@ -286,8 +292,13 @@ def run_h3_st_dbscan(
     fallback_on_pentagons: bool | None = None,
     allow_uncalibrated: bool | None = None,
     measure_memory: bool = False,
+    detailed_timing: bool = False,
 ) -> STDBSCANResult:
-    """Convenience runner executing accelerated H3-backed ST-DBSCAN on a dataset."""
+    """Convenience runner executing accelerated H3-backed ST-DBSCAN on a dataset.
+
+    ``detailed_timing`` enables per-stage provider timers (diagnostics only; results
+    are identical). Official benchmark timing uses the default ``False``.
+    """
     from aegismar.clustering.h3_neighbors import H3NeighborhoodProvider
 
     started_tracemalloc = False
@@ -305,6 +316,7 @@ def run_h3_st_dbscan(
         enable_fallback=enable_fallback,
         fallback_on_pentagons=fallback_on_pentagons,
         allow_uncalibrated=allow_uncalibrated,
+        detailed_timing=detailed_timing,
     )
     result = run_st_dbscan(
         dataset=dataset,

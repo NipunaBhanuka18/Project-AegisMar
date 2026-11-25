@@ -51,6 +51,7 @@ import logging
 import math
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -163,6 +164,16 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
     via H3 discrete grid indexing with conservative ring coverage, filtered temporally
     via binary search on pre-sorted cell timestamp arrays, and evaluated against exact
     spherical Haversine distance.
+
+    Timing instrumentation
+    ----------------------
+    ``build_time_seconds`` (cell mapping, bucket index, and ``grid_disk``
+    precomputation) is always recorded. When ``detailed_timing=False`` (default,
+    used for official benchmark trials), no build sub-stage timers and zero
+    per-point ``perf_counter`` calls are executed, and unmeasured timers are
+    reported as ``None``. When ``detailed_timing=True``, the full stage
+    breakdown is recorded. Fallback counts and reasons are always recorded.
+    Neighborhood results and fallback behavior are identical in both modes.
     """
 
     def __init__(
@@ -174,7 +185,11 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
         enable_fallback: bool | None = None,
         fallback_on_pentagons: bool | None = None,
         allow_uncalibrated: bool | None = None,
+        detailed_timing: bool = False,
     ) -> None:
+        if not isinstance(detailed_timing, bool):
+            raise ValueError(f"detailed_timing must be a boolean, got {detailed_timing!r}")
+        self._detailed_timing = detailed_timing
         self._dataset = dataset
         self._config = config
         self._eps_spatial_m = float(config.eps_spatial_m)
@@ -294,17 +309,22 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
             self._lats_rad = np.deg2rad(lats_deg)
             self._timestamps_us = dataset.timestamps_us
 
+            detailed = self._detailed_timing
+
             # 1. Map each observation to an H3 discrete global grid cell
-            t_map_0 = time.perf_counter()
+            if detailed:
+                t_map_0 = time.perf_counter()
             cells: list[str] = [
                 h3.latlng_to_cell(float(lats_deg[i]), float(lons_deg[i]), self._resolution)
                 for i in range(n)
             ]
-            self._cell_mapping_time_s = time.perf_counter() - t_map_0
+            if detailed:
+                self._cell_mapping_time_s = time.perf_counter() - t_map_0
             self._point_cells = cells
 
             # 2. Build inverted index mapping each cell to its constituent observation indices.
-            t_pre_0 = time.perf_counter()
+            if detailed:
+                t_pre_0 = time.perf_counter()
             cell_to_obs: dict[str, list[int]] = defaultdict(list)
             for i, c in enumerate(cells):
                 cell_to_obs[c].append(i)
@@ -357,7 +377,8 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
             self._active_candidates = active_candidates
             self._cell_is_pentagon = cell_is_pentagon
             self._cell_near_pentagon = cell_near_pentagon
-            self._candidate_precomputation_time_s = time.perf_counter() - t_pre_0
+            if detailed:
+                self._candidate_precomputation_time_s = time.perf_counter() - t_pre_0
         elif n > 0 and self._all_fallback:
             # All observations will route directly to BallTree fallback
             self._lats_deg = dataset.latitudes_deg
@@ -439,9 +460,35 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
         """Immutable set of cell identifiers that trigger fallback evaluation."""
         return frozenset(self._cells_requiring_fallback)
 
+    @property
+    def detailed_timing(self) -> bool:
+        """Whether build sub-stage and per-query stage timers are recorded."""
+        return self._detailed_timing
+
     def get_metrics(self) -> dict[str, Any]:
-        """Return granular diagnostics, contract status, and performance counters."""
+        """Return granular diagnostics, contract status, and performance counters.
+
+        Timers and candidate counters are ``None`` when ``detailed_timing=False``
+        because they are not measured. Fallback counts and reasons are always
+        reported. Legacy ``*_seconds`` keys are retained alongside the common
+        ``*_s`` stage keys shared with ``BallTreeNeighborhoodProvider.get_metrics``.
+        """
+        detailed = self._detailed_timing
+
+        def _timer(value: float) -> float | None:
+            return round(value, 6) if detailed else None
+
+        candidates = self._total_candidates_evaluated if detailed else None
         return {
+            "provider": "h3",
+            "detailed_timing": detailed,
+            "build_time_s": round(self._build_time_seconds, 6),
+            "cell_mapping_time_s": _timer(self._cell_mapping_time_s),
+            "candidate_precomputation_time_s": _timer(self._candidate_precomputation_time_s),
+            "candidate_retrieval_time_s": _timer(self._candidate_retrieval_time_s),
+            "temporal_filtering_time_s": _timer(self._temporal_filtering_time_s),
+            "distance_filtering_time_s": _timer(self._distance_filtering_time_s),
+            "candidates_evaluated": candidates,
             "h3_resolution": self._resolution,
             "h3_k_ring": self._k_ring,
             "is_calibrated": self._is_calibrated,
@@ -449,17 +496,15 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
             "h3_allow_uncalibrated": self._allow_uncalibrated,
             "unique_occupied_cells": len(self._cell_indices),
             "fallback_count": self._fallback_count,
-            "fallback_time_seconds": round(self._fallback_time_s, 6),
+            "fallback_time_seconds": _timer(self._fallback_time_s),
             "fallback_reasons": dict(self._fallback_reason_counts),
-            "cell_mapping_time_seconds": round(self._cell_mapping_time_s, 6),
-            "candidate_precomputation_time_seconds": round(
-                self._candidate_precomputation_time_s, 6
-            ),
-            "candidate_retrieval_time_seconds": round(self._candidate_retrieval_time_s, 6),
-            "candidate_generation_time_seconds": round(self._candidate_retrieval_time_s, 6),
-            "temporal_filtering_time_seconds": round(self._temporal_filtering_time_s, 6),
-            "distance_filtering_time_seconds": round(self._distance_filtering_time_s, 6),
-            "total_candidates_evaluated": self._total_candidates_evaluated,
+            "cell_mapping_time_seconds": _timer(self._cell_mapping_time_s),
+            "candidate_precomputation_time_seconds": _timer(self._candidate_precomputation_time_s),
+            "candidate_retrieval_time_seconds": _timer(self._candidate_retrieval_time_s),
+            "candidate_generation_time_seconds": _timer(self._candidate_retrieval_time_s),
+            "temporal_filtering_time_seconds": _timer(self._temporal_filtering_time_s),
+            "distance_filtering_time_seconds": _timer(self._distance_filtering_time_s),
+            "total_candidates_evaluated": candidates,
         }
 
     def _get_fallback_provider(self) -> BallTreeNeighborhoodProvider:
@@ -471,36 +516,80 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
             )
         return self._fallback_provider
 
-    def _query_single_index(self, index: int) -> NDArray[np.int64]:
-        """Execute complete neighborhood query for a single observation index."""
-        if self._all_fallback:
+    def _fallback_query(self, index: int, reason: str) -> NDArray[np.int64]:
+        """Route one observation to the reference BallTree and record the fallback."""
+        if self._detailed_timing:
             t_fb_0 = time.perf_counter()
-            fb_provider = self._get_fallback_provider()
-            res = fb_provider.query_neighbors(index)
+        res = self._get_fallback_provider().query_neighbors(index)
+        if self._detailed_timing:
             self._fallback_time_s += time.perf_counter() - t_fb_0
-            self._fallback_count += 1
-            reason = self._unsupported_reason or "unsupported_configuration"
-            self._fallback_reason_counts[reason] += 1
-            return res
+        self._fallback_count += 1
+        self._fallback_reason_counts[reason] += 1
+        return res
+
+    def _require_fallback_reason(self, index: int, cell: str) -> str:
+        """Return the fallback reason for ``cell``, failing closed if fallback is disabled."""
+        reason = self._fallback_reasons.get(cell, "unknown")
+        if not self._enable_fallback:
+            raise RuntimeError(
+                f"Observation {index} (cell {cell}) requires fallback "
+                f"({self._fallback_reasons.get(cell, 'unspecified')}) but fallback is disabled."
+            )
+        return reason
+
+    def _query_single_index(self, index: int) -> NDArray[np.int64]:
+        """Execute the neighborhood query for one observation (official, untimed path).
+
+        Performs zero ``perf_counter`` calls. ``_query_single_index_timed`` is the
+        instrumented twin and must return identical results.
+        """
+        if self._all_fallback:
+            return self._fallback_query(
+                index, self._unsupported_reason or "unsupported_configuration"
+            )
 
         c = self._point_cells[index]
 
         # Fail-closed fallback evaluation for pentagons, near-pentagons, or grid_disk failures
         if c in self._cells_requiring_fallback:
-            if not self._enable_fallback:
-                reason = self._fallback_reasons.get(c, "unspecified")
-                raise RuntimeError(
-                    f"Observation {index} (cell {c}) requires fallback ({reason}) "
-                    f"but fallback is disabled."
-                )
-            t_fb_0 = time.perf_counter()
-            fb_provider = self._get_fallback_provider()
-            res = fb_provider.query_neighbors(index)
-            self._fallback_time_s += time.perf_counter() - t_fb_0
-            self._fallback_count += 1
-            reason = self._fallback_reasons.get(c, "unknown")
-            self._fallback_reason_counts[reason] += 1
-            return res
+            return self._fallback_query(index, self._require_fallback_reason(index, c))
+
+        t_i = int(self._timestamps_us[index])
+        cand_chunks: list[NDArray[np.int64]] = []
+        for cand_c in self._active_candidates.get(c, [c]):
+            c_times = self._cell_timestamps[cand_c]
+            left = int(np.searchsorted(c_times, t_i - self._eps_temporal_us, side="left"))
+            right = int(np.searchsorted(c_times, t_i + self._eps_temporal_us, side="right"))
+            if right > left:
+                cand_chunks.append(self._cell_indices[cand_c][left:right])
+
+        if not cand_chunks:
+            return np.array([index], dtype=np.int64)
+
+        candidates = np.concatenate(cand_chunks)
+        dists_m = _exact_haversine_to_candidates_m(
+            float(self._lats_deg[index]),
+            float(self._lons_deg[index]),
+            float(self._lats_rad[index]),
+            self._lats_deg[candidates],
+            self._lons_deg[candidates],
+            self._lats_rad[candidates],
+        )
+        exact_mask = (dists_m <= self._eps_spatial_m) | (candidates == index)
+        eligible: NDArray[np.int64] = np.sort(candidates[exact_mask].astype(np.int64, copy=False))
+        return eligible
+
+    def _query_single_index_timed(self, index: int) -> NDArray[np.int64]:
+        """Instrumented twin of ``_query_single_index`` recording per-stage timers."""
+        if self._all_fallback:
+            return self._fallback_query(
+                index, self._unsupported_reason or "unsupported_configuration"
+            )
+
+        c = self._point_cells[index]
+
+        if c in self._cells_requiring_fallback:
+            return self._fallback_query(index, self._require_fallback_reason(index, c))
 
         t_i = int(self._timestamps_us[index])
 
@@ -554,6 +643,8 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
         n = self._dataset.num_points
         if index < 0 or index >= n:
             raise IndexError(f"Observation index {index} out of bounds for dataset of size {n}")
+        if self._detailed_timing:
+            return self._query_single_index_timed(index)
         return self._query_single_index(index)
 
     def build_neighborhood_graph(self) -> NeighborhoodGraph:
@@ -569,8 +660,12 @@ class H3NeighborhoodProvider(NeighborhoodProvider):
         chunks: list[NDArray[np.int64]] = []
         offset = 0
 
+        # Select the query path once so the official (untimed) path pays no per-point toggle cost.
+        query: Callable[[int], NDArray[np.int64]] = (
+            self._query_single_index_timed if self._detailed_timing else self._query_single_index
+        )
         for i in range(n):
-            eligible = self._query_single_index(i)
+            eligible = query(i)
             chunks.append(eligible)
             offset += int(eligible.shape[0])
             indptr[i + 1] = offset
