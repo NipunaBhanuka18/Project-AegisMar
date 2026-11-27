@@ -241,7 +241,7 @@ First-time contributors, academic evaluators, and research collaborators can fol
 4. **Reproduce or Obtain Permitted AIS Telemetry**:
    Generate canonical Parquet storage from the regional San Pedro Bay sample without committing data:
    ```powershell
-   uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101 --overwrite
+   uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101_v1_1
    ```
    *(For full-day NOAA downloads, follow instructions in [docs/05-guides/ml-research-onboarding.md](05-guides/ml-research-onboarding.md#6-how-to-acquire-or-reproduce-permitted-research-data)).*
 5. **Understand the Existing Implementation**:

@@ -698,3 +698,18 @@ This log documents chronological engineering actions, commands executed, test re
   - Track B leadership confirmed: Kishakya reviewed and accepted the collaboration plan, so the "Proposed / pending review" qualifiers were removed from 14 current documents. ADR-010 keeps its original wording as a historical decision record.
 - **Quality Gates:** see the PR description for the executed results.
 - **Next Action:** ML-04 — implement `src/aegismar/anomaly/features.py` per ML-02 v1.0.
+
+---
+
+## Log Entry: 2026-11-25 — Canonical Dataset v1.1 Reconciliation (Track B workstation)
+
+- **Date:** 2026-11-25
+- **Track:** Track B — Kishakya (agreed with NipunaBhanuka18)
+- **Branch:** `docs/canonical-dataset-v1.1`
+- **Summary of Work:**
+  - Re-ran ingestion at commit `1b573ad` (W1-02B) in a temporary worktree on `sample_lalb_20250101.csv` (SHA-256 `42e4f766…`): output file SHA-256 `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b`, identical to the historical v1.0 file. Logical fingerprint `570b0fb09182720fc476b4b712c0d599bed3ed34491aad4946719fab965a1473`.
+  - Current `main` (`c468fd1`) ingestion into a new folder `data/processed/lalb_20250101_v1_1/` produced file SHA-256 `bdde2581302270a9e2c99a1a7aa1819a0bd1a24fbf6384458cfd8a81229eaf48`, fingerprint `d8a619f7d27314ae8418eff5da8e1c5c96004d038c2fce8f5ee868ed90fec2cf`, `git_dirty=false` in `manifest.json`; identical to the v1.1 file on the Track A workstation.
+  - Row-level diff v1.0 vs v1.1: 12 rows differ, only in `prev_source_row`, `elapsed_seconds`, `distance_nm`, `implied_speed_knots` (8 timestamp-position conflict rows plus the 4 following rows). Quality flags, positions, timestamps and kinematic fields are identical.
+  - Clustering-input comparison via `load_clustering_dataset_from_parquet` (default `QualityFilterPolicy`): 143,116 rows each, 8 conflict rows excluded each; source rows, MMSIs, timestamps, latitudes and longitudes bit-identical.
+  - Documentation reconciled (see CHANGELOG 2026-11-25). Historical records (W2-01/W3-01B log entries, CHANGELOG W3-01B, milestones W3-01B) intentionally keep the v1.0 hash.
+- **Data safety:** no existing dataset was modified; `lalb_20250101/` on this workstation already held v1.1 bytes (regenerated 2026-11-23) and was left untouched.

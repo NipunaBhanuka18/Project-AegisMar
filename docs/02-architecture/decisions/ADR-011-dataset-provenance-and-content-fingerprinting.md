@@ -118,6 +118,7 @@ The same digest is produced for an in-memory `pa.Table` and any Parquet file wri
 - **Status:** Implemented in Milestone W3-02A (branch `feat/clu-w3-02a-dataset-provenance`).
 - **Implementation:** [src/aegismar/ingestion/provenance.py](../../../src/aegismar/ingestion/provenance.py), [src/aegismar/ingestion/schema.py](../../../src/aegismar/ingestion/schema.py), [src/aegismar/ingestion/pipeline.py](../../../src/aegismar/ingestion/pipeline.py), [src/aegismar/common/types.py](../../../src/aegismar/common/types.py), [src/aegismar/cli.py](../../../src/aegismar/cli.py)
 - **Test Evidence:** [tests/unit/test_provenance.py](../../../tests/unit/test_provenance.py), [tests/unit/test_ingestion.py](../../../tests/unit/test_ingestion.py) (`test_21`–`test_24`), [tests/unit/test_cli.py](../../../tests/unit/test_cli.py) (`test_cli_fingerprint_*`)
+- **Resolution of the divergent-hash question (2026-11-25):** Both files were reproduced byte-for-byte from the same NOAA sample: ingestion at `1b573ad` (W1-02B) yields v1.0 (`4a7ca719...`, fingerprint `570b0fb0...`) and current `main` yields v1.1 (`bdde2581...`, fingerprint `d8a619f7...`). The content differs in exactly 12 rows of derived kinematic columns (the W2-01 "no fictitious movement" fix); clustering inputs after quality filtering are bit-identical. v1.1 is canonical for both tracks; v1.0 is the immutable historical baseline. See [evidence-register.md §2.1](../../03-research/evidence-register.md) (`CLM-ING-07`, `CLM-ING-08`).
 
 ---
 

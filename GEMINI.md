@@ -20,7 +20,7 @@ Primary AI project lead, technical architect, research planning partner, and coo
 
 ## Scientific & Provenance Invariants
 - **Clustering (`ADR-005`–`009`):** BallTree is the reference ST-DBSCAN implementation; H3 is a calibrated empirical candidate accelerator with an explicit fail-closed/fallback contract.
-- **Data Integrity:** Preserve historical v1.0 Parquet (`4a7ca719...e88b`) untouched. Separate raw file-byte SHA-256 from order-sensitive, versioned logical content fingerprints. Keep `manifest.json` authoritative for provenance in `W3-02A` (no new Parquet footer metadata).
+- **Data Integrity:** Preserve historical v1.0 Parquet (`4a7ca719...e88b`) and canonical v1.1 Parquet (`lalb_20250101_v1_1/`, `bdde2581...af48`, fingerprint `d8a619f7...`) untouched. Separate raw file-byte SHA-256 from order-sensitive, versioned logical content fingerprints. Keep `manifest.json` authoritative for provenance in `W3-02A` (no new Parquet footer metadata).
 - **Sequencing:** `W3-02A` -> controlled regeneration & row-level diff -> finalized `W3-02` protocol -> controlled benchmarking.
 
 ## Planning & Delivery Rules

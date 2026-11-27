@@ -107,6 +107,7 @@ During Milestones W3-01A and W3-01B, an in-depth audit of the clearance geometry
     - `indices match: True` (100.0000% neighbor identity across all 13,188,256 edges).
     - `clusters_match: True`, `roles_match: True`, `labels_match: True` (241 clusters, 136,276 core, 934 border, 5,906 noise).
     - `fallback_count: 0`.
+    - *Dataset note (2026-11-25):* this parity run used the historical v1.0 file. The canonical v1.1 file (`bdde2581...`) yields bit-identical clustering inputs ([evidence-register.md §2.1](../../03-research/evidence-register.md), `CLM-ING-08`), so the result applies unchanged; W3-02 benchmarks use v1.1.
 - **Shared Provider Protocol**: [src/aegismar/clustering/types.py](../../../src/aegismar/clustering/types.py) (`NeighborhoodProvider`).
 
 ---

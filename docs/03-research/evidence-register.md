@@ -1,10 +1,10 @@
 # Research Evidence Register & Verification Matrix
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**  
-> **Document Version:** 1.0  
+> **Document Version:** 1.1  
 > **Lifecycle Status:** Active Evidence Baseline  
 > **Maintained By:** NipunaBhanuka18 (Project Lead) & Kishakya (Track B Lead)  
-> **Last Reconciled:** 2026-11-22  
+> **Last Reconciled:** 2026-11-25  
 
 ---
 
@@ -23,17 +23,17 @@ Every claim in this register is categorized under one of six strict evidentiary 
 
 ### Claim Accounting & Evidentiary Category Totals
 
-The register currently tracks **15 formal claims** classified across the evidentiary hierarchy:
+The register currently tracks **21 formal claims** classified across the evidentiary hierarchy:
 
 | Evidentiary Category | Claim Count | Active Claim Identifiers |
 |---|---|---|
 | **1. Implemented and Code-Inspected** | 0 | *(Baseline modules covered under Category 2 checks)* |
-| **2. Tested by Automated Checks** | 11 | `CLM-ING-01`, `CLM-ING-02`, `CLM-ING-03`, `CLM-ING-04`, `CLM-ING-05`, `CLM-SPA-01`, `CLM-SPA-02`, `CLM-CLU-01`, `CLM-CLU-02`, `CLM-CLU-03`, `CLM-CLU-06` |
-| **3. Experimentally Observed** | 2 | `CLM-ING-06`, `CLM-CLU-04` |
-| **4. Independently Reproduced** | 0 | *(Awaiting multi-environment reproduction runs)* |
+| **2. Tested by Automated Checks** | 12 | `CLM-ING-01`, `CLM-ING-02`, `CLM-ING-03`, `CLM-ING-04`, `CLM-ING-05`, `CLM-SPA-01`, `CLM-SPA-02`, `CLM-CLU-01`, `CLM-CLU-02`, `CLM-CLU-03`, `CLM-CLU-06`, `CLM-ANO-05` |
+| **3. Experimentally Observed** | 6 | `CLM-ING-06`, `CLM-ING-08`, `CLM-CLU-04`, `CLM-ANO-02`, `CLM-ANO-03`, `CLM-ANO-04` |
+| **4. Independently Reproduced** | 1 | `CLM-ING-07` |
 | **5. Reported by Development Assistant** | 1 | `CLM-CLU-05` |
 | **6. Planned or Hypothesized** | 1 | `CLM-ANO-01` |
-| **Total Tracked Claims** | **15** | |
+| **Total Tracked Claims** | **21** | |
 
 > [!CAUTION]
 > **Scientific Integrity Guardrails**:
@@ -79,6 +79,27 @@ Before evaluating algorithmic claims, the data pipeline accounting from raw byte
             └─ Visualized Preview Subset:  5,000 observations (subsampled strictly for map rendering responsiveness)
 ```
 
+### 2.1 Canonical Dataset Versions (reconciled 2026-11-25)
+
+Two cleaned versions of the 2025-01-01 LA/LB dataset exist. They are identified by file SHA-256 **and** by the
+writer-independent logical content fingerprint (`aegismar-logical-v1`, ADR-011), never by path alone.
+
+| Version | Status | Path convention | File SHA-256 | Logical fingerprint | Produced by | Used by |
+|---|---|---|---|---|---|---|
+| **v1.0** | Historical, immutable | `data/processed/lalb_20250101/` | `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b` | `570b0fb09182720fc476b4b712c0d599bed3ed34491aad4946719fab965a1473` | `aegismar ingest` at `1b573ad` (W1-02B, before the W2-01 cleaner hardening) | W2-01 clustering baseline and W3-01/W3-01B H3 parity (`CLM-CLU-04`, `CLM-CLU-06`) |
+| **v1.1** | **Canonical** for Track A (from W3-02) and Track B | `data/processed/lalb_20250101_v1_1/` | `bdde2581302270a9e2c99a1a7aa1819a0bd1a24fbf6384458cfd8a81229eaf48` | `d8a619f7d27314ae8418eff5da8e1c5c96004d038c2fce8f5ee868ed90fec2cf` | `aegismar ingest` at current `main` (W2-01 hardened cleaner) | W3-02 benchmark; Track B ML-01 to ML-05 |
+
+- **Difference:** exactly 12 rows, only in the derived columns `prev_source_row`, `elapsed_seconds`, `distance_nm`
+  and `implied_speed_knots` (`CLM-ING-08`). All positions, timestamps, kinematic fields and quality flags are identical.
+- **Clustering equivalence:** after the default `QualityFilterPolicy`, both versions give bit-identical clustering inputs
+  (143,116 rows), so the W2-01 and W3-01/W3-01B clustering and parity results apply unchanged to v1.1.
+- **Track B must use v1.1:** ML-02 §4.2 relies on conflict rows having null predecessor pointers, which only v1.1 provides.
+- **Workstation note:** on the Track B workstation, `data/processed/lalb_20250101/` was regenerated on 2026-11-23 (before
+  the `_v1_1` path convention) and therefore holds v1.1 bytes. Always confirm a local file with `aegismar fingerprint`.
+- **Reproduce:** `uv run python scripts/slice_noaa_bbox.py data/raw/ais-2025-01-01.csv.zst data/raw/sample_lalb_20250101.csv --lat 33.5 33.9 --lon -118.4 -118.0`,
+  then `uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101_v1_1`,
+  then `uv run python -m aegismar fingerprint -i data/processed/lalb_20250101_v1_1/cleaned_ais.parquet`.
+
 ---
 
 ## 3. Evidence Register Matrix
@@ -91,15 +112,21 @@ Before evaluating algorithmic claims, the data pipeline accounting from raw byte
 | **CLM-ING-04** | Tested by Automated Checks | International sentinels (`SOG 102.3`, `COG 360.0`, `HDG 511`, `Status 15`) and 2025 nulls are coerced to explicit typed nulls without dropping coordinates. | Synthetic fixtures | `v0.1.0.dev1` | `src/aegismar/ingestion/cleaner.py`<br>`tests/unit/test_ingestion.py` (`test_06`) | **Verified** (Tests pass) | Null values must be handled by downstream consumers. |
 | **CLM-ING-05** | Tested by Automated Checks | Exact duplicate rows are consolidated (`EXACT_DUPLICATE`), while same-timestamp differing positions are preserved with `TIMESTAMP_POSITION_CONFLICT` and zero fictitious movement. | Synthetic fixtures | `v0.1.0.dev1` | `src/aegismar/ingestion/cleaner.py`<br>`tests/unit/test_ingestion.py` (`test_09`, `test_10`, `test_18`, `test_19`) | **Verified** (Tests pass) | Preserves conflicts for analytical inspection. |
 | **CLM-ING-06** | Experimentally Observed | Ingestion of real San Pedro Bay sample converts 143,156 input records into 143,124 output rows in 7.19 s (~19,900 rec/s), identifying 362 vessels, 32 duplicates, and 18 speed violations ($>50\text{ kt}$). | `sample_lalb_20250101.csv`<br>(SHA-256: `42e4f766...`) | Commit `1b573ad`<br>(hardened `3ece859`) | `data/processed/lalb_20250101/manifest.json`<br>`data/processed/lalb_20250101/cleaned_ais.parquet` | **Verified on Local Disk** (Manifest confirmed) | In-memory batch ingestion; requires host RAM proportional to CSV size. |
+| **CLM-ING-07** | Independently Reproduced | Both cleaned-dataset versions are byte-for-byte reproducible on a second workstation: ingestion at `1b573ad` reproduces v1.0 (`4a7ca719...`), ingestion at current `main` reproduces v1.1 (`bdde2581...`), and `scripts/slice_noaa_bbox.py` reproduces the regional sample (`42e4f766...`) from the NOAA extract. | `ais-2025-01-01.csv.zst` (SHA-256 `36c07f4a...`) → `sample_lalb_20250101.csv` | Commits `1b573ad`, `95b7e50`, `c468fd1` | `scripts/slice_noaa_bbox.py`; `aegismar ingest`; `aegismar fingerprint`; development log 2026-11-25 | **Verified** (identical file SHA-256 on two workstations) | Byte identity depends on the PyArrow writer (26.0.1); the logical fingerprint is the writer-independent identity (ADR-011). |
+| **CLM-ING-08** | Experimentally Observed | v1.0 and v1.1 differ in exactly 12 rows of the derived columns `prev_source_row`, `elapsed_seconds`, `distance_nm`, `implied_speed_knots`: the 8 `TIMESTAMP_POSITION_CONFLICT` rows (v1.0 fictitious links, v1.1 null) and the 4 following rows (re-linked to the last unambiguous observation). After the default quality filter both yield bit-identical clustering inputs (143,116 rows: source rows, MMSIs, timestamps, latitudes, longitudes). | v1.0 vs v1.1 `cleaned_ais.parquet` | `QualityFilterPolicy()` default | Row-level diff and `load_clustering_dataset_from_parquet` comparison (2026-11-25) | **Verified** (executed comparison) | Equivalence covers clustering inputs only; Track B features use the derived columns and require v1.1. |
 | **CLM-SPA-01** | Tested by Automated Checks | Haversine distance implementation computes exact spherical great-circle distances across standard coordinates, high latitudes, and anti-meridian dateline crossings ($\pm 180^\circ$). | Synthetic & extreme coordinates | `v0.1.0.dev1` | `src/aegismar/spatial/haversine.py`<br>`tests/unit/test_st_dbscan.py` (`test_10`, `test_11`) | **Verified** (Tests pass) | Assumes spherical Earth ($R=6{,}371{,}008.8\text{ m}$); max ~0.5% deviation from WGS 84 ellipsoid. |
 | **CLM-SPA-02** | Tested by Automated Checks | Independent $O(N^2)$ brute-force test oracle calculates exact scalar Haversine distances independently of scikit-learn, with an automated $N \le 5{,}000$ safety cap. | Synthetic fixtures | `v0.1.0.dev1` | `src/aegismar/spatial/oracle.py`<br>`tests/unit/test_oracle.py` (7 tests) | **Verified** (Tests pass) | Capped at $N \le 5{,}000$ to prevent quadratic execution lockup. |
 | **CLM-CLU-01** | Tested by Automated Checks | `BallTreeNeighborhoodProvider` matches brute-force oracle neighbor sets 100% across randomized datasets, extreme boundaries, and a 1,000-row real LA/LB subset. | Randomized & real 1k subset | `v0.1.0.dev1` | `src/aegismar/clustering/balltree_neighbors.py`<br>`tests/unit/test_oracle.py` (`test_12`, `test_oracle_matches_balltree...`) | **Verified** (Tests pass) | Tests neighborhood candidate retrieval; does not measure traffic semantics. |
 | **CLM-CLU-02** | Tested by Automated Checks | Core-first ST-DBSCAN (`stdbscan-core-first-v1.0`) produces identical cluster assignments regardless of input row permutation (input permutation invariance on tested runtime). | Synthetic permutation fixtures | Policy `v1.0` | `src/aegismar/clustering/st_dbscan.py`<br>`tests/unit/test_st_dbscan.py` (`test_13`) | **Verified** (Tests pass) | Requires canonical sorting pass prior to clustering; verified deterministic within tested Python runtime. |
 | **CLM-CLU-03** | Tested by Automated Checks | Non-core points reachable from multiple core components are deterministically attached to the nearest core component via lexicographical tie-breaker tuple `(dist, |dt|, cluster_id, core_idx)`. | Multi-core boundary fixtures | Policy `v1.0` | `src/aegismar/clustering/st_dbscan.py`<br>`tests/unit/test_st_dbscan.py` (`test_09`) | **Verified** (Tests pass) | Tie-breaking is geometric and temporal; not hydrodynamic. |
-| **CLM-CLU-04** | Experimentally Observed | Exploratory BallTree ST-DBSCAN run on 143,116 analyzed LA/LB rows partitions observations into 241 spatiotemporal density clusters (136,276 core, 934 border, 5,906 noise). | `cleaned_ais.parquet`<br>(SHA-256: `4a7ca719...`) | $\varepsilon_s=300\text{m}$, $\Delta T=900\text{s}$, $\text{MinPts}=5$ | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json` | **Verified on Local Disk** (Summary JSON verified) | Clusters represent raw density groups; they are **NOT** 241 confirmed anchorages. |
+| **CLM-CLU-04** | Experimentally Observed | Exploratory BallTree ST-DBSCAN run on 143,116 analyzed LA/LB rows partitions observations into 241 spatiotemporal density clusters (136,276 core, 934 border, 5,906 noise). | `cleaned_ais.parquet` historical v1.0<br>(SHA-256: `4a7ca719...`; clustering inputs identical to canonical v1.1, §2.1) | $\varepsilon_s=300\text{m}$, $\Delta T=900\text{s}$, $\text{MinPts}=5$ | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json` | **Verified on Local Disk** (Summary JSON verified) | Clusters represent raw density groups; they are **NOT** 241 confirmed anchorages. |
 | **CLM-CLU-05** | Reported by Development Assistant | Exploratory BallTree ST-DBSCAN recorded 13.680 s uninstrumented wall time (0.077 s build, 13.341 s query, 0.262 s clustering) in development log; instrumented run recorded 38.014 s wall time with 225.83 MB peak heap in summary JSON. | `cleaned_ais.parquet` | Commit `3ece859` | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json`<br>`docs/04-development/development-log.md` | **Recorded in Log; Not Multi-Trial Benchmark** | Measured on a single workstation run; uninstrumented timing reported in dev log, instrumented timing in summary JSON; not a multi-trial benchmark. |
-| **CLM-CLU-06** | Tested by Automated Checks | Uber H3 candidate generation with empirical clearance lower bounds on calibrated resolutions (7, 8, 9), exact Haversine/temporal pruning, and fail-closed BallTree fallback for unsupported or anomalous configurations (Option B) achieves 100% recall (0 missing neighbors) against the brute-force oracle across 32 unit test fixture categories and 100% bit-for-bit CSR graph parity (13,188,256 / 13,188,256 edges, identical `indptr` and `indices`) against the BallTree reference on 143,116 real LA/LB observations (`cleaned_ais.parquet`, SHA-256: `4a7ca719...`, verified via `aegismar verify-parity`). | Synthetic fixtures & `cleaned_ais.parquet` | Calibrated Res 7–9, Option B | `src/aegismar/clustering/h3_neighbors.py`<br>`tests/unit/test_h3_neighbors.py` (32 fixtures)<br>`experiments/outputs/w3_01_lalb_h3/clustering_summary.json` | **Verified** (Automated checks & real LA/LB parity pass) | Proves neighborhood candidate completeness and clustering equivalence under Option B contract on calibrated domain; formal comparative speedup benchmarking belongs to W3-02 ($H_{1,A}$). |
+| **CLM-CLU-06** | Tested by Automated Checks | Uber H3 candidate generation with empirical clearance lower bounds on calibrated resolutions (7, 8, 9), exact Haversine/temporal pruning, and fail-closed BallTree fallback for unsupported or anomalous configurations (Option B) achieves 100% recall (0 missing neighbors) against the brute-force oracle across 32 unit test fixture categories and 100% bit-for-bit CSR graph parity (13,188,256 / 13,188,256 edges, identical `indptr` and `indices`) against the BallTree reference on 143,116 real LA/LB observations (`cleaned_ais.parquet` historical v1.0, SHA-256: `4a7ca719...`, verified via `aegismar verify-parity`; clustering inputs bit-identical to canonical v1.1, §2.1). | Synthetic fixtures & `cleaned_ais.parquet` | Calibrated Res 7–9, Option B | `src/aegismar/clustering/h3_neighbors.py`<br>`tests/unit/test_h3_neighbors.py` (32 fixtures)<br>`experiments/outputs/w3_01_lalb_h3/clustering_summary.json` | **Verified** (Automated checks & real LA/LB parity pass) | Proves neighborhood candidate completeness and clustering equivalence under Option B contract on calibrated domain; formal comparative speedup benchmarking belongs to W3-02 ($H_{1,A}$). |
 | **CLM-ANO-01** | Planned / Hypothesized | Multi-factor kinematic trajectory anomaly scoring will achieve at least 15 percentage points higher $F_1$ than ST-DBSCAN spatial density noise ($H_{2,A}$). | Held-out trajectory partitions (test days 2025-01-14, 2025-01-22) | Rule-based (R1) vs. density noise (B0); IF (M1) | `docs/03-research/vessel-behavior-ml.md`<br>`docs/03-research/ml-03-evaluation-protocol.md` (frozen decision rules, §8) | **Unverified Hypothesis** (Planned ML track) | Anomaly models are **not yet implemented**; the evaluation protocol and statistical decision rules are frozen in ML-03 v1.0; hypotheses remain subject to experiment. |
+| **CLM-ANO-02** | Experimentally Observed | On the canonical development day, reporting cadence is coarse: the most common intervals are 180 s (26,305 pairs) and 70 s (15,020 pairs), with a median of 70 s when the preceding ping is moving (SOG ≥ 1.5 kt). 90.0% of SOG values are < 0.5 kt; 135 of 362 vessels ever reach SOG ≥ 1.5 kt; heading is present in 63.0% of Class A and 8.8% of Class B rows. | v1.1 (`bdde2581...`) | ML-01 profile | `experiments/anomaly/ml01_profile_dataset.py` → `experiments/outputs/anomaly/ml01_profile/profile.json` | **Verified on Local Disk** | Single day (a public holiday); descriptive only. |
+| **CLM-ANO-03** | Experimentally Observed | Two feed-wide reception silences (no observation from any vessel) occur on 2025-01-01, 03:07:37–03:20:25 and 12:06:09–12:18:20 UTC, spanned by 557 of the 1,579 vessel reporting gaps > 600 s. | v1.1 | Silence > 60 s, merge ≤ 180 s (ML-02 G6/G7) | `ml01_profile_dataset.py`; `aegismar.anomaly.features.detect_outage_windows`; `tests/unit/test_anomaly.py` (real-data check) | **Verified** | Property of the receiver network on this day; cause not established. |
+| **CLM-ANO-04** | Experimentally Observed | Of 429 COG–heading disparities > 45° at SOG ≥ 1.5 kt, 342 are near-reversals (> 135°; 29 vessels, 281 rows from tug/towing vessels) and 87 are lateral drift (45–135°; 20 vessels). | v1.1 | SOG guard 1.5 kt | `experiments/anomaly/ml02_drift_breakdown.py` | **Verified on Local Disk** | The physical cause of the reversals is not established from AIS alone. |
+| **CLM-ANO-05** | Tested by Automated Checks | The ML-04 feature extractor implements ML-02 v1.0 (angular wrapping, dead reckoning, rate guards, conflict-row skipping, outage-aware gaps, segment-bounded windows, permutation invariance, no cross-vessel leakage), and the test-day firewall refuses held-out days using Parquet metadata only. | Synthetic fixtures (plus a real-data outage/segment check when data is present) | ML-02 v1.0 / ML-03 v1.0 | `src/aegismar/anomaly/`; `tests/unit/test_anomaly.py` (34 tests) | **Verified** (Tests pass) | Software correctness only; says nothing about detection performance. |
 
 ---
 
