@@ -1,16 +1,18 @@
 # ML-03: Track B Evaluation Protocol (Baselines, Splits, Perturbations, Metrics)
 
 > **Project AegisMar — Track B (Vessel Behavior ML & Anomaly Detection)**
-> **Document Version:** 1.1 (Accepted by Track Lead — frozen; amends v1.0 of 2026-11-23)
+> **Document Version:** 1.2 (Accepted by Track Lead — frozen; amends v1.1 of 2026-11-25)
 > **Milestone:** ML-03
 > **Track Lead:** Kishakya
-> **Date:** 2026-11-23 (v1.0); amended 2026-11-25 (v1.1)
+> **Date:** 2026-11-23 (v1.0); amended 2026-11-25 (v1.1) and 2026-11-27 (v1.2)
 > **Builds on:** [ML-02 Feature Specification v1.0.1](ml-02-feature-spec.md); canonical dataset v1.1 ([evidence-register.md §2.1](evidence-register.md))
 
 > [!IMPORTANT]
 > **Frozen protocol.** Decisions D7–D14 were accepted by the Track B lead on 2026-11-23 (Section 12).
 > **v1.1:** Amendments D15–D18 (Section 0) were accepted by the Track B lead on 2026-11-25, **before
-> any test-day inspection**, as Section 3.4 permits. v1.1 is now the frozen protocol.
+> any test-day inspection**, as Section 3.4 permits.
+> **v1.2:** Amendment D19 (Section 0.4, evaluation population) was accepted by the Track B lead on
+> 2026-11-27, also **before any test-day inspection**. v1.2 is now the frozen protocol.
 > This protocol was frozen **before any held-out test day was inspected** (Section 3.4). Any later
 > change requires a new document version and is subject to the test-day firewall rules. This document
 > contains no experimental results. All dataset numbers it cites come from executed ML-01 / ML-02
@@ -62,6 +64,35 @@ As of this amendment, T1 and T2 have only been downloaded, sliced, ingested and 
 SHA-256, row and vessel counts, timestamp range), and checked by the metadata-only firewall guard. No
 feature, distribution, plot or score from T1/T2 has been computed. The amendment is therefore a
 pre-evaluation change, which Section 3.4 permits.
+
+### 0.4 v1.2 amendment — evaluation population (D19)
+
+**Problem found.** A smoke run of the ML-05 validation pipeline (D0 validation vessels, seed 1000,
+headline configurations) showed that the v1.1 evaluation set is confounded. Injections can only be
+placed where every observation within ±30 min is moving at ≥ 1.5 kt, unflagged and outside outages
+(Section 4.1). All positive windows were therefore moving, clean, steady transits, while about 93% of
+the evaluated windows were stationary. A method that merely ranks such transits highly then looks like
+a detector without detecting the fault.
+
+**Negative control.** B0 (ST-DBSCAN noise) cannot observe A1 (reported speed) or B (heading)
+faults: its inputs are byte-identical to the clean data for those types. Its PR-AUC on A1 should
+therefore equal the positive prevalence (chance). Measured on the smoke run:
+
+| Evaluation population | A1 prevalence (chance) | B0 PR-AUC on A1 | Ratio |
+|---|---|---|---|
+| All windows (v1.1) | 0.005 | 0.371 | ~79× — confounded |
+| Moving windows only | 0.143 | 0.379 | 2.7× — still confounded |
+| **Eligible-context windows (v1.2)** | 0.434 | 0.552 | 1.3× — close to chance |
+
+On B, B0 likewise fell to 0.32 against a prevalence of 0.26 on eligible-context windows. These are
+single-seed, single-day diagnostics measured on 2026-11-27 with the uncommitted ML-05 runner; ML-05
+reports the negative control reproducibly for every run (Section 7).
+
+**Amendment D19.** The primary evaluation population becomes the **eligible-context windows**
+(Section 6.0). All-window and moving-only results are kept as secondary. The clean-data false-alarm
+rate (Section 6.4) stays on all windows, because it measures the operational burden of each method.
+
+**Firewall compliance.** As for v1.1, no test-day feature, distribution, plot or score has been computed.
 
 ---
 
@@ -313,6 +344,17 @@ hyperparameter search on test data.
 
 ## 6. Metrics
 
+### 6.0 Evaluation population (v1.2, D19)
+- **Primary: eligible-context windows.** A window is eligible-context if **every** observation in it
+  meets the per-observation injection conditions of Section 4.1 item 2, judged on the **clean**
+  (unperturbed) data of the window's original observations: SOG ≥ 1.5 kt, no pre-existing quality
+  flag other than `MISSING_*`, and outside every feed-wide outage window of that day. By
+  construction every positive window is eligible-context, so positives and negatives come from the
+  same kind of traffic.
+- **Secondary:** all windows (the v1.1 definition) and moving windows only.
+- Unknown (masked) windows are excluded from every population (Section 4.4).
+- All metrics in Sections 6.1–6.3, 6.5 and 8 use the primary population unless stated otherwise.
+
 ### 6.1 Ranking (primary)
 - **Window-level PR-AUC** (average precision) on the headline configurations. The positive prevalence is
   always reported next to it, because the PR-AUC of a random scorer equals the prevalence.
@@ -323,12 +365,14 @@ hyperparameter search on test data.
 - **Precision, Recall, F1** at the DEV-val-selected threshold (Section 6.3).
 
 ### 6.3 Threshold selection (leakage fix)
-- Each method's threshold maximises F1 on **DEV-val**, pooled across headline configurations and seeds.
+- Each method's threshold maximises F1 on **DEV-val** eligible-context windows (v1.2), pooled across
+  headline configurations, seeds and days.
   It is then **fixed** for T1/T2.
 - The "optimal-F1 threshold" of evaluation-protocol §3.3 is reported on the test days only as a
   clearly labelled **oracle upper bound**, never as a result.
 
 ### 6.4 False alarms on clean data
+- Computed on **all** windows (not only eligible-context ones), with the thresholds of Section 6.3.
 - Flagged windows on the **unperturbed** test days, merged into incidents per vessel (overlapping flagged
   windows become one incident), reported as **incidents per 1,000 vessel-hours**. Vessel-hours = the sum
   over vessels of observed segment durations. Broken down by vessel group and motion state.
@@ -353,6 +397,11 @@ hyperparameter search on test data.
 - Results stratified by transceiver class (A/B). Heading-dependent factors are null for about 91% of
   Class B rows (ML-02 C5).
 - B0's selected grid point and its DEV-val F1 for every grid point.
+- **Negative control (v1.2):** B0's PR-AUC divided by the positive prevalence on A1 and B, in the
+  primary population, with a vessel-level bootstrap 95% interval. B0 cannot observe these faults, so
+  the ratio should be close to 1. An interval that excludes 1 indicates residual confounding and
+  must be discussed alongside the results.
+- The number of eligible-context windows and positives per configuration and day.
 
 ---
 
@@ -415,7 +464,8 @@ Each run writes to `experiments/outputs/anomaly/<experiment_id>/` (gitignored):
 
 ## 12. Design Decisions (Accepted)
 
-Decisions D7–D14 were accepted by the Track B lead (Kishakya) on 2026-11-23; D15–D18 on 2026-11-25.
+Decisions D7–D14 were accepted by the Track B lead (Kishakya) on 2026-11-23; D15–D18 on 2026-11-25;
+D19 on 2026-11-27.
 
 | # | Decision | Accepted choice |
 |---|---|---|
@@ -431,6 +481,7 @@ Decisions D7–D14 were accepted by the Track B lead (Kishakya) on 2026-11-23; D
 | D16 | Joint split *(v1.1)* | One MMSI-grouped stratified split over both development days |
 | D17 | Eligibility and density *(v1.1)* | SOG ≥ 1.5 kt; several injections per segment ≥ 60 min apart; C scorability; ±30 min margin kept |
 | D18 | Gap configurations *(v1.1)* | G ∈ {30, 60} min (120 min removed) |
+| D19 | Evaluation population *(v1.2)* | Eligible-context windows primary; all-window and moving-only secondary; mandatory negative control; false alarms on all windows |
 
 ---
 
@@ -443,6 +494,8 @@ Decisions D7–D14 were accepted by the Track B lead (Kishakya) on 2026-11-23; D
 3. D0 is a public holiday. T2 is included specifically so that any difference between D0 and T2 can be described.
 4. Isolation Forest / LOF attribution is post-hoc (§5.3), not intrinsic.
 5. Kinematic signal quality is limited by the 70–180 s cadence and missing headings (ML-02 C1, C5).
+6. The primary (eligible-context) population is small (about 120 windows per development day on the
+   validation vessels in the smoke run), so confidence intervals are wide.
 
 ---
 
@@ -453,3 +506,4 @@ Decisions D7–D14 were accepted by the Track B lead (Kishakya) on 2026-11-23; D
 | 0.1 | 2026-11-23 | Initial draft. |
 | 1.0 | 2026-11-23 | Decisions D7–D14 accepted by the Track B lead; protocol frozen before any test-day inspection. |
 | 1.1 | 2026-11-25 | Amendments D15–D18 (Section 0) accepted by the Track B lead: second development day, joint vessel split, relaxed eligibility and density, G = 120 min removed. Made and frozen before any test-day inspection. |
+| 1.2 | 2026-11-27 | Amendment D19 (Section 0.4) accepted by the Track B lead: eligible-context windows become the primary evaluation population after a negative control exposed confounding; mandatory negative-control report. Made and frozen before any test-day inspection. |
