@@ -22,8 +22,8 @@ Implementation choices where ML-03 v1.1 leaves a detail open:
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
@@ -37,11 +37,13 @@ from sklearn.preprocessing import RobustScaler
 
 from aegismar.anomaly.features import MOTION_MOVING
 from aegismar.anomaly.rules import ecdf
+from aegismar.clustering.balltree_neighbors import BallTreeNeighborhoodProvider
 from aegismar.clustering.config import STDBSCANConfig
-from aegismar.clustering.st_dbscan import run_balltree_st_dbscan
+from aegismar.clustering.st_dbscan import run_balltree_st_dbscan, run_st_dbscan
 from aegismar.clustering.types import (
     NOISE_CLUSTER_ID,
     ClusteringInputDataset,
+    NeighborhoodGraph,
     ObservationRecord,
     build_clustering_dataset,
 )
@@ -233,10 +235,85 @@ def build_dataset(table: pa.Table) -> ClusteringInputDataset:
     return build_clustering_dataset(clustering_records(table))
 
 
+class CachedGraphProvider:
+    """Neighborhood provider that serves a precomputed graph (implements ``NeighborhoodProvider``).
+
+    The ST-DBSCAN neighborhood graph depends on the spatial and temporal radii only, not on
+    ``min_samples``, so one BallTree graph per radius serves every MinPts value of the B0 grid.
+    Clustering itself is unchanged (``run_st_dbscan``), so labels are identical to a direct run.
+    """
+
+    def __init__(self, graph: NeighborhoodGraph, name: str, build_time_seconds: float) -> None:
+        self._graph = graph
+        self._name = name
+        self._build_time = build_time_seconds
+
+    @property
+    def provider_name(self) -> str:
+        return self._name
+
+    @property
+    def num_points(self) -> int:
+        return self._graph.num_points
+
+    @property
+    def build_time_seconds(self) -> float:
+        return self._build_time
+
+    def query_neighbors(self, index: int) -> NDArray[np.int64]:
+        return self._graph.neighbors_of(index)
+
+    def build_neighborhood_graph(self) -> NeighborhoodGraph:
+        return self._graph
+
+
 def noise_labels_for_grid(
     dataset: ClusteringInputDataset, grid: Iterable[tuple[float, int]] = B0_GRID
 ) -> list[NoiseLabels]:
-    return [run_noise_baseline(dataset, eps, mp) for eps, mp in grid]
+    """B0 noise labels for every grid point, building one neighborhood graph per radius."""
+    points = list(grid)
+    by_eps: dict[float, NeighborhoodGraph] = {}
+    out: list[NoiseLabels] = []
+    for eps, mp in points:
+        if eps not in by_eps:
+            provider = BallTreeNeighborhoodProvider(
+                dataset=dataset,
+                config=STDBSCANConfig(
+                    eps_spatial_m=eps, eps_temporal_s=B0_EPS_TEMPORAL_S, min_samples=mp
+                ),
+            )
+            by_eps[eps] = provider.build_neighborhood_graph()
+        cached = CachedGraphProvider(by_eps[eps], "balltree_haversine_cached", 0.0)
+        config = STDBSCANConfig(eps_spatial_m=eps, eps_temporal_s=B0_EPS_TEMPORAL_S, min_samples=mp)
+        result = run_st_dbscan(dataset, config, cached)
+        rows = dataset.source_rows
+        out.append(
+            NoiseLabels(
+                eps,
+                mp,
+                frozenset(int(r) for r in rows[result.labels == NOISE_CLUSTER_ID]),
+                frozenset(int(r) for r in rows),
+            )
+        )
+    return out
+
+
+def with_source_rows(
+    dataset: ClusteringInputDataset, mapping: Mapping[int, int]
+) -> ClusteringInputDataset:
+    """Copy of ``dataset`` with source rows renumbered through ``mapping`` (order preserved)."""
+    rows = np.asarray([mapping[int(r)] for r in dataset.source_rows], dtype=np.int64)
+    return replace(dataset, source_rows=rows)
+
+
+def remap_noise_labels(labels: NoiseLabels, mapping: Mapping[int, int]) -> NoiseLabels:
+    """Noise labels renumbered through ``mapping`` (e.g. clean rows -> perturbed-copy rows)."""
+    return NoiseLabels(
+        labels.eps_spatial_m,
+        labels.min_samples,
+        frozenset(mapping[r] for r in labels.noise_rows if r in mapping),
+        frozenset(mapping[r] for r in labels.analyzed_rows if r in mapping),
+    )
 
 
 def grid_points(grid: Sequence[tuple[float, int]] = B0_GRID) -> list[str]:

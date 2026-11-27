@@ -34,14 +34,25 @@ from aegismar.anomaly.evaluation import (
     PerturbationConfig,
     TestDayFirewallError,
     _as_utc,
+    alerts,
+    attribution_accuracy,
+    best_f1_threshold,
     canonical_to_raw_rows,
     check_test_day_firewall,
+    cluster_bootstrap,
+    confusion_at,
     dataset_days,
+    eligible_context_windows,
+    eligible_rows,
+    event_recall,
     label_windows,
+    merge_incidents,
     perturb_dataset,
     plan_injections,
+    pr_auc,
     preexisting_flagged_rows,
     rederive,
+    roc_auc,
     split_vessels,
     vessel_attributes,
     vessel_group,
@@ -68,6 +79,7 @@ from aegismar.anomaly.features import (
 from aegismar.anomaly.models import (
     B0_GRID,
     MODEL_FEATURES,
+    CachedGraphProvider,
     NoiseLabels,
     WindowModel,
     b0_window_scores,
@@ -76,7 +88,9 @@ from aegismar.anomaly.models import (
     design_matrix,
     grid_points,
     noise_labels_for_grid,
+    remap_noise_labels,
     run_noise_baseline,
+    with_source_rows,
 )
 from aegismar.anomaly.rules import (
     FACTOR_FEATURES,
@@ -85,6 +99,8 @@ from aegismar.anomaly.rules import (
     ecdf,
     primary_factor_from_groups,
 )
+from aegismar.clustering.balltree_neighbors import BallTreeNeighborhoodProvider
+from aegismar.clustering.config import STDBSCANConfig
 from aegismar.ingestion.cleaner import process_and_clean_observations
 from aegismar.ingestion.schema import get_canonical_arrow_schema
 from aegismar.ingestion.storage import canonical_pings_to_arrow_table
@@ -1037,3 +1053,105 @@ def test_b0_clean_result_reusable_only_when_inputs_identical() -> None:
     assert clustering_inputs_equal(clean, build_dataset(a1.table))  # SOG is not a clustering input
     assert not clustering_inputs_equal(clean, build_dataset(a2.table))  # positions moved
     assert len(noise_labels_for_grid(clean, [(300.0, 3)])) == 1
+
+
+# =========================================================================== stage 3 metrics
+def _lab(*values: int) -> np.ndarray[Any, np.dtype[np.int8]]:
+    return np.asarray(values, dtype=np.int8)
+
+
+def test_pr_auc_and_roc_auc_skip_unknown_and_treat_nan_as_no_alert() -> None:
+    labels = _lab(1, 0, 0, -1, 1)
+    perfect = np.array([0.9, 0.1, 0.2, 0.99, 0.8])
+    assert pr_auc(labels, perfect) == pytest.approx(1.0)
+    assert roc_auc(labels, perfect) == pytest.approx(1.0)
+    unscored_positive = np.array([np.nan, 0.1, 0.2, 0.0, 0.8])  # NaN ranks below every score
+    assert roc_auc(labels, unscored_positive) == pytest.approx(0.5)
+    assert np.isnan(pr_auc(_lab(0, 0), np.array([0.1, 0.2])))
+    assert np.isnan(roc_auc(_lab(1, 1), np.array([0.1, 0.2])))
+
+
+def test_best_f1_threshold_and_confusion() -> None:
+    labels = _lab(1, 1, 0, 0, 0, -1)
+    scores = np.array([0.9, 0.6, 0.7, 0.2, np.nan, 1.0])
+    best = best_f1_threshold(labels, scores)
+    assert best.threshold == pytest.approx(0.6)
+    assert (best.tp, best.fp, best.fn, best.tn) == (2, 1, 0, 2)
+    assert best.f1 == pytest.approx(0.8)
+    c = confusion_at(labels, scores, 0.8)
+    assert (c.tp, c.fp, c.fn, c.tn) == (1, 0, 1, 3)
+    assert c.precision == 1.0 and c.recall == 0.5
+    assert c.to_dict()["f1"] == pytest.approx(2 / 3)
+    assert alerts(np.array([np.nan, 0.5]), 0.0).tolist() == [False, True]
+    none = best_f1_threshold(_lab(0, 0), np.array([np.nan, np.nan]))
+    assert none.threshold == math.inf and np.isnan(none.precision)
+
+
+def test_event_recall_attribution_bootstrap_and_incidents() -> None:
+    labels = _lab(1, 1, 0, -1)
+    alert = np.array([False, True, False, True])
+    by_inj = {"a": [0], "b": [1], "masked": [3], "none": []}
+    assert event_recall(by_inj, labels, alert) == (1, 2)
+    primary: list[str | None] = ["LATERAL_DRIFT", "REPORTING_GAP", None, None]
+    assert attribution_accuracy(labels, np.array([True, True, False, False]), primary, "B") == (
+        1,
+        2,
+    )
+
+    groups = ["v1", "v1", "v2", "v3"]
+    boot = cluster_bootstrap(groups, lambda idx: float(len(idx)), n_boot=50, seed=1)
+    assert boot.shape == (50,) and boot.min() >= 3 and boot.max() <= 6
+    np.testing.assert_array_equal(
+        boot, cluster_bootstrap(groups, lambda idx: float(len(idx)), n_boot=50, seed=1)
+    )
+    assert merge_incidents([0, 600, 5000], [1800, 2400, 6800]) == 2
+    assert merge_incidents([], []) == 0
+
+
+# =========================================================================== stage 3 B0 helpers
+def test_cached_grid_matches_direct_runs_and_remaps() -> None:
+    table = _ingest(_b0_rows())
+    ds = build_dataset(table)
+    grid = [(300.0, 3), (300.0, 5), (150.0, 3)]
+    cached = noise_labels_for_grid(ds, grid)
+    assert cached == [run_noise_baseline(ds, eps, mp) for eps, mp in grid]
+
+    rows = [int(r) for r in ds.source_rows]
+    mapping = {r: r + 1000 for r in rows}
+    shifted = with_source_rows(ds, mapping)
+    assert [int(r) for r in shifted.source_rows] == [r + 1000 for r in rows]
+    remapped = remap_noise_labels(cached[0], mapping)
+    assert remapped.noise_rows == frozenset(r + 1000 for r in cached[0].noise_rows)
+    assert len(remapped.analyzed_rows) == len(rows)
+    provider = CachedGraphProvider(
+        BallTreeNeighborhoodProvider(
+            ds, STDBSCANConfig(300.0, 900.0, 3)
+        ).build_neighborhood_graph(),
+        "cached",
+        1.5,
+    )
+    assert provider.provider_name == "cached" and provider.build_time_seconds == 1.5
+    assert provider.num_points == ds.num_points
+    assert 0 in provider.query_neighbors(0)
+
+
+# ================================================================ v1.2 eligible-context (D19)
+def test_eligible_rows_and_eligible_context_windows() -> None:
+    rows = _long_track() + _track(OTHER, 40, 60.0, 0.2, 0.0, lat0=33.8)  # second vessel is slow
+    table = _ingest(rows)
+    good = eligible_rows(table)
+    obs = prepare_observations(table)
+    long_rows = {int(s) for s, m in zip(obs.source_row, obs.mmsi, strict=True) if m == LONG}
+    slow_rows = {int(s) for s, m in zip(obs.source_row, obs.mmsi, strict=True) if m == OTHER}
+    assert long_rows <= good and not (slow_rows & good)
+
+    r = extract_features(table, outages=[])
+    ctx = eligible_context_windows(r.windows, {}, good)
+    by_vessel = dict(zip(r.windows.column("mmsi").to_pylist(), ctx.tolist(), strict=False))
+    assert by_vessel[LONG] is True and by_vessel[OTHER] is False
+
+    d = perturb_dataset(table, PerturbationConfig("A1", 20.0), [LONG], seed=1000)
+    rp = extract_features(d.table, outages=[])
+    labels, _ = label_windows(rp.windows, d.new_to_original, d.injections, frozenset())
+    ctx_p = eligible_context_windows(rp.windows, d.new_to_original, good)
+    assert ctx_p[labels == LABEL_POSITIVE].all()  # every positive is eligible-context

@@ -25,7 +25,7 @@ import hashlib
 import json
 import math
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -519,6 +519,43 @@ def _far_enough(plan: InjectionPlan, taken: list[tuple[float, float]]) -> bool:
     )
 
 
+def observation_eligibility(
+    table: pa.Table, obs: Observations, outages: list[tuple[float, float]]
+) -> BoolArr:
+    """Per-observation injection conditions (ML-03 4.1 item 2), aligned with ``obs``.
+
+    SOG >= 1.5 kt, no pre-existing quality flag other than ``MISSING_*``, outside every feed-wide
+    outage window. Shared by injection placement and the v1.2 eligible-context population (D19),
+    so both use exactly the same rule.
+    """
+    good = _clean_flags_ok(table, obs.source_row) & (obs.sog >= ELIGIBILITY_MIN_SOG_KT)
+    return np.asarray(good & ~_inside_outage(obs.timestamp_s, outages), dtype=bool)
+
+
+def eligible_rows(clean_table: pa.Table) -> frozenset[int]:
+    """Original source rows of a **clean** day meeting the per-observation injection conditions."""
+    obs = prepare_observations(clean_table)
+    good = observation_eligibility(clean_table, obs, detect_outage_windows(obs.timestamp_s))
+    return frozenset(int(s) for s in obs.source_row[good])
+
+
+def eligible_context_windows(
+    windows: pa.Table, new_to_original: Mapping[int, int], eligible: frozenset[int]
+) -> BoolArr:
+    """ML-03 v1.2 D19 primary population: every observation of the window is eligible.
+
+    Window source rows are mapped to the clean day's original rows (identity when no mapping is
+    given), and judged with the clean data's eligibility (:func:`eligible_rows`).
+    """
+    return np.asarray(
+        [
+            bool(rows) and all(new_to_original.get(int(r), int(r)) in eligible for r in rows)
+            for rows in windows.column("source_rows").to_pylist()
+        ],
+        dtype=bool,
+    )
+
+
 def plan_injections(
     config: PerturbationConfig, table: pa.Table, vessels: Iterable[str], seed: int
 ) -> tuple[list[InjectionPlan], int, Observations]:
@@ -527,8 +564,7 @@ def plan_injections(
     segments = assign_segments(obs)
     outages = detect_outage_windows(obs.timestamp_s)
     allowed = set(vessels)
-    good = _clean_flags_ok(table, obs.source_row) & (obs.sog >= ELIGIBILITY_MIN_SOG_KT)
-    good &= ~_inside_outage(obs.timestamp_s, outages)
+    good = observation_eligibility(table, obs, outages)
 
     rng = np.random.default_rng(seed)
     chosen: list[InjectionPlan] = []
@@ -714,3 +750,183 @@ def label_windows(
         elif hit:
             labels[w] = LABEL_POSITIVE
     return labels, by_injection
+
+
+# ======================================================================= metrics (ML-03 section 6)
+# All methods are evaluated on the same windows. A window a method does not score (NaN, e.g. M1/M2
+# on a non-moving window or R1 with no factor feature) is treated as "no alert" by giving it the
+# score UNSCORED_VALUE, which is below every real score in [0, 1]. Unknown labels are excluded.
+
+UNSCORED_VALUE: float = -1.0
+
+
+def known_mask(labels: Int8Arr) -> BoolArr:
+    return np.asarray(labels != LABEL_UNKNOWN, dtype=bool)
+
+
+def _filled(scores: FloatArr) -> FloatArr:
+    return np.where(np.isfinite(scores), scores, UNSCORED_VALUE)
+
+
+def pr_auc(labels: Int8Arr, scores: FloatArr) -> float:
+    """Average precision on known windows; NaN if there is no positive or no negative."""
+    from sklearn.metrics import average_precision_score
+
+    k = known_mask(labels)
+    y = labels[k] == LABEL_POSITIVE
+    if y.all() or not y.any():
+        return math.nan
+    return float(average_precision_score(y, _filled(scores[k])))
+
+
+def roc_auc(labels: Int8Arr, scores: FloatArr) -> float:
+    from sklearn.metrics import roc_auc_score
+
+    k = known_mask(labels)
+    y = labels[k] == LABEL_POSITIVE
+    if y.all() or not y.any():
+        return math.nan
+    return float(roc_auc_score(y, _filled(scores[k])))
+
+
+@dataclass(frozen=True)
+class ConfusionAt:
+    """Confusion counts and P/R/F1 at a fixed threshold (alert = score >= threshold)."""
+
+    threshold: float
+    tp: int
+    fp: int
+    fn: int
+    tn: int
+
+    @property
+    def precision(self) -> float:
+        return self.tp / (self.tp + self.fp) if self.tp + self.fp else math.nan
+
+    @property
+    def recall(self) -> float:
+        return self.tp / (self.tp + self.fn) if self.tp + self.fn else math.nan
+
+    @property
+    def f1(self) -> float:
+        denom = 2 * self.tp + self.fp + self.fn
+        return 2 * self.tp / denom if denom else math.nan
+
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "threshold": self.threshold,
+            "tp": self.tp,
+            "fp": self.fp,
+            "fn": self.fn,
+            "tn": self.tn,
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+        }
+
+
+def alerts(scores: FloatArr, threshold: float) -> BoolArr:
+    return np.asarray(_filled(scores) >= threshold, dtype=bool)
+
+
+def confusion_at(labels: Int8Arr, scores: FloatArr, threshold: float) -> ConfusionAt:
+    k = known_mask(labels)
+    y = labels[k] == LABEL_POSITIVE
+    a = alerts(scores[k], threshold)
+    return ConfusionAt(
+        threshold,
+        int((a & y).sum()),
+        int((a & ~y).sum()),
+        int((~a & y).sum()),
+        int((~a & ~y).sum()),
+    )
+
+
+def best_f1_threshold(labels: Int8Arr, scores: FloatArr) -> ConfusionAt:
+    """Threshold maximising F1 on known windows (ML-03 section 6.3; used on DEV-val only).
+
+    Candidate thresholds are the distinct real scores of known windows; ties in F1 are broken by
+    the higher threshold (fewer alerts). Unscored windows can never be alerted.
+    """
+    k = known_mask(labels)
+    s = _filled(scores[k])
+    y = labels[k] == LABEL_POSITIVE
+    candidates = np.unique(s[s > UNSCORED_VALUE])
+    if candidates.size == 0 or not y.any():
+        return ConfusionAt(math.inf, 0, 0, int(y.sum()), int((~y).sum()))
+    order = np.argsort(-s, kind="stable")
+    s_sorted, y_sorted = s[order], y[order]
+    tp_cum = np.cumsum(y_sorted)
+    fp_cum = np.cumsum(~y_sorted)
+    best: ConfusionAt | None = None
+    n_pos, n_neg = int(y.sum()), int((~y).sum())
+    for thr in candidates[::-1]:  # high -> low, so the first maximum is the highest threshold
+        n_alert = int(np.searchsorted(-s_sorted, -thr, side="right"))
+        tp = int(tp_cum[n_alert - 1]) if n_alert else 0
+        fp = int(fp_cum[n_alert - 1]) if n_alert else 0
+        cand = ConfusionAt(float(thr), tp, fp, n_pos - tp, n_neg - fp)
+        if best is None or cand.f1 > best.f1:
+            best = cand
+    assert best is not None
+    return best
+
+
+def event_recall(
+    by_injection: Mapping[str, Sequence[int]], labels: Int8Arr, alert: BoolArr
+) -> tuple[int, int]:
+    """(detected, scorable) injections: detected if any of its known windows is alerted.
+
+    An injection whose windows are all unknown (masked) or that has no window is not scorable.
+    """
+    detected = scorable = 0
+    for windows in by_injection.values():
+        known = [w for w in windows if labels[w] != LABEL_UNKNOWN]
+        if not known:
+            continue
+        scorable += 1
+        detected += int(any(alert[w] for w in known))
+    return detected, scorable
+
+
+def attribution_accuracy(
+    labels: Int8Arr, alert: BoolArr, primary: Sequence[str | None], kind: str
+) -> tuple[int, int]:
+    """(correct, true positives): TP windows whose primary factor is expected for ``kind``."""
+    expected = EXPECTED_FACTORS[kind]
+    tp = np.flatnonzero((labels == LABEL_POSITIVE) & alert)
+    return sum(primary[int(w)] in expected for w in tp), int(tp.size)
+
+
+def cluster_bootstrap(
+    groups: Sequence[str],
+    statistic: Callable[[IntArr], float],
+    n_boot: int = 2000,
+    seed: int = 42,
+) -> FloatArr:
+    """Cluster (vessel) bootstrap distribution of ``statistic`` (ML-03 section 8).
+
+    Each replicate resamples the distinct group ids with replacement and passes the concatenated
+    row indices of the chosen groups (repeats included) to ``statistic``.
+    """
+    ids = np.asarray(groups, dtype=object)
+    uniq, inverse = np.unique(ids, return_inverse=True)
+    rows_of = [np.flatnonzero(inverse == g) for g in range(uniq.size)]
+    rng = np.random.default_rng(seed)
+    out = np.empty(n_boot, dtype=np.float64)
+    for b in range(n_boot):
+        pick = rng.integers(0, uniq.size, size=uniq.size)
+        out[b] = statistic(np.concatenate([rows_of[int(g)] for g in pick]))
+    return out
+
+
+def merge_incidents(starts: Sequence[float], ends: Sequence[float]) -> int:
+    """Number of incidents after merging overlapping flagged windows of one vessel (ML-03 6.4)."""
+    spans = sorted(zip(starts, ends, strict=True))
+    count, current_end = 0, -math.inf
+    for s, e in spans:
+        if s >= current_end:
+            count += 1
+            current_end = e
+        else:
+            current_end = max(current_end, e)
+    return count
