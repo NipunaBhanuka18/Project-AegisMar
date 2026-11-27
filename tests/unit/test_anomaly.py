@@ -1,4 +1,5 @@
-"""Unit tests for Track B features (ML-02 v1.0) and the D0 vessel partition (ML-03 v1.0).
+"""Unit tests for Track B features (ML-02 v1.0), the vessel partition and the perturbation
+harness (ML-03 v1.1).
 
 Synthetic trajectories are passed through the production ingestion cleaner
 (``process_and_clean_observations``) so that pair pointers, elapsed time, distance and implied
@@ -20,12 +21,38 @@ import pyarrow.parquet as pq
 import pytest
 
 from aegismar.anomaly.evaluation import (
+    DRIFT_RUN_LENGTH,
+    ELIGIBILITY_MIN_SOG_KT,
+    HEADLINE_CONFIGS,
+    INJECTION_MIN_SPACING_S,
+    LABEL_NEGATIVE,
+    LABEL_POSITIVE,
+    LABEL_UNKNOWN,
     MERGED_GROUP,
+    SWEEP_CONFIGS,
     TEST_DAYS,
+    PerturbationConfig,
     TestDayFirewallError,
     _as_utc,
+    alerts,
+    attribution_accuracy,
+    best_f1_threshold,
+    canonical_to_raw_rows,
     check_test_day_firewall,
+    cluster_bootstrap,
+    confusion_at,
     dataset_days,
+    eligible_context_windows,
+    eligible_rows,
+    event_recall,
+    label_windows,
+    merge_incidents,
+    perturb_dataset,
+    plan_injections,
+    pr_auc,
+    preexisting_flagged_rows,
+    rederive,
+    roc_auc,
     split_vessels,
     vessel_attributes,
     vessel_group,
@@ -49,6 +76,31 @@ from aegismar.anomaly.features import (
     sangdiff,
     window_starts,
 )
+from aegismar.anomaly.models import (
+    B0_GRID,
+    MODEL_FEATURES,
+    CachedGraphProvider,
+    NoiseLabels,
+    WindowModel,
+    b0_window_scores,
+    build_dataset,
+    clustering_inputs_equal,
+    design_matrix,
+    grid_points,
+    noise_labels_for_grid,
+    remap_noise_labels,
+    run_noise_baseline,
+    with_source_rows,
+)
+from aegismar.anomaly.rules import (
+    FACTOR_FEATURES,
+    FACTOR_NAMES,
+    RuleScorer,
+    ecdf,
+    primary_factor_from_groups,
+)
+from aegismar.clustering.balltree_neighbors import BallTreeNeighborhoodProvider
+from aegismar.clustering.config import STDBSCANConfig
 from aegismar.ingestion.cleaner import process_and_clean_observations
 from aegismar.ingestion.schema import get_canonical_arrow_schema
 from aegismar.ingestion.storage import canonical_pings_to_arrow_table
@@ -56,7 +108,7 @@ from aegismar.spatial.haversine import haversine_distance_meters
 
 T0 = datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC)
 NM = 1852.0
-D0_PARQUET = Path("data/processed/lalb_20250101/cleaned_ais.parquet")
+D0_PARQUET = Path("data/processed/lalb_20250101_v1_1/cleaned_ais.parquet")
 
 
 # --------------------------------------------------------------------------- helpers
@@ -662,3 +714,444 @@ def test_timestamp_statistic_conversion() -> None:
     assert _as_utc(datetime(2025, 1, 14, 5)) == datetime(2025, 1, 14, 5, tzinfo=UTC)
     with pytest.raises(TypeError):
         _as_utc("2025-01-14")
+
+
+# ============================================================== multi-day partition (D16)
+def test_split_is_joint_over_days_and_vessel_grouped() -> None:
+    day1 = _ingest(_partition_rows())
+    shifted = [
+        dict(r, timestamp_utc=r["timestamp_utc"] + timedelta(days=7)) for r in _partition_rows()
+    ]
+    shifted += _track("366000199", 3, 60.0, 9.0, 0.0, start_s=7 * 86400.0, lat0=33.8)
+    day2 = _ingest(shifted)
+    p = split_vessels([day1, day2])
+    assert len(p.train) + len(p.val) == 33
+    assert set(p.train).isdisjoint(p.val)
+    assert split_vessels([day2, day1]).partition_hash == p.partition_hash  # day order irrelevant
+
+
+def test_vessel_attributes_pool_days() -> None:
+    m = "366000031"
+    day1 = _ingest([_row(m, 0.0, 33.6, -118.2, sog=0.0, cog=0.0, vessel_type=None)])
+    day2 = _ingest([_row(m, 7 * 86400.0, 33.6, -118.2, sog=3.0, cog=0.0, vessel_type=52)])
+    assert vessel_attributes([day1, day2]) == {m: ("tug_towing", True)}
+
+
+def test_expected_intervals_pool_days() -> None:
+    a = prepare_observations(_ingest(_track("366000032", 4, 60.0, 10.0, 0.0)))
+    b = prepare_observations(_ingest(_track("366000032", 4, 90.0, 10.0, 0.0, start_s=7 * 86400.0)))
+    assert fit_expected_intervals([a, b], ["366000032"]) == {("A", "moving"): 75.0}
+
+
+# =========================================================================== perturbation harness
+LONG = "366000050"
+OTHER = "366000051"
+
+
+def _long_track() -> list[dict[str, Any]]:
+    return _track(LONG, 240, 60.0, 10.0, 0.0, heading=0.0)  # 4 h at a 60 s cadence
+
+
+def _by_original(d: Any) -> dict[int, dict[str, Any]]:
+    return {d.new_to_original[r["source_row"]]: r for r in d.table.to_pylist()}
+
+
+def test_configs_match_protocol_v1_1() -> None:
+    assert [c.label for c in HEADLINE_CONFIGS] == ["A1_20kt", "A2_20kt", "B_85deg", "C2_60min_1nm"]
+    gaps = sorted({c.magnitude for c in SWEEP_CONFIGS if c.kind in ("C1", "C2")})
+    assert gaps == [30.0, 60.0]  # D18: 120 min removed
+    assert len(SWEEP_CONFIGS) == 20
+    assert ELIGIBILITY_MIN_SOG_KT == 1.5  # D17
+    with pytest.raises(ValueError, match="unknown"):
+        PerturbationConfig("Z", 1.0)
+    with pytest.raises(ValueError, match="positive"):
+        PerturbationConfig("A1", 0.0)
+    with pytest.raises(ValueError, match="displacement"):
+        PerturbationConfig("C1", 30.0, 1.0)
+
+
+def test_rederive_without_perturbation_reproduces_derived_columns() -> None:
+    table = _ingest(_long_track() + _track(OTHER, 50, 60.0, 0.0, 0.0, lat0=33.7))
+    raw, order = canonical_to_raw_rows(table)
+    again, new_to_orig = rederive(raw, order)
+    orig = {r["source_row"]: r for r in table.to_pylist()}
+    cols = ("latitude", "longitude", "sog", "elapsed_seconds", "distance_nm", "implied_speed_knots")
+    for r in again.to_pylist():
+        o = orig[new_to_orig[r["source_row"]]]
+        prev = None if r["prev_source_row"] is None else new_to_orig[r["prev_source_row"]]
+        assert prev == o["prev_source_row"]
+        for c in cols:
+            assert r[c] == o[c]
+
+
+def test_a1_spikes_reported_speed_only() -> None:
+    table = _ingest(_long_track())
+    d = perturb_dataset(table, PerturbationConfig("A1", 20.0), [LONG], seed=1000)
+    assert len(d.injections) >= 2  # D17: several injections per segment
+    clean = {r["source_row"]: r for r in table.to_pylist()}
+    targets = {s for inj in d.injections for s in inj.label_source_rows}
+    for s, r in _by_original(d).items():
+        expected = clean[s]["sog"] + 20.0 if s in targets else clean[s]["sog"]
+        assert r["sog"] == pytest.approx(expected)
+        assert (r["latitude"], r["longitude"]) == (clean[s]["latitude"], clean[s]["longitude"])
+
+
+def test_injections_are_spaced_and_deterministic() -> None:
+    table = _ingest(_long_track())
+    cfg = PerturbationConfig("A1", 10.0)
+    a = perturb_dataset(table, cfg, [LONG], seed=1000)
+    b = perturb_dataset(table, cfg, [LONG], seed=1000)
+    assert [i.to_dict() for i in a.injections] == [i.to_dict() for i in b.injections]
+    starts = sorted(datetime.fromisoformat(i.span_start_utc).timestamp() for i in a.injections)
+    gaps = [y - x for x, y in zip(starts, starts[1:], strict=False)]
+    assert all(g >= INJECTION_MIN_SPACING_S for g in gaps)
+    assert a.manifest()["n_injections"] == len(a.injections)
+    assert perturb_dataset(table, cfg, [OTHER], seed=1000).injections == ()
+
+
+def test_a2_moves_position_along_course() -> None:
+    table = _ingest(_long_track())
+    d = perturb_dataset(table, PerturbationConfig("A2", 20.0), [LONG], seed=1001)
+    clean = {r["source_row"]: r for r in table.to_pylist()}
+    moved_rows = _by_original(d)
+    assert d.injections
+    for inj in d.injections:
+        (s,) = inj.label_source_rows
+        a, b = clean[s], moved_rows[s]
+        moved = haversine_distance_meters(
+            a["latitude"], a["longitude"], b["latitude"], b["longitude"]
+        )
+        assert moved == pytest.approx(20.0 * 60.0 / 3600.0 * NM, rel=1e-9)
+        assert b["latitude"] > a["latitude"]  # COG 0 -> moved north
+        assert inj.parameters["shift_nm"] == pytest.approx(20.0 * 60.0 / 3600.0)
+
+
+def test_b_sets_heading_off_course_for_k_observations() -> None:
+    table = _ingest(_long_track())
+    d = perturb_dataset(table, PerturbationConfig("B", 85.0), [LONG], seed=1002)
+    rows = _by_original(d)
+    assert d.injections
+    for inj in d.injections:
+        assert len(inj.label_source_rows) == DRIFT_RUN_LENGTH
+        expected = 85.0 if inj.parameters["sign"] > 0 else 275.0
+        assert all(rows[s]["heading"] == expected for s in inj.label_source_rows)
+
+
+def test_b_requires_heading() -> None:
+    table = _ingest(_track(LONG, 240, 60.0, 10.0, 0.0, heading=None))
+    assert perturb_dataset(table, PerturbationConfig("B", 85.0), [LONG], seed=1000).injections == ()
+
+
+def test_c1_removes_gap_and_c2_displaces_reappearance() -> None:
+    table = _ingest(_long_track())
+    c1 = perturb_dataset(table, PerturbationConfig("C1", 30.0), [LONG], seed=1000)
+    assert c1.injections
+    assert all(len(i.removed_source_rows) == 31 for i in c1.injections)  # 30 min at 60 s, inclusive
+    removed = sum(len(i.removed_source_rows) for i in c1.injections)
+    assert c1.table.num_rows == table.num_rows - removed
+
+    c2 = perturb_dataset(table, PerturbationConfig("C2", 30.0, 1.0), [LONG], seed=1000)
+    clean = {r["source_row"]: r for r in table.to_pylist()}
+    rows = _by_original(c2)
+    inj = c2.injections[0]
+    (label,) = inj.label_source_rows
+    assert label in inj.modified_source_rows
+    a, b = clean[label], rows[label]
+    moved = haversine_distance_meters(a["latitude"], a["longitude"], b["latitude"], b["longitude"])
+    assert moved == pytest.approx(NM, rel=1e-9)
+    r = extract_features(c2.table, outages=[])
+    new_row = next(k for k, v in c2.new_to_original.items() if v == label)
+    i = int(np.flatnonzero(r.observations.source_row == new_row)[0])
+    assert r.pair_features["dr_error_nm"][i] == pytest.approx(1.0, rel=1e-3)
+
+
+def test_c_requires_observations_after_reappearance() -> None:
+    # 33 obs at 60 s: under v1.0 the only C1-30 site is t0 = 1 min with reappearance at 32 min,
+    # which is the last observation, so no window could ever contain it. D17 rejects it.
+    table = _ingest(_track(LONG, 33, 60.0, 10.0, 0.0))
+    cfg = PerturbationConfig("C1", 30.0)
+    assert perturb_dataset(table, cfg, [LONG], seed=1000).injections == ()
+    longer = _ingest(_track(LONG, 35, 60.0, 10.0, 0.0))  # two more observations -> scorable
+    assert perturb_dataset(longer, cfg, [LONG], seed=1000).injections != ()
+
+
+def test_eligibility_excludes_slow_flagged_and_outage_regions() -> None:
+    slow = _ingest(_track(LONG, 240, 60.0, 1.4, 0.0))  # below the 1.5 kt guard
+    assert perturb_dataset(slow, PerturbationConfig("A1", 20.0), [LONG], seed=1000).injections == ()
+
+    rows = _long_track()
+    for k in range(0, 240, 20):  # a pre-existing implied-speed violation every 20 min
+        rows[k] = dict(rows[k], latitude=rows[k]["latitude"] + 0.5)
+    flagged = _ingest(rows)
+    cfg = PerturbationConfig("A1", 20.0)
+    assert perturb_dataset(flagged, cfg, [LONG], seed=1000).injections == ()
+
+    gappy = _ingest([r for k, r in enumerate(_long_track()) if k % 40 != 20])  # 120 s silences
+    plans, _, _ = plan_injections(cfg, gappy, [LONG], seed=1000)
+    assert plans == []  # every +/-30 min region meets a feed-wide silence (single vessel)
+
+
+def test_label_windows_positive_negative_and_masked() -> None:
+    table = _ingest(_long_track())
+    d = perturb_dataset(table, PerturbationConfig("A1", 20.0), [LONG], seed=1000)
+    r = extract_features(d.table, outages=[])
+    labels, by_inj = label_windows(r.windows, d.new_to_original, d.injections, frozenset())
+    assert set(labels.tolist()) == {LABEL_POSITIVE, LABEL_NEGATIVE}
+    for inj in d.injections:
+        assert by_inj[inj.injection_id]
+        assert all(labels[w] == LABEL_POSITIVE for w in by_inj[inj.injection_id])
+
+    first = d.injections[0]
+    masked, _ = label_windows(
+        r.windows, d.new_to_original, d.injections, frozenset(first.label_source_rows)
+    )
+    assert all(masked[w] == LABEL_UNKNOWN for w in by_inj[first.injection_id])
+
+
+def test_preexisting_flagged_rows() -> None:
+    rows = _long_track()
+    rows[10] = dict(rows[10], latitude=rows[10]["latitude"] + 0.5)
+    assert len(preexisting_flagged_rows(_ingest(rows))) >= 1
+    assert preexisting_flagged_rows(_ingest(_long_track())) == frozenset()
+
+
+# =========================================================================== R1 rule scorer
+def _windows(rows: list[dict[str, Any]]) -> pa.Table:
+    cols = ("motion_state", *FACTOR_FEATURES)
+    data: dict[str, list[Any]] = {c: [r.get(c) for r in rows] for c in cols}
+    data["source_rows"] = [r.get("source_rows", []) for r in rows]
+    return pa.table(
+        {
+            "motion_state": pa.array(data["motion_state"], pa.string()),
+            **{c: pa.array(data[c], pa.float64()) for c in FACTOR_FEATURES},
+            "source_rows": pa.array(data["source_rows"], pa.list_(pa.int64())),
+        }
+    )
+
+
+def test_ecdf_is_right_continuous_and_keeps_nan() -> None:
+    ref = np.array([1.0, 2.0, 3.0, 4.0])
+    out = ecdf(ref, np.array([0.0, 1.0, 2.5, 4.0, 10.0, np.nan]))
+    np.testing.assert_allclose(out[:5], [0.0, 0.25, 0.5, 1.0, 1.0])
+    assert np.isnan(out[5])
+    assert np.isnan(ecdf(np.array([]), np.array([1.0]))[0])
+
+
+def test_rule_scorer_max_composite_and_primary_factor() -> None:
+    train = _windows(
+        [
+            {"motion_state": "moving", "max_abs_delta_sog_kt": v, "max_gap_ratio": v}
+            for v in range(1, 5)
+        ]
+    )
+    r1 = RuleScorer().fit(train)
+    assert r1.calibration_sizes()["moving"]["max_abs_delta_sog_kt"] == 4
+    test = _windows(
+        [
+            {"motion_state": "moving", "max_abs_delta_sog_kt": 4.0, "max_gap_ratio": 1.0},
+            {"motion_state": "moving", "max_abs_delta_sog_kt": 1.0, "max_gap_ratio": 3.0},
+            {"motion_state": "moving"},  # no factor feature -> not scored
+            {"motion_state": "stationary", "max_gap_ratio": 9.0},  # no stationary calibration
+        ]
+    )
+    s = r1.score(test)
+    np.testing.assert_allclose(s.composite[:2], [1.0, 0.75])
+    np.testing.assert_allclose(s.linear[:2], [(1.0 + 0.25) / 2, (0.25 + 0.75) / 2])
+    assert s.primary_factor[:2] == ("SPEED_DISCONTINUITY", "REPORTING_GAP")
+    assert np.isnan(s.composite[2]) and s.primary_factor[2] is None
+    assert np.isnan(s.composite[3])  # state without training windows
+    assert set(s.group_scores) == set(FACTOR_NAMES)
+
+
+def test_rule_scorer_ties_follow_protocol_order_and_requires_fit() -> None:
+    train = _windows([{"motion_state": "moving", "max_abs_rot_deg_s": 1.0, "tortuosity": 1.0}])
+    s = (
+        RuleScorer()
+        .fit(train)
+        .score(_windows([{"motion_state": "moving", "max_abs_rot_deg_s": 5.0, "tortuosity": 5.0}]))
+    )
+    assert s.primary_factor == ("COURSE_CHANGE",)  # listed before TRAJECTORY_SHAPE
+    with pytest.raises(RuntimeError):
+        RuleScorer().score(train)
+    with pytest.raises(ValueError):
+        RuleScorer().fit(train.slice(0, 0))
+    groups = {name: np.array([np.nan, 0.2]) for name in FACTOR_NAMES}
+    groups["LATERAL_DRIFT"] = np.array([np.nan, 0.9])
+    assert primary_factor_from_groups(groups) == (None, "LATERAL_DRIFT")
+
+
+# =========================================================================== M1 / M2
+def _model_windows(n: int, outlier: bool, seed: int) -> pa.Table:
+    rng = np.random.default_rng(seed)
+    rows: list[dict[str, Any]] = []
+    for k in range(n):
+        row: dict[str, Any] = {"motion_state": "moving"}
+        for c in MODEL_FEATURES:
+            row[c] = float(rng.normal(1.0, 0.1))
+        if k % 3 == 0:
+            row["p90_lateral_drift_deg"] = None  # heading often missing
+        rows.append(row)
+    rows.append({"motion_state": "stationary", "max_gap_ratio": 1.0})
+    if outlier:
+        rows.append({"motion_state": "moving", **dict.fromkeys(MODEL_FEATURES, 25.0)})
+    return _windows(rows)
+
+
+@pytest.mark.parametrize("kind", ["isolation_forest", "lof"])
+def test_window_models_rank_outlier_highest(kind: str) -> None:
+    model = WindowModel(kind).fit(_model_windows(120, outlier=False, seed=1))
+    test = _model_windows(40, outlier=True, seed=2)
+    idx = model.score(test)
+    assert np.isnan(idx[40])  # stationary window is not scored
+    finite = idx[np.isfinite(idx)]
+    assert ((finite >= 0) & (finite <= 1)).all()
+    assert idx[41] == 1.0 and idx[41] == np.nanmax(idx)
+    np.testing.assert_array_equal(
+        idx, WindowModel(kind).fit(_model_windows(120, False, 1)).score(test)
+    )
+
+
+def test_window_model_validation() -> None:
+    with pytest.raises(ValueError, match="unknown"):
+        WindowModel("svm")
+    with pytest.raises(ValueError, match="moving training windows"):
+        WindowModel("lof").fit(_model_windows(10, outlier=False, seed=1))
+    with pytest.raises(RuntimeError):
+        WindowModel("isolation_forest").raw_scores(_model_windows(5, outlier=False, seed=1))
+    x, moving = design_matrix(_model_windows(3, outlier=False, seed=1))
+    assert x.shape == (4, len(MODEL_FEATURES)) and moving.tolist() == [True, True, True, False]
+
+
+# =========================================================================== B0
+def _b0_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for v in range(4):  # four vessels moored together -> dense cluster
+        rows += _track(f"36600070{v}", 20, 60.0, 0.0, 0.0, lat0=33.70 + 0.0001 * v)
+    rows += _track("366000799", 20, 60.0, 12.0, 90.0, lat0=33.55, lon0=-118.35)  # lone transit
+    return rows
+
+
+def test_b0_noise_fraction_per_window() -> None:
+    table = _ingest(_b0_rows())
+    labels = run_noise_baseline(build_dataset(table), 300.0, 5)
+    assert labels.eps_spatial_m == 300.0 and labels.min_samples == 5
+    r = extract_features(table, outages=[])
+    scores = b0_window_scores(r.windows, labels)
+    by_vessel = dict(zip(r.windows.column("mmsi").to_pylist(), scores.tolist(), strict=False))
+    assert by_vessel["366000799"] == 1.0  # isolated transit is all noise
+    assert by_vessel["366000700"] == 0.0  # moored group is clustered
+    empty = NoiseLabels(300.0, 5, frozenset(), frozenset())
+    assert np.isnan(b0_window_scores(r.windows, empty)).all()
+    assert len(B0_GRID) == 9 and grid_points()[0] == "eps150m_minpts3"
+
+
+def test_b0_clean_result_reusable_only_when_inputs_identical() -> None:
+    table = _ingest(_long_track())
+    clean = build_dataset(table)
+    a1 = perturb_dataset(table, PerturbationConfig("A1", 20.0), [LONG], seed=1000)
+    a2 = perturb_dataset(table, PerturbationConfig("A2", 20.0), [LONG], seed=1000)
+    assert clustering_inputs_equal(clean, build_dataset(a1.table))  # SOG is not a clustering input
+    assert not clustering_inputs_equal(clean, build_dataset(a2.table))  # positions moved
+    assert len(noise_labels_for_grid(clean, [(300.0, 3)])) == 1
+
+
+# =========================================================================== stage 3 metrics
+def _lab(*values: int) -> np.ndarray[Any, np.dtype[np.int8]]:
+    return np.asarray(values, dtype=np.int8)
+
+
+def test_pr_auc_and_roc_auc_skip_unknown_and_treat_nan_as_no_alert() -> None:
+    labels = _lab(1, 0, 0, -1, 1)
+    perfect = np.array([0.9, 0.1, 0.2, 0.99, 0.8])
+    assert pr_auc(labels, perfect) == pytest.approx(1.0)
+    assert roc_auc(labels, perfect) == pytest.approx(1.0)
+    unscored_positive = np.array([np.nan, 0.1, 0.2, 0.0, 0.8])  # NaN ranks below every score
+    assert roc_auc(labels, unscored_positive) == pytest.approx(0.5)
+    assert np.isnan(pr_auc(_lab(0, 0), np.array([0.1, 0.2])))
+    assert np.isnan(roc_auc(_lab(1, 1), np.array([0.1, 0.2])))
+
+
+def test_best_f1_threshold_and_confusion() -> None:
+    labels = _lab(1, 1, 0, 0, 0, -1)
+    scores = np.array([0.9, 0.6, 0.7, 0.2, np.nan, 1.0])
+    best = best_f1_threshold(labels, scores)
+    assert best.threshold == pytest.approx(0.6)
+    assert (best.tp, best.fp, best.fn, best.tn) == (2, 1, 0, 2)
+    assert best.f1 == pytest.approx(0.8)
+    c = confusion_at(labels, scores, 0.8)
+    assert (c.tp, c.fp, c.fn, c.tn) == (1, 0, 1, 3)
+    assert c.precision == 1.0 and c.recall == 0.5
+    assert c.to_dict()["f1"] == pytest.approx(2 / 3)
+    assert alerts(np.array([np.nan, 0.5]), 0.0).tolist() == [False, True]
+    none = best_f1_threshold(_lab(0, 0), np.array([np.nan, np.nan]))
+    assert none.threshold == math.inf and np.isnan(none.precision)
+
+
+def test_event_recall_attribution_bootstrap_and_incidents() -> None:
+    labels = _lab(1, 1, 0, -1)
+    alert = np.array([False, True, False, True])
+    by_inj = {"a": [0], "b": [1], "masked": [3], "none": []}
+    assert event_recall(by_inj, labels, alert) == (1, 2)
+    primary: list[str | None] = ["LATERAL_DRIFT", "REPORTING_GAP", None, None]
+    assert attribution_accuracy(labels, np.array([True, True, False, False]), primary, "B") == (
+        1,
+        2,
+    )
+
+    groups = ["v1", "v1", "v2", "v3"]
+    boot = cluster_bootstrap(groups, lambda idx: float(len(idx)), n_boot=50, seed=1)
+    assert boot.shape == (50,) and boot.min() >= 3 and boot.max() <= 6
+    np.testing.assert_array_equal(
+        boot, cluster_bootstrap(groups, lambda idx: float(len(idx)), n_boot=50, seed=1)
+    )
+    assert merge_incidents([0, 600, 5000], [1800, 2400, 6800]) == 2
+    assert merge_incidents([], []) == 0
+
+
+# =========================================================================== stage 3 B0 helpers
+def test_cached_grid_matches_direct_runs_and_remaps() -> None:
+    table = _ingest(_b0_rows())
+    ds = build_dataset(table)
+    grid = [(300.0, 3), (300.0, 5), (150.0, 3)]
+    cached = noise_labels_for_grid(ds, grid)
+    assert cached == [run_noise_baseline(ds, eps, mp) for eps, mp in grid]
+
+    rows = [int(r) for r in ds.source_rows]
+    mapping = {r: r + 1000 for r in rows}
+    shifted = with_source_rows(ds, mapping)
+    assert [int(r) for r in shifted.source_rows] == [r + 1000 for r in rows]
+    remapped = remap_noise_labels(cached[0], mapping)
+    assert remapped.noise_rows == frozenset(r + 1000 for r in cached[0].noise_rows)
+    assert len(remapped.analyzed_rows) == len(rows)
+    provider = CachedGraphProvider(
+        BallTreeNeighborhoodProvider(
+            ds, STDBSCANConfig(300.0, 900.0, 3)
+        ).build_neighborhood_graph(),
+        "cached",
+        1.5,
+    )
+    assert provider.provider_name == "cached" and provider.build_time_seconds == 1.5
+    assert provider.num_points == ds.num_points
+    assert 0 in provider.query_neighbors(0)
+
+
+# ================================================================ v1.2 eligible-context (D19)
+def test_eligible_rows_and_eligible_context_windows() -> None:
+    rows = _long_track() + _track(OTHER, 40, 60.0, 0.2, 0.0, lat0=33.8)  # second vessel is slow
+    table = _ingest(rows)
+    good = eligible_rows(table)
+    obs = prepare_observations(table)
+    long_rows = {int(s) for s, m in zip(obs.source_row, obs.mmsi, strict=True) if m == LONG}
+    slow_rows = {int(s) for s, m in zip(obs.source_row, obs.mmsi, strict=True) if m == OTHER}
+    assert long_rows <= good and not (slow_rows & good)
+
+    r = extract_features(table, outages=[])
+    ctx = eligible_context_windows(r.windows, {}, good)
+    by_vessel = dict(zip(r.windows.column("mmsi").to_pylist(), ctx.tolist(), strict=False))
+    assert by_vessel[LONG] is True and by_vessel[OTHER] is False
+
+    d = perturb_dataset(table, PerturbationConfig("A1", 20.0), [LONG], seed=1000)
+    rp = extract_features(d.table, outages=[])
+    labels, _ = label_windows(rp.windows, d.new_to_original, d.injections, frozenset())
+    ctx_p = eligible_context_windows(rp.windows, d.new_to_original, good)
+    assert ctx_p[labels == LABEL_POSITIVE].all()  # every positive is eligible-context
