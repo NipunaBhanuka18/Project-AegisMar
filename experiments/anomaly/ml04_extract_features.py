@@ -13,7 +13,7 @@ is passed (reserved for the single final evaluation).
 
 Usage:
     uv run python experiments/anomaly/ml04_extract_features.py \
-        --input data/processed/lalb_20250101/cleaned_ais.parquet \
+        --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet \
         --output experiments/outputs/anomaly/ml04_d0_features
 """
 

@@ -1,7 +1,7 @@
 # ML-02: Vessel Trajectory Kinematic Feature Specification
 
 > **Project AegisMar — Track B (Vessel Behavior ML & Anomaly Detection)**
-> **Document Version:** 1.0 (Accepted by Track Lead)
+> **Document Version:** 1.0.1 (Accepted by Track Lead; editorial update 2026-11-25)
 > **Milestone:** ML-02
 > **Track Lead:** Kishakya
 > **Date:** 2026-11-23
@@ -36,7 +36,7 @@ parameters (ML-03).
 
 ## 2. Data-Derived Constraints (ML-01 Findings)
 
-Source dataset: `data/processed/lalb_20250101/cleaned_ais.parquet`, SHA-256
+Source dataset: `data/processed/lalb_20250101_v1_1/cleaned_ais.parquet` (canonical v1.1), SHA-256
 `bdde2581302270a9e2c99a1a7aa1819a0bd1a24fbf6384458cfd8a81229eaf48` (143,124 rows, 362 vessels,
 2025-01-01 00:00:00 → 23:59:57 UTC).
 
@@ -257,11 +257,11 @@ Every case below uses a hand-built synthetic trajectory with a known answer:
 
 ```powershell
 uv run python experiments/anomaly/ml01_profile_dataset.py `
-  --input data/processed/lalb_20250101/cleaned_ais.parquet `
+  --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet `
   --output experiments/outputs/anomaly/ml01_profile
 
 uv run python experiments/anomaly/ml02_drift_breakdown.py `
-  --input data/processed/lalb_20250101/cleaned_ais.parquet `
+  --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet `
   --output experiments/outputs/anomaly/ml02_drift_breakdown
 ```
 
@@ -277,3 +277,4 @@ uv run python experiments/anomaly/ml02_drift_breakdown.py `
 |---|---|---|
 | 0.1 | 2026-11-23 | Initial draft from ML-01 profile and drift breakdown. |
 | 1.0 | 2026-11-23 | Decisions D1–D6 accepted by the Track B lead; specification frozen for ML-03 / ML-04. |
+| 1.0.1 | 2026-11-25 | Editorial only: dataset path updated to the canonical v1.1 folder `lalb_20250101_v1_1/`. The SHA-256, all evidence numbers and all decisions are unchanged. |

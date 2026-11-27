@@ -11,7 +11,7 @@ never paired.
 
 Usage:
     uv run python experiments/anomaly/ml01_profile_dataset.py \
-        --input data/processed/lalb_20250101/cleaned_ais.parquet \
+        --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet \
         --output experiments/outputs/anomaly/ml01_profile
 """
 
