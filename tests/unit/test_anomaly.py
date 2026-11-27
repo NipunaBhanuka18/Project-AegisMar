@@ -65,6 +65,26 @@ from aegismar.anomaly.features import (
     sangdiff,
     window_starts,
 )
+from aegismar.anomaly.models import (
+    B0_GRID,
+    MODEL_FEATURES,
+    NoiseLabels,
+    WindowModel,
+    b0_window_scores,
+    build_dataset,
+    clustering_inputs_equal,
+    design_matrix,
+    grid_points,
+    noise_labels_for_grid,
+    run_noise_baseline,
+)
+from aegismar.anomaly.rules import (
+    FACTOR_FEATURES,
+    FACTOR_NAMES,
+    RuleScorer,
+    ecdf,
+    primary_factor_from_groups,
+)
 from aegismar.ingestion.cleaner import process_and_clean_observations
 from aegismar.ingestion.schema import get_canonical_arrow_schema
 from aegismar.ingestion.storage import canonical_pings_to_arrow_table
@@ -877,3 +897,143 @@ def test_preexisting_flagged_rows() -> None:
     rows[10] = dict(rows[10], latitude=rows[10]["latitude"] + 0.5)
     assert len(preexisting_flagged_rows(_ingest(rows))) >= 1
     assert preexisting_flagged_rows(_ingest(_long_track())) == frozenset()
+
+
+# =========================================================================== R1 rule scorer
+def _windows(rows: list[dict[str, Any]]) -> pa.Table:
+    cols = ("motion_state", *FACTOR_FEATURES)
+    data: dict[str, list[Any]] = {c: [r.get(c) for r in rows] for c in cols}
+    data["source_rows"] = [r.get("source_rows", []) for r in rows]
+    return pa.table(
+        {
+            "motion_state": pa.array(data["motion_state"], pa.string()),
+            **{c: pa.array(data[c], pa.float64()) for c in FACTOR_FEATURES},
+            "source_rows": pa.array(data["source_rows"], pa.list_(pa.int64())),
+        }
+    )
+
+
+def test_ecdf_is_right_continuous_and_keeps_nan() -> None:
+    ref = np.array([1.0, 2.0, 3.0, 4.0])
+    out = ecdf(ref, np.array([0.0, 1.0, 2.5, 4.0, 10.0, np.nan]))
+    np.testing.assert_allclose(out[:5], [0.0, 0.25, 0.5, 1.0, 1.0])
+    assert np.isnan(out[5])
+    assert np.isnan(ecdf(np.array([]), np.array([1.0]))[0])
+
+
+def test_rule_scorer_max_composite_and_primary_factor() -> None:
+    train = _windows(
+        [
+            {"motion_state": "moving", "max_abs_delta_sog_kt": v, "max_gap_ratio": v}
+            for v in range(1, 5)
+        ]
+    )
+    r1 = RuleScorer().fit(train)
+    assert r1.calibration_sizes()["moving"]["max_abs_delta_sog_kt"] == 4
+    test = _windows(
+        [
+            {"motion_state": "moving", "max_abs_delta_sog_kt": 4.0, "max_gap_ratio": 1.0},
+            {"motion_state": "moving", "max_abs_delta_sog_kt": 1.0, "max_gap_ratio": 3.0},
+            {"motion_state": "moving"},  # no factor feature -> not scored
+            {"motion_state": "stationary", "max_gap_ratio": 9.0},  # no stationary calibration
+        ]
+    )
+    s = r1.score(test)
+    np.testing.assert_allclose(s.composite[:2], [1.0, 0.75])
+    np.testing.assert_allclose(s.linear[:2], [(1.0 + 0.25) / 2, (0.25 + 0.75) / 2])
+    assert s.primary_factor[:2] == ("SPEED_DISCONTINUITY", "REPORTING_GAP")
+    assert np.isnan(s.composite[2]) and s.primary_factor[2] is None
+    assert np.isnan(s.composite[3])  # state without training windows
+    assert set(s.group_scores) == set(FACTOR_NAMES)
+
+
+def test_rule_scorer_ties_follow_protocol_order_and_requires_fit() -> None:
+    train = _windows([{"motion_state": "moving", "max_abs_rot_deg_s": 1.0, "tortuosity": 1.0}])
+    s = (
+        RuleScorer()
+        .fit(train)
+        .score(_windows([{"motion_state": "moving", "max_abs_rot_deg_s": 5.0, "tortuosity": 5.0}]))
+    )
+    assert s.primary_factor == ("COURSE_CHANGE",)  # listed before TRAJECTORY_SHAPE
+    with pytest.raises(RuntimeError):
+        RuleScorer().score(train)
+    with pytest.raises(ValueError):
+        RuleScorer().fit(train.slice(0, 0))
+    groups = {name: np.array([np.nan, 0.2]) for name in FACTOR_NAMES}
+    groups["LATERAL_DRIFT"] = np.array([np.nan, 0.9])
+    assert primary_factor_from_groups(groups) == (None, "LATERAL_DRIFT")
+
+
+# =========================================================================== M1 / M2
+def _model_windows(n: int, outlier: bool, seed: int) -> pa.Table:
+    rng = np.random.default_rng(seed)
+    rows: list[dict[str, Any]] = []
+    for k in range(n):
+        row: dict[str, Any] = {"motion_state": "moving"}
+        for c in MODEL_FEATURES:
+            row[c] = float(rng.normal(1.0, 0.1))
+        if k % 3 == 0:
+            row["p90_lateral_drift_deg"] = None  # heading often missing
+        rows.append(row)
+    rows.append({"motion_state": "stationary", "max_gap_ratio": 1.0})
+    if outlier:
+        rows.append({"motion_state": "moving", **dict.fromkeys(MODEL_FEATURES, 25.0)})
+    return _windows(rows)
+
+
+@pytest.mark.parametrize("kind", ["isolation_forest", "lof"])
+def test_window_models_rank_outlier_highest(kind: str) -> None:
+    model = WindowModel(kind).fit(_model_windows(120, outlier=False, seed=1))
+    test = _model_windows(40, outlier=True, seed=2)
+    idx = model.score(test)
+    assert np.isnan(idx[40])  # stationary window is not scored
+    finite = idx[np.isfinite(idx)]
+    assert ((finite >= 0) & (finite <= 1)).all()
+    assert idx[41] == 1.0 and idx[41] == np.nanmax(idx)
+    np.testing.assert_array_equal(
+        idx, WindowModel(kind).fit(_model_windows(120, False, 1)).score(test)
+    )
+
+
+def test_window_model_validation() -> None:
+    with pytest.raises(ValueError, match="unknown"):
+        WindowModel("svm")
+    with pytest.raises(ValueError, match="moving training windows"):
+        WindowModel("lof").fit(_model_windows(10, outlier=False, seed=1))
+    with pytest.raises(RuntimeError):
+        WindowModel("isolation_forest").raw_scores(_model_windows(5, outlier=False, seed=1))
+    x, moving = design_matrix(_model_windows(3, outlier=False, seed=1))
+    assert x.shape == (4, len(MODEL_FEATURES)) and moving.tolist() == [True, True, True, False]
+
+
+# =========================================================================== B0
+def _b0_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for v in range(4):  # four vessels moored together -> dense cluster
+        rows += _track(f"36600070{v}", 20, 60.0, 0.0, 0.0, lat0=33.70 + 0.0001 * v)
+    rows += _track("366000799", 20, 60.0, 12.0, 90.0, lat0=33.55, lon0=-118.35)  # lone transit
+    return rows
+
+
+def test_b0_noise_fraction_per_window() -> None:
+    table = _ingest(_b0_rows())
+    labels = run_noise_baseline(build_dataset(table), 300.0, 5)
+    assert labels.eps_spatial_m == 300.0 and labels.min_samples == 5
+    r = extract_features(table, outages=[])
+    scores = b0_window_scores(r.windows, labels)
+    by_vessel = dict(zip(r.windows.column("mmsi").to_pylist(), scores.tolist(), strict=False))
+    assert by_vessel["366000799"] == 1.0  # isolated transit is all noise
+    assert by_vessel["366000700"] == 0.0  # moored group is clustered
+    empty = NoiseLabels(300.0, 5, frozenset(), frozenset())
+    assert np.isnan(b0_window_scores(r.windows, empty)).all()
+    assert len(B0_GRID) == 9 and grid_points()[0] == "eps150m_minpts3"
+
+
+def test_b0_clean_result_reusable_only_when_inputs_identical() -> None:
+    table = _ingest(_long_track())
+    clean = build_dataset(table)
+    a1 = perturb_dataset(table, PerturbationConfig("A1", 20.0), [LONG], seed=1000)
+    a2 = perturb_dataset(table, PerturbationConfig("A2", 20.0), [LONG], seed=1000)
+    assert clustering_inputs_equal(clean, build_dataset(a1.table))  # SOG is not a clustering input
+    assert not clustering_inputs_equal(clean, build_dataset(a2.table))  # positions moved
+    assert len(noise_labels_for_grid(clean, [(300.0, 3)])) == 1
