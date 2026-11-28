@@ -2,7 +2,7 @@
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
-**Document Version:** 2.3  
+**Document Version:** 2.4 (2026-11-28: W3-02A added; W3-02 and ML-04 marked completed)  
 **Status:** Collaborative Dual-Track Milestone Architecture  
 **Research Tracks & Capacity:**  
 - **Track A (Maritime Traffic & Geospatial Clustering Lead):** NipunaBhanuka18 (200 Hours across 8 Weeks, 25 Hours/Week)  
@@ -27,7 +27,8 @@
 | **W3-01** | Week 3 | H3 Candidate Optimization & Completeness Verification | 15 h | **Completed** | W2-01 |
 | **W3-01A** | Week 3 | H3 Completeness Audit, Correctness Hardening & PR Preparation | 6 h | **Completed** | W3-01 |
 | **W3-01B** | Week 3 | H3 Correctness Contract Finalization | 4 h | **Completed** | W3-01A |
-| **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | Planned | W3-01B |
+| **W3-02A** | Week 3 | Dataset Provenance & Deterministic Fingerprinting | — | **Completed** | W3-01B |
+| **W3-02** | Week 3 | Comparative H1 Benchmarking (BallTree vs. H3) | 10 h | **Completed** | W3-01B, W3-02A |
 | **W4-01** | Week 4 | Stay-Point Extraction & Berth Polygon Exclusion | 15 h | Planned | W3-02 |
 | **W4-02** | Week 4 | Anchorage Dwell Metrics & Utilization Analytics | 10 h | Planned | W4-01 |
 | **W5-01** | Week 5 | DuckDB In-Process Analytics & Contract Integration | 15 h | Planned | W3-02, W4-02 |
@@ -36,6 +37,8 @@
 | **W7-02** | Week 7 | End-to-End Pipeline Integration & Verification | 10 h | Planned | W7-01 |
 | **W8-01** | Week 8 | Automated Benchmark Execution (10k, 50k, 100k) | 15 h | Planned | W7-02 |
 | **W8-02** | Week 8 | Reproducibility Package, Final Audit & Thesis Report | 10 h | Planned | W8-01 |
+
+> **Week 3 (Track A) complete — 2026-11-28.** W3-01, W3-01A, W3-01B, W3-02A and W3-02 are complete. Next gate: Week 4, W4-01 (stay-point extraction and berth polygon exclusion), then W4-02 (anchorage dwell and utilization analytics).
 
 ---
 
@@ -50,7 +53,7 @@
 | **ML-01** | Phase 1 | Domain Literature, AIS Schema & Telemetry Review | 10 h | **In Progress** (data profiling completed; literature review pending) | None (Cleaned Parquet available) |
 | **ML-02** | Phase 2 | Vessel Trajectory Kinematic Feature Specification | 15 h | **Completed** | ML-01 (profiling) |
 | **ML-03** | Phase 3 | Baseline Models & Evaluation Protocol Freezing | 15 h | **Completed** | ML-02 |
-| **ML-04** | Phase 4 | Feature Engineering Module & Baseline Experiments | 20 h | Planned | ML-03, `cleaned_ais.parquet` |
+| **ML-04** | Phase 4 | Feature Engineering Module & Baseline Experiments | 20 h | **Completed** (PR #6) | ML-03, `cleaned_ais.parquet` |
 | **ML-05** | Phase 5 | Anomaly Model Evaluation & `vessel_anomaly_v1` Export | 20 h | Planned | ML-04 |
 
 ---
@@ -252,16 +255,35 @@
   - [x] All 92 automated tests pass; repository code coverage reaches 94%
   - [x] All documentation updated to eliminate unproven global theorems
 
-### Milestone W3-02: Comparative H1 Benchmarking (BallTree vs. H3)
-- **Goal:** Formally benchmark runtime (build, query, pruning, clustering), peak memory, neighbor recall/precision, and Adjusted Rand Index between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` across dataset scales (10k, 50k, 100k, full LA/LB). *(Not yet started.)*
-- **Estimated Hours:** 10 Hours
-- **Status:** Planned
-- **Dependencies:** W3-01
-- **Planned Deliverables:**
-  - Automated H1 benchmark harness writing structured experiment JSON records under `experiments/outputs/`
-  - Empirical comparative evaluation tables for thesis documentation
+### Milestone W3-02A: Dataset Provenance & Deterministic Fingerprinting
+- **Goal:** Make dataset identity verifiable before benchmarking by separating the file-byte SHA-256 from an order-sensitive, versioned, writer-independent logical content fingerprint. `manifest.json` is the authoritative provenance record; no new Parquet footer metadata is added ([ADR-011](../02-architecture/decisions/ADR-011-dataset-provenance-and-content-fingerprinting.md)).
+- **Estimated Hours:** Not separately estimated (inserted gate ahead of W3-02)
+- **Status:** **Completed** (PR #8, merged 2026-11-25 as `7d2d114`)
+- **Dependencies:** W3-01B
+- **Deliverables:**
+  - `src/aegismar/ingestion/provenance.py` (logical fingerprint `aegismar-logical-v1`, canonical-order verification), with related changes to `schema.py` (`CANONICAL_ROW_ORDER`, `SCHEMA_CONTRACT_VERSION`), `pipeline.py`, `common/types.py` and `cli.py`
+  - Read-only `aegismar fingerprint` CLI subcommand
+  - Tests: `tests/unit/test_provenance.py`, `tests/unit/test_ingestion.py` (`test_21`–`test_24`), `tests/unit/test_cli.py` (`test_cli_fingerprint_*`)
+  - Follow-up (PR #11): canonical v1.1 regenerated into `data/processed/lalb_20250101_v1_1/`, reproduced byte-for-byte on two workstations, and reconciled in [evidence-register.md §2.1](../03-research/evidence-register.md)
 - **Acceptance Checks:**
-  - Statistically rigorous comparison of BallTree vs. H3 across repeated deterministic trials with zero fabricated numbers
+  - [x] File SHA-256 and logical fingerprint recorded separately in `manifest.json`
+  - [x] Canonical row order `(mmsi, timestamp_utc, source_row)` verified
+  - [x] Historical v1.0 file left untouched; v1.1 written to a separate directory
+
+### Milestone W3-02: Comparative H1 Benchmarking (BallTree vs. H3)
+- **Goal:** Formally benchmark runtime (build, query, pruning, clustering), peak memory, neighbor recall/precision, and Adjusted Rand Index between `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` across dataset scales (10k, 50k, 100k, full LA/LB).
+- **Estimated Hours:** 10 Hours
+- **Status:** **Completed** (harness and protocol: PR #10; full run executed 2026-11-28 at `379ec16`)
+- **Dependencies:** W3-01B, W3-02A
+- **Deliverables:**
+  - Harness [`src/aegismar/clustering/benchmark.py`](../../src/aegismar/clustering/benchmark.py) and runner [`experiments/clustering/w3_02_benchmark.py`](../../experiments/clustering/w3_02_benchmark.py), with a `detailed_timing` toggle that makes official trials free of instrumentation
+  - Locked [W3-02 Benchmark Protocol](../03-research/w3-02-benchmark-protocol.md)
+  - Executed [W3-02 Benchmark Results](../03-research/w3-02-benchmark-results.md) on canonical v1.1 (`bdde2581...`), recorded as `CLM-CLU-07` in the evidence register
+- **Acceptance Checks:**
+  - [x] Exact parity at 10k / 50k / 100k / full for H3 r7, r8 and r9 vs. BallTree, and a 2,000-row brute-force oracle check (recall = precision = ARI = 1.0, 0 fallbacks)
+  - [x] 1 warm-up + 10 counterbalanced paired trials per block and scale with `detailed_timing=False`; all trial-integrity checks passed
+  - [x] Descriptive 95% CIs and paired speedups reported; zero fabricated numbers
+  - **Headline (single host, descriptive):** H3 r8 is 0.773× at 10k, 0.908× at 50k and 1.004× at 100k (parity), and 1.150× faster at full scale by total time. r7 and r9 are slower than BallTree at all tested scales.
 
 ### Milestone W4-01: Stay-Point Extraction & Berth Polygon Exclusion
 - **Goal:** Detect vessel dwell periods and exclude terminal berths using spatial polygon clipping.
@@ -407,7 +429,7 @@
 ### Milestone ML-04: Feature Engineering Module & Baseline Experiments
 - **Goal:** Implement `src/aegismar/anomaly/features.py` exactly as specified in ML-02 v1.0, with comprehensive unit tests (`tests/unit/test_anomaly.py`, including the ML-02 §11 verification cases). Build the D0 vessel partition (ML-03 §3.2) and extract development-day features, logging reproducible experiment artifacts. Test days stay behind the ML-03 firewall.
 - **Estimated Hours:** 20 Hours
-- **Status:** Planned
+- **Status:** **Completed** (PR #6, merged 2026-11-25 as `95b7e50`)
 - **Dependencies:** ML-03
 - **Planned Deliverables:**
   - `src/aegismar/anomaly/features.py` and `tests/unit/test_anomaly.py`

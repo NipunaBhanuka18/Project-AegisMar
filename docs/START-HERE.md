@@ -4,7 +4,7 @@
 > **Collaborative AI Research & Software Engineering Knowledge Base**  
 > **Repository:** [https://github.com/NipunaBhanuka18/Project-AegisMar](https://github.com/NipunaBhanuka18/Project-AegisMar)  
 > **Primary Researchers:** NipunaBhanuka18 (Project Lead & Author) & Kishakya (ML Research Collaborator & Track B Lead)  
-> **Date:** 2026-11-22  
+> **Date:** 2026-11-22 (status updated 2026-11-28: Week 3 complete)  
 
 ---
 
@@ -111,7 +111,16 @@ The repository has completed foundational data engineering and reference cluster
 - **Milestone W2-01**: Ingestion hardening (strict integer MMSI sanitation, same-timestamp conflict preservation, ambiguous header rejection), reference Haversine `BallTree` ST-DBSCAN engine (`stdbscan-core-first-v1.0`), and independent brute-force $O(N^2)$ oracle (`BruteForceNeighborhoodOracle`). 52 automated tests passing with 95% total code coverage.
 - **Milestone W2-CLOSE**: Public exploratory clustering visualization published in `README.md` (`docs/assets/w2-balltree-clustering.png`).
 - **Milestone W3-01**: Uber H3 discrete hexagonal candidate neighborhood provider (`H3NeighborhoodProvider`) with safe $k$-ring coverage lower bounds, exact Haversine/temporal pruning, and pentagon fallback. Verified 100% recall (0 missing neighbors) against the brute-force oracle and 100% role/label identity with BallTree across 143,116 real LA/LB observations. 77 automated tests passing with 93% total code coverage.
-- **Track B ML-01 (in progress) / ML-02 / ML-03 (completed)**: Reproducible dataset profiling (`experiments/anomaly/ml01_profile_dataset.py`) and drift breakdown (`experiments/anomaly/ml02_drift_breakdown.py`); accepted feature specification ([ML-02 v1.0](03-research/ml-02-feature-spec.md)); frozen evaluation protocol ([ML-03 v1.0](03-research/ml-03-evaluation-protocol.md)); NOAA bounding-box slicer (`scripts/slice_noaa_bbox.py`) reproducing the documented 2025-01-01 sample exactly. No anomaly models are implemented yet. The test suite stands at 92 tests with 94% coverage (2026-11-24).
+- **Milestone W3-01A / W3-01B**: H3 Option B correctness contract (calibrated resolutions 7–9, fail-closed BallTree fallback) and the `aegismar verify-parity` command.
+- **Milestone W3-02A**: Dataset provenance in `manifest.json` and the versioned logical content fingerprint (`aegismar-logical-v1`, `aegismar fingerprint`) ([ADR-011](02-architecture/decisions/ADR-011-dataset-provenance-and-content-fingerprinting.md)). The canonical v1.1 dataset lives in `data/processed/lalb_20250101_v1_1/`.
+- **Milestone W3-02**: Locked comparative benchmark of BallTree vs. H3 at resolutions 7, 8 and 9 across 10k / 50k / 100k / full ([protocol](03-research/w3-02-benchmark-protocol.md), [results](03-research/w3-02-benchmark-results.md)).
+- **Track B ML-01 (in progress) / ML-02 / ML-03 / ML-04 (completed)**:
+  - Reproducible dataset profiling (`experiments/anomaly/ml01_profile_dataset.py`) and drift breakdown (`experiments/anomaly/ml02_drift_breakdown.py`).
+  - Accepted feature specification ([ML-02](03-research/ml-02-feature-spec.md)) and frozen evaluation protocol ([ML-03](03-research/ml-03-evaluation-protocol.md)).
+  - ML-04 trajectory feature extractor (`src/aegismar/anomaly/`, PR #6).
+  - NOAA bounding-box slicer (`scripts/slice_noaa_bbox.py`), which reproduces the documented 2025-01-01 sample exactly.
+  - No anomaly models are merged yet.
+- **Test suite (2026-11-28)**: 183 tests with 96% coverage, enforced by GitHub Actions CI (coverage ≥ 85%).
 
 ---
 
@@ -120,7 +129,7 @@ The repository has completed foundational data engineering and reference cluster
 To ensure absolute transparency, our current measurements are categorized according to the [Research Evidence Register](03-research/evidence-register.md):
 
 1. **Automated Software Correctness**:
-   - 77 automated unit, oracle, and CLI regression tests pass 100% in local test suite verification (pre-commit quality gates executed via pytest).
+   - 183 automated unit, oracle, benchmark-harness and CLI regression tests pass, with 96% coverage (2026-11-28). They run locally and in GitHub Actions CI.
    - Both the reference `BallTreeNeighborhoodProvider` and `H3NeighborhoodProvider` match the independent brute-force oracle 100% (zero missing, zero extra neighbors) on synthetic fixtures, dateline crossings, polar coordinates, pentagonal cells, and randomized distributions.
 2. **Exploratory Real-Data Baseline (Single Workstation Run on LA/LB)**:
    - Input: 143,124 cleaned rows -> 8 position conflicts excluded -> **143,116 analyzed observations**.
@@ -130,14 +139,21 @@ To ensure absolute transparency, our current measurements are categorized accord
    - Recorded uninstrumented BallTree wall time (reported in development log): **13.680 seconds** (0.077 s build, 13.341 s query, 0.262 s clustering).
    - Recorded instrumented BallTree run under `tracemalloc` (persisted in `w2_01_lalb_balltree/clustering_summary.json`): **38.014 seconds** total wall time (0.083 s build, 31.348 s query, 6.583 s clustering) with **225.83 MB peak heap memory**.
    - Recorded instrumented H3 run under `tracemalloc` (persisted in `w3_01_lalb_h3/clustering_summary.json`): **55.668 seconds** total wall time (0.984 s build, 46.343 s query, 8.342 s clustering) with **233.82 MB peak heap memory** (798 occupied cells, 0 fallbacks).
-   - *Note*: These are single recorded exploratory workstation runs; formal multi-trial comparative benchmarking belongs to Milestone W3-02.
+   - *Note*: These are single recorded exploratory workstation runs.
+3. **Formal Multi-Trial Benchmark (W3-02, 2026-11-28, canonical v1.1, commit `379ec16`)**:
+   - Exact parity of H3 at resolutions 7, 8 and 9 with BallTree at 10k, 50k, 100k and full scale: recall = precision = ARI = 1.0, 0 fallbacks.
+   - Uninstrumented totals at full scale (mean of 10 counterbalanced trials): BallTree 12.4074 s vs. H3 r8 10.7867 s, a 1.150× speedup.
+   - H3 r8 is slower below 100k and at parity at 100k. r7 and r9 are slower than BallTree at all tested scales.
+   - These are single-host descriptive statistics: see [w3-02-benchmark-results.md](03-research/w3-02-benchmark-results.md).
 
 ---
 
 ## 10. What Research Questions Remain Unanswered
 
 The following core research questions are currently under active investigation:
-- **RQ1 (Track A)**: Will discrete hexagonal H3 candidate generation achieve a statistically significant runtime speedup over the 13.34 s BallTree query time on 143k records while preserving 100% eligible-neighbor recall across cell boundaries and pentagonal distortion zones?
+- **RQ1 (Track A)**: *(Answered for one host and dataset by W3-02.)* H3 r8 preserves exact parity and is 1.15× faster than BallTree at 143k rows, but slower below 100k. Still open:
+  - whether the crossover holds on other hardware, denser multi-day inputs and the deferred 500k scale;
+  - how it changes with other ε settings.
 - **Stay-Point Identification (Track A)**: What displacement and duration thresholds ($\Delta D_{\text{max}}, \Delta T_{\text{min}}$) accurately isolate vessels at anchor outside the San Pedro breakwater while excluding maneuvering vessels?
 - **RQ2 (Track B)**: Can trajectory-derived kinematic feature vectors distinguish abnormal maneuvers from normal navigation with lower false alarms than spatial density noise baselines?
 - **Model Explainability (Track B)**: Does an unsupervised Isolation Forest or LOF model provide superior PR-AUC ranking on held-out vessel trajectories compared to a rule-based kinematic scorer while maintaining transparent factor attribution?
@@ -154,20 +170,24 @@ git clone https://github.com/NipunaBhanuka18/Project-AegisMar.git
 cd Project-AegisMar
 uv sync --locked
 
-# 2. Run quality gates (all tests should pass; 92 as of 2026-11-24)
-uv run pytest -v
+# 2. Run quality gates (all tests should pass; 183 as of 2026-11-28; same gates as CI)
+uv run pytest --cov=aegismar --cov-fail-under=85 -v
 uv run ruff check .
+uv run ruff format --check .
 uv run mypy src tests
 
-# 3. Ingest the San Pedro Bay regional CSV into canonical Parquet
+# 3. Ingest the San Pedro Bay regional CSV into the canonical v1.1 Parquet.
+#    Never pass --overwrite: lalb_20250101/ (v1.0) and lalb_20250101_v1_1/ (v1.1) are immutable.
+#    Without --overwrite, ingestion refuses to replace an existing Parquet or manifest.
 uv run python -m aegismar ingest `
   --input data/raw/sample_lalb_20250101.csv `
-  --output data/processed/lalb_20250101 `
-  --overwrite
+  --output data/processed/lalb_20250101_v1_1
+uv run python -m aegismar fingerprint --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet
 
 # 4. Run the reference Haversine BallTree ST-DBSCAN clustering engine
+#    (--overwrite here only replaces git-ignored experiment outputs)
 uv run python -m aegismar cluster `
-  --input data/processed/lalb_20250101/cleaned_ais.parquet `
+  --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet `
   --output experiments/outputs/w2_01_lalb_balltree `
   --eps-spatial-m 300 `
   --eps-temporal-s 900 `
@@ -176,7 +196,7 @@ uv run python -m aegismar cluster `
 
 # 5. Run the verified H3-accelerated ST-DBSCAN clustering engine (W3-01)
 uv run python -m aegismar cluster `
-  --input data/processed/lalb_20250101/cleaned_ais.parquet `
+  --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet `
   --output experiments/outputs/w3_01_lalb_h3 `
   --provider h3 `
   --h3-resolution 8 `
@@ -185,8 +205,14 @@ uv run python -m aegismar cluster `
   --min-samples 5 `
   --overwrite
 
-# 6. Inspect the generated clustering summary
-Get-Content experiments/outputs/w3_01_lalb_balltree/clustering_summary.json
+# 6. Inspect the generated clustering summaries
+Get-Content experiments/outputs/w2_01_lalb_balltree/clustering_summary.json
+Get-Content experiments/outputs/w3_01_lalb_h3/clustering_summary.json
+
+# 7. (Optional, about 38 min) Reproduce the W3-02 benchmark
+uv run python experiments/clustering/w3_02_benchmark.py `
+  -i data/processed/lalb_20250101_v1_1/cleaned_ais.parquet `
+  -o experiments/outputs/w3_02_benchmark_results.json
 ```
 
 ---
@@ -202,12 +228,15 @@ Get-Content experiments/outputs/w3_01_lalb_balltree/clustering_summary.json
   - `unit/test_ingestion.py`: Schema mapping, duplicate consolidation, conflict flagging.
   - `unit/test_st_dbscan.py`: ST-DBSCAN fixtures, permutation invariance, boundary tie-breaking.
   - `unit/test_oracle.py`: Oracle vs. BallTree mathematical equivalence tests.
-  - `unit/test_h3_neighbors.py`: 20 H3 completeness and oracle parity fixture tests.
-- **Architecture Decisions**: [`docs/02-architecture/decisions/`](02-architecture/decisions/) (ADRs 001 through 010).
+  - `unit/test_h3_neighbors.py`: H3 completeness and oracle parity fixture tests (32 fixture categories).
+  - `unit/test_provenance.py`: Logical content fingerprint and canonical-order verification (W3-02A).
+  - `unit/test_benchmark.py`: W3-02 benchmark harness (timing invariance, statistics, counterbalancing, end-to-end mini benchmark).
+- **Architecture Decisions**: [`docs/02-architecture/decisions/`](02-architecture/decisions/) (ADRs 001 through 011).
 - **Research Documentation**: [`docs/03-research/`](03-research/)
   - `evidence-register.md`: The official verification and claims register.
   - `research-plan.md`: Formal research questions and hypotheses.
   - `evaluation-protocol.md`: Scientific benchmark methodology.
+  - `w3-02-benchmark-protocol.md` / `w3-02-benchmark-results.md`: Locked W3-02 protocol and executed results.
   - `vessel-behavior-ml.md`: The ML anomaly detection research proposal.
   - `ml-02-feature-spec.md`: Accepted Track B feature specification (v1.0).
   - `ml-03-evaluation-protocol.md`: Frozen Track B evaluation protocol (v1.0).
@@ -273,13 +302,13 @@ First-time contributors, academic evaluators, and research collaborators can fol
 
 - **Track A (Maritime Traffic & Clustering — Lead: NipunaBhanuka18)**:
   - **Milestone W3-01**: *(Completed)* Implemented Uber H3 hexagonal candidate neighborhood provider (`H3NeighborhoodProvider`) and verified 100% neighbor recall against oracle and BallTree reference.
-  - **Milestone W3-02**: Execute comparative H1 benchmarks (BallTree vs. H3) measuring runtime, memory, and recall across dataset scales (10k, 50k, 100k, full LA/LB).
-  - **Milestone W4-01 / W4-02**: Stay-point extraction, berth polygon exclusion, and anchorage dwell analytics.
+  - **Milestone W3-02A / W3-02**: *(Completed)* Dataset provenance and fingerprinting; comparative H1 benchmarks (BallTree vs. H3) across 10k, 50k, 100k and full LA/LB ([results](03-research/w3-02-benchmark-results.md)).
+  - **Milestone W4-01 / W4-02** *(next)*: Stay-point extraction, berth polygon exclusion, and anchorage dwell analytics.
   - **Milestone W5-01 / W6-01**: DuckDB analytical storage, `vessel_anomaly_v1` contract integration, and read-only FastAPI service.
   - **Milestone W7-01 / W8-01**: Interactive geospatial web dashboard and multi-trial benchmark reproducibility package.
 - **Track B (Vessel Behavior ML & Anomaly Detection — Lead: Kishakya)**:
   - **Milestone ML-01**: *(In progress — data profiling completed; literature review pending)* Review domain literature, AIS telemetry fields, and evaluation constraints.
   - **Milestone ML-02**: *(Completed — [v1.0](03-research/ml-02-feature-spec.md))* Mathematical specifications for trajectory windowing and kinematic features.
   - **Milestone ML-03**: *(Completed — [v1.0](03-research/ml-03-evaluation-protocol.md), frozen)* Baseline models and synthetic perturbation evaluation protocol.
-  - **Milestone ML-04**: *(Next)* Implement `features.py` per ML-02 and the first reproducible feature engineering experiment on the development day.
+  - **Milestone ML-04**: *(Completed — PR #6)* Implement `features.py` per ML-02 and the first reproducible feature engineering experiment on the development day.
   - **Milestone ML-05**: Anomaly model evaluation and `vessel_anomaly_v1` GeoJSON contract export.

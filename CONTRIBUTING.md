@@ -54,14 +54,18 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 
 ## 4. Quality Gates & Continuous Verification
 
-Before staging files or opening a Pull Request, all five automated quality gates must pass cleanly:
+Before staging files or opening a Pull Request, all five automated quality gates must pass cleanly. The same gates run in GitHub Actions on every push and pull request to `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+**Coverage policy:**
+- **Enforced in CI:** at least 85% line coverage of `aegismar`. CI uses `--cov-fail-under=85`, so a pull request below that fails.
+- **Recommended quality target:** at least 90%.
 
 ```bash
 # 1. Run unit and oracle tests
 uv run pytest -v
 
-# 2. Check test coverage (target: >= 90% across core modules)
-uv run pytest --cov=aegismar --cov-report=term-missing
+# 2. Check test coverage: identical to the CI gate (fails below 85%; recommended target >= 90%)
+uv run pytest --cov=aegismar --cov-report=term-missing --cov-fail-under=85 -v
 
 # 3. Fast linter check
 uv run ruff check .
