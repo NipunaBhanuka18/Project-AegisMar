@@ -397,8 +397,6 @@ def handle_cluster(args: argparse.Namespace) -> int:
 
 def handle_verify_parity(args: argparse.Namespace) -> int:
     """Handle the verify-parity CLI command."""
-    import hashlib
-
     from aegismar.clustering.h3_neighbors import verify_dataset_h3_balltree_parity
 
     input_path = Path(args.input)
@@ -406,7 +404,7 @@ def handle_verify_parity(args: argparse.Namespace) -> int:
         print(f"Error: Input file not found: {input_path}", file=sys.stderr)
         return 1
 
-    sha256 = hashlib.sha256(input_path.read_bytes()).hexdigest()
+    sha256 = compute_file_sha256(input_path)
 
     policy = QualityFilterPolicy(exclude_timestamp_conflicts=True)
     dataset = load_clustering_dataset_from_parquet(

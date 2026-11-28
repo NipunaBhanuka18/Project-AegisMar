@@ -26,6 +26,9 @@ dependencies = [
     "tzdata>=2026.6",
 ]
 
+[project.scripts]
+aegismar = "aegismar.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
