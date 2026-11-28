@@ -683,6 +683,8 @@ def _paired_block_scale(
     config: W302BenchmarkConfig,
     resolution: int,
     reference_counts: dict[str, int] | None,
+    log: LogFn = _no_log,
+    log_prefix: str = "[phase 2]",
 ) -> dict[str, Any]:
     cfg = config.clustering_config()
 
@@ -692,9 +694,11 @@ def _paired_block_scale(
     for _ in range(config.warmup_runs):
         run(BALLTREE)
         run(H3)
+    log(f"{log_prefix} warm-up complete")
 
     trials: list[dict[str, Any]] = []
-    for t in range(config.measured_trials):
+    n_trials = config.measured_trials
+    for t in range(n_trials):
         records = {kind: run(kind) for kind in trial_execution_order(t)}
         trials.append(
             {
@@ -703,6 +707,14 @@ def _paired_block_scale(
                 BALLTREE: records[BALLTREE],
                 H3: records[H3],
             }
+        )
+        # Progress only: emitted after both timed provider runs of this trial have
+        # returned and before the next trial's gc.collect(), so it is outside every
+        # timed region and does not affect any recorded timing.
+        log(
+            f"{log_prefix} trial {t + 1}/{n_trials} complete "
+            f"({execution_order_label(t)}; total balltree "
+            f"{records[BALLTREE]['total_time_s']:.3f} s, h3 {records[H3]['total_time_s']:.3f} s)"
         )
 
     instrumentation_ok = all(not tr[k]["detailed_timing"] for tr in trials for k in (BALLTREE, H3))
@@ -756,7 +768,14 @@ def run_timed_phase(
                 f"({ds.num_points} rows, {config.warmup_runs} warm-up + "
                 f"{config.measured_trials} trials)"
             )
-            entry = _paired_block_scale(ds, config, resolution, reference_counts.get(label_s))
+            entry = _paired_block_scale(
+                ds,
+                config,
+                resolution,
+                reference_counts.get(label_s),
+                log=log,
+                log_prefix=f"[phase 2] {role} {_h3_label(resolution)} @ {label_s}",
+            )
             scales_out.append({"scale_label": label_s, **entry})
         blocks.append(
             {

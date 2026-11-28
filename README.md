@@ -3,8 +3,8 @@
 > **Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3119/)
-[![Project Status: Pre-Alpha MVP](https://img.shields.io/badge/status-pre--alpha%20MVP-blue.svg)](#2-current-status-and-research-tracks)
-[![License: Pending](https://img.shields.io/badge/license-pending-lightgrey.svg)](#14-license-attribution)
+[![Project Status: Pre-Alpha MVP](https://img.shields.io/badge/status-pre--alpha%20MVP-blue.svg)](#current-status)
+[![License: Pending](https://img.shields.io/badge/license-pending-lightgrey.svg)](#license-and-attribution)
 
 > [!TIP]
 > **New to Project AegisMar or reviewing for the first time?**  

@@ -502,6 +502,7 @@ def test_end_to_end_mini_benchmark(synthetic_parquet: Path) -> None:
     assert results["benchmark"] == "w3_02_balltree_vs_h3"
     assert results["statistical_interpretation_note"] == STATISTICAL_INTERPRETATION_NOTE
     assert any(m.startswith("[phase 2]") for m in messages)
+    assert any(m.startswith("[phase 2]") and " trial 1/" in m for m in messages)
 
     # Provenance
     prov = results["provenance"]
