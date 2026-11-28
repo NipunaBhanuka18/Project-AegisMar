@@ -2,7 +2,7 @@
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**
 
-**Document Version:** 2.2  
+**Document Version:** 2.3 (2026-11-28: Week 3 Track A completed)  
 **Status:** Approved Roadmap (Collaborative Dual-Track Architecture)  
 **Track A Capacity:** 200 Hours (8 Weeks @ 25 Hours/Week) — Lead: NipunaBhanuka18  
 **Track B Capacity:** Independent Parallel Track — Lead: Kishakya *(independent flexible schedule)*  
@@ -46,12 +46,14 @@ The development lifecycle operates across two complementary, decoupled research 
 ### Week 3: H3 Candidate Optimization, Completeness Testing & Comparative H1 Benchmarks
 - **Capacity**: 25 Hours
 - **Primary Goal**: Implement the correctness-preserving Uber H3 neighborhood provider plugging into the shared ST-DBSCAN core, verify completeness across cell boundaries and pentagons, and execute comparative H1 benchmarks against the BallTree reference.
-- **Key Deliverables**:
-  - `W3-01`: Uber H3 discrete hexagonal grid candidate generation engine (`H3NeighborhoodProvider`) with exact geodesic and temporal pruning.
-  - `W3-02`: Completeness verification across H3 cell boundaries, pentagons, dateline, and high latitudes against the brute-force oracle and BallTree reference.
-  - `W3-03`: Quantitative comparative H1 benchmark (Neighbor Recall, Precision, ARI, build/query/clustering wall time, peak memory).
+- **Status (2026-11-28)**: **Completed.**
+- **Key Deliverables** (IDs aligned with the [milestone board](../04-development/milestones.md)):
+  - `W3-01` / `W3-01A` / `W3-01B` *(Completed)*: Uber H3 candidate generation engine (`H3NeighborhoodProvider`) with exact geodesic and temporal pruning. Completeness was verified across cell boundaries, pentagons, the dateline and high latitudes against the brute-force oracle and BallTree reference, and the empirical Option B correctness contract was finalized.
+  - `W3-02A` *(Completed, PR #8)*: Dataset provenance and deterministic logical content fingerprinting ([ADR-011](../02-architecture/decisions/ADR-011-dataset-provenance-and-content-fingerprinting.md)).
+  - `W3-02` *(Completed)*: Quantitative comparative H1 benchmark: neighbor recall and precision, ARI, build / query / clustering wall time, and peak memory. See the [protocol](../03-research/w3-02-benchmark-protocol.md) and [results](../03-research/w3-02-benchmark-results.md).
 - **Dependencies**: Week 2 BallTree ST-DBSCAN reference engine and oracle.
 - **Acceptance Gate**: Cluster labels between H3-accelerated and BallTree engines achieve exact concordance with 100% eligible-neighbor recall on correctness tests and empirically measured runtime comparisons.
+  - *Met:* exact parity at every scale. On one host, H3 r8 is 1.150× faster than BallTree at full scale (143,116 rows) and slower below 100k.
 
 ### Week 4: Stay-Point Extraction & Anchorage Intelligence
 - **Capacity**: 25 Hours
@@ -128,7 +130,7 @@ The machine learning anomaly detection research track proceeds in parallel with 
   - Implement `src/aegismar/anomaly/features.py` with comprehensive unit tests (`tests/unit/test_anomaly.py`).
   - Extract feature representations for the development day (2025-01-01) and log reproducible experiment artifacts under `experiments/outputs/anomaly/`. Held-out test days stay behind the ML-03 firewall.
   - *Deliverable*: Feature extractor module and baseline experiment summary JSON.
-  - *Status (2026-11-24)*: **Next**.
+  - *Status (2026-11-25)*: **Completed** — merged in PR #6 (`95b7e50`).
 - **ML-05: Anomaly Model Evaluation & `vessel_anomaly_v1` Export**:
   - Implement rule-based scoring engine and Isolation Forest model.
   - Evaluate PR-AUC, precision, recall, and false alarm rates on held-out splits.

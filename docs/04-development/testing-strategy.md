@@ -5,7 +5,8 @@
 **Document Version:** 2.1  
 **Status:** Approved Quality Assurance Standard  
 **Test Framework:** Pytest 8.x / 9.x  
-**Coverage Target:** $\ge 85\%$ Branch Coverage on Analytical Core  
+**Coverage Gate:** $\ge 85\%$ line coverage of `aegismar`, enforced in CI (`--cov-fail-under=85`, [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)); $\ge 90\%$ recommended quality target  
+**Current Suite (2026-11-28):** 183 tests, 96% line coverage  
 
 ---
 
@@ -49,7 +50,7 @@ flowchart TD
 - Algorithmic correctness is verified against an **independent test oracle**:
   - An exact, unaccelerated $O(N^2)$ brute-force geodesic-temporal comparator (`aegismar.spatial.oracle.BruteForceNeighborhoodOracle`, implemented in W2-01 with a safety guard at $N \le 5{,}000$) serves as the ground truth.
   - `BallTreeNeighborhoodProvider` is verified in automated tests (`tests/unit/test_oracle.py`, `tests/unit/test_st_dbscan.py`) against the oracle across 16 critical fixtures (isolated points, multi-cluster, exact spatial/temporal thresholds, core/border/noise, ambiguous multi-cluster borders, dateline crossing, high latitudes, randomized coastal sets, row permutation invariance, and quality-filtered conflicts) with zero missing or extra neighbors and 100% identical labels.
-  - In Week 3, `H3NeighborhoodProvider` will be verified against the exact same oracle and BallTree reference, adding H3 cell-boundary ($\delta \le 10\text{ m}$) and pentagon tests.
+  - In Week 3, `H3NeighborhoodProvider` was verified against the same oracle and BallTree reference (`tests/unit/test_h3_neighbors.py`), adding H3 cell-boundary ($\delta \le 10\text{ m}$), pentagon and near-pentagon tests. The W3-02 benchmark re-verifies oracle and BallTree parity on real data before any timing is run (`tests/unit/test_benchmark.py`, [w3-02-benchmark-results.md](../03-research/w3-02-benchmark-results.md)).
 
 ---
 
@@ -57,7 +58,7 @@ flowchart TD
 
 To comply with the rule that raw AIS datasets must never be committed to Git:
 1. **No External Network Calls in Tests**: Test runs must execute entirely offline without fetching external URLs or datasets.
-2. **Deterministic Synthetic Generators**: Tests utilize programmatic fixtures (in `tests/conftest.py` and `tests/fixtures/`) that generate parameterized vessel trajectories (e.g., straight-line transit, circular loitering, anchored dwell, sudden speed jump, transponder dropout).
+2. **Deterministic Synthetic Generators**: Each test module builds its own deterministic synthetic inputs with module-local helper functions and `pytest` fixtures, for example hand-built trajectories, boundary-distance point pairs and seeded randomized coordinate sets. Small committed CSV fixtures live in `tests/fixtures/` (`synthetic_2025_sample.csv`, `synthetic_legacy_sample.csv`; used by `test_ingestion.py` and `test_cli.py`). There is currently no shared `tests/conftest.py`.
 3. **Committed Sample Fixtures**: Small, anonymized CSV/GeoJSON test files ($\le 500\text{ KB}$) may be committed under `data/samples/` or `tests/fixtures/` strictly for deterministic integration testing.
 
 ---
@@ -70,6 +71,6 @@ To comply with the rule that raw AIS datasets must never be committed to Git:
 | **Code Formatting** | `uv run ruff format --check .` | 100% compliant, 0 re-formats needed |
 | **Type Safety** | `uv run mypy src tests` | 0 type errors in strict mode |
 | **Test Suite** | `uv run pytest -v` | 100% passing |
-| **Coverage Analysis** | `uv run pytest --cov=aegismar --cov-report=term-missing` | $\ge 80\%$ ($\ge 85\%$ target) core coverage |
-| **Full Quality Gate** | `uv run ruff check . && uv run ruff format --check . && uv run mypy src tests && uv run pytest -v` | All checks pass |
+| **Coverage Analysis** | `uv run pytest --cov=aegismar --cov-report=term-missing --cov-fail-under=85 -v` | $\ge 85\%$ line coverage enforced in CI; $\ge 90\%$ recommended target |
+| **Full Quality Gate** | `uv run ruff check . && uv run ruff format --check . && uv run mypy src tests && uv run pytest --cov=aegismar --cov-fail-under=85 -v` | All checks pass (identical to CI) |
 

@@ -27,6 +27,9 @@ Experiments will evaluate four standardized dataset scales derived from cleaned 
 3. **Scale L (100,000 pings)**: Primary scientific benchmark scale, representing multi-day coastal traffic.
 4. **Scale XL (500,000 pings)** *(Optional/Stress)*: Upper bound stress test for single-workstation memory and runtime limits.
 
+> [!NOTE]
+> **W3-02 reconciliation (2026-11-28).** For Milestone W3-02 the scale tiers were locked to **10,000 / 50,000 / 100,000 / full (143,116 rows)**. They are deterministic chronological prefixes of the single-day LA/LB dataset. **500k is deferred** because no dataset of that size exists yet. See [w3-02-benchmark-protocol.md §2](w3-02-benchmark-protocol.md#2-relationship-to-existing-documents) and the executed [w3-02-benchmark-results.md](w3-02-benchmark-results.md). The text above is kept for traceability.
+
 ### 2.2 Independent Spatial Oracle & Correctness Verification
 To prevent circular reasoning between spatial indexing data structures:
 - A standalone, isolated brute-force oracle (`aegismar.spatial.oracle.BruteForceNeighborhoodOracle`, implemented in W2-01 with a default safety cap of $N \le 5{,}000$ to prevent accidental $O(N^2)$ runs on full 143k+ datasets) calculates exact scalar Haversine distances independently of `scikit-learn`/`BallTree`:
@@ -40,7 +43,7 @@ To prevent circular reasoning between spatial indexing data structures:
   - Unsupported configurations (uncalibrated resolutions or radii exceeding empirical clearance tables) strictly reject with `ValueError` (when fallback is disabled) or route all queries to reference `BallTree` fallback (when fallback is enabled). An explicit experimental opt-in (`allow_uncalibrated=True`) is required to permit approximate ring estimation, tagging execution metadata as uncalibrated.
   - Discrete expansion failures (`grid_disk`) and near-pentagon encounters route to BallTree fallback (with recorded `fallback_reasons`) or raise `RuntimeError` if fallback is disabled. Silent self-cell downgrades are eliminated.
   - Runtime queries do not claim automated omission detection; exactness is maintained by conservative ring coverage on calibrated domains or fail-closed fallback.
-  - The H3 engine achieved $\text{Recall} = 1.0$ (zero missing neighbors) across all 32 unit test fixture categories (including cell boundaries $\delta \le 10\text{ m}$, sub-meter vertex pairs, pentagons, near-pentagons, high latitudes, dateline crossings, uncalibrated configurations, and multi-region coordinates) and bit-for-bit identical CSR neighborhood graphs (13,188,256 edges, identical `indptr` and `indices`) on all 143,116 real LA/LB observations against the BallTree reference. Dataset-scoped parity is verifiable via `verify_dataset_h3_balltree_parity` or `aegismar verify-parity`. Formal comparative performance benchmarking across dataset scales is scheduled for Milestone W3-02.
+  - The H3 engine achieved $\text{Recall} = 1.0$ (zero missing neighbors) across all 32 unit test fixture categories (including cell boundaries $\delta \le 10\text{ m}$, sub-meter vertex pairs, pentagons, near-pentagons, high latitudes, dateline crossings, uncalibrated configurations, and multi-region coordinates) and bit-for-bit identical CSR neighborhood graphs (13,188,256 edges, identical `indptr` and `indices`) on all 143,116 real LA/LB observations against the BallTree reference. Dataset-scoped parity is verifiable via `verify_dataset_h3_balltree_parity` or `aegismar verify-parity`. Formal comparative performance benchmarking across dataset scales was executed in Milestone W3-02 ([w3-02-benchmark-results.md](w3-02-benchmark-results.md)).
 
 ### 2.3 Benchmark Timing & Memory Procedure
 - **Warmup**: 1 warmup pass prior to timing collection to ensure JIT/cache stabilization.
@@ -51,6 +54,16 @@ To prevent circular reasoning between spatial indexing data structures:
   3. **Exact Pruning Latency ($T_{\text{prune}}$)**: Geodesic distance verification on retrieved candidates.
   4. **Total Algorithm Execution Time ($T_{\text{total}} = T_{\text{build}} + T_{\text{query}} + T_{\text{prune}}$)**.
   5. **Peak Memory Footprint ($\text{RAM}_{\text{peak}}$)**: Measured via Python `tracemalloc` and OS process monitoring (`psutil`).
+
+> [!IMPORTANT]
+> **Superseded operationally for W3-02 (2026-11-28).** The locked [W3-02 Benchmark Protocol](w3-02-benchmark-protocol.md) is the authoritative operational specification for the BallTree vs. H3 benchmark. Its executed results are in [w3-02-benchmark-results.md](w3-02-benchmark-results.md). Where it differs from §2.1–§2.3 above:
+> - **Memory** is measured in a **separate** `tracemalloc` pass, never during timed trials. **`psutil` is not used**, because it is not a project dependency, so RSS is not reported.
+> - **No RNG seeds are needed.** Subsets are deterministic chronological prefixes and both algorithms are deterministic. Determinism is verified by a nested-prefix check and repeat-trial result consistency.
+> - **Scales** are `10k / 50k / 100k / full`. 500k is deferred.
+> - **Timing:** official trials time query and prune as one segment (`query_and_prune_time_s`) with `detailed_timing=False`. Both `index_and_graph_time_s` (build + query + prune) and `total_time_s` (adding clustering) are reported, so both definitions of total time are covered. The query/prune split appears only in separate instrumented diagnostics.
+> - **Repetitions:** 1 warm-up plus 10 trials, run as counterbalanced paired trials.
+>
+> The text above is kept for traceability.
 
 ---
 

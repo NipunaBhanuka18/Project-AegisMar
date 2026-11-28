@@ -1,10 +1,10 @@
 # Research Evidence Register & Verification Matrix
 
 > **Project AegisMar: Explainable Maritime Traffic Intelligence & Vessel Behavior Anomaly Detection Platform**  
-> **Document Version:** 1.1  
+> **Document Version:** 1.2  
 > **Lifecycle Status:** Active Evidence Baseline  
 > **Maintained By:** NipunaBhanuka18 (Project Lead) & Kishakya (Track B Lead)  
-> **Last Reconciled:** 2026-11-25  
+> **Last Reconciled:** 2026-11-28 (W3-02 benchmark added; v1.1 dataset reconciliation of 2026-11-25 unchanged)  
 
 ---
 
@@ -23,17 +23,17 @@ Every claim in this register is categorized under one of six strict evidentiary 
 
 ### Claim Accounting & Evidentiary Category Totals
 
-The register currently tracks **21 formal claims** classified across the evidentiary hierarchy:
+The register currently tracks **22 formal claims** classified across the evidentiary hierarchy:
 
 | Evidentiary Category | Claim Count | Active Claim Identifiers |
 |---|---|---|
 | **1. Implemented and Code-Inspected** | 0 | *(Baseline modules covered under Category 2 checks)* |
 | **2. Tested by Automated Checks** | 12 | `CLM-ING-01`, `CLM-ING-02`, `CLM-ING-03`, `CLM-ING-04`, `CLM-ING-05`, `CLM-SPA-01`, `CLM-SPA-02`, `CLM-CLU-01`, `CLM-CLU-02`, `CLM-CLU-03`, `CLM-CLU-06`, `CLM-ANO-05` |
-| **3. Experimentally Observed** | 6 | `CLM-ING-06`, `CLM-ING-08`, `CLM-CLU-04`, `CLM-ANO-02`, `CLM-ANO-03`, `CLM-ANO-04` |
+| **3. Experimentally Observed** | 7 | `CLM-ING-06`, `CLM-ING-08`, `CLM-CLU-04`, `CLM-CLU-07`, `CLM-ANO-02`, `CLM-ANO-03`, `CLM-ANO-04` |
 | **4. Independently Reproduced** | 1 | `CLM-ING-07` |
 | **5. Reported by Development Assistant** | 1 | `CLM-CLU-05` |
 | **6. Planned or Hypothesized** | 1 | `CLM-ANO-01` |
-| **Total Tracked Claims** | **21** | |
+| **Total Tracked Claims** | **22** | |
 
 > [!CAUTION]
 > **Scientific Integrity Guardrails**:
@@ -122,6 +122,7 @@ writer-independent logical content fingerprint (`aegismar-logical-v1`, ADR-011),
 | **CLM-CLU-04** | Experimentally Observed | Exploratory BallTree ST-DBSCAN run on 143,116 analyzed LA/LB rows partitions observations into 241 spatiotemporal density clusters (136,276 core, 934 border, 5,906 noise). | `cleaned_ais.parquet` historical v1.0<br>(SHA-256: `4a7ca719...`; clustering inputs identical to canonical v1.1, §2.1) | $\varepsilon_s=300\text{m}$, $\Delta T=900\text{s}$, $\text{MinPts}=5$ | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json` | **Verified on Local Disk** (Summary JSON verified) | Clusters represent raw density groups; they are **NOT** 241 confirmed anchorages. |
 | **CLM-CLU-05** | Reported by Development Assistant | Exploratory BallTree ST-DBSCAN recorded 13.680 s uninstrumented wall time (0.077 s build, 13.341 s query, 0.262 s clustering) in development log; instrumented run recorded 38.014 s wall time with 225.83 MB peak heap in summary JSON. | `cleaned_ais.parquet` | Commit `3ece859` | `experiments/outputs/w2_01_lalb_balltree/clustering_summary.json`<br>`docs/04-development/development-log.md` | **Recorded in Log; Not Multi-Trial Benchmark** | Measured on a single workstation run; uninstrumented timing reported in dev log, instrumented timing in summary JSON; not a multi-trial benchmark. |
 | **CLM-CLU-06** | Tested by Automated Checks | Uber H3 candidate generation with empirical clearance lower bounds on calibrated resolutions (7, 8, 9), exact Haversine/temporal pruning, and fail-closed BallTree fallback for unsupported or anomalous configurations (Option B) achieves 100% recall (0 missing neighbors) against the brute-force oracle across 32 unit test fixture categories and 100% bit-for-bit CSR graph parity (13,188,256 / 13,188,256 edges, identical `indptr` and `indices`) against the BallTree reference on 143,116 real LA/LB observations (`cleaned_ais.parquet` historical v1.0, SHA-256: `4a7ca719...`, verified via `aegismar verify-parity`; clustering inputs bit-identical to canonical v1.1, §2.1). | Synthetic fixtures & `cleaned_ais.parquet` | Calibrated Res 7–9, Option B | `src/aegismar/clustering/h3_neighbors.py`<br>`tests/unit/test_h3_neighbors.py` (32 fixtures)<br>`experiments/outputs/w3_01_lalb_h3/clustering_summary.json` | **Verified** (Automated checks & real LA/LB parity pass) | Proves neighborhood candidate completeness and clustering equivalence under Option B contract on calibrated domain; formal comparative speedup benchmarking belongs to W3-02 ($H_{1,A}$). |
+| **CLM-CLU-07** | Experimentally Observed | W3-02 multi-trial benchmark (1 warm-up + 10 counterbalanced paired trials per block and scale, `detailed_timing=False`): H3 at resolutions 7, 8 and 9 reproduces BallTree exactly at 10k / 50k / 100k / full (143,116 rows). Every check gives an exact CSR graph match, recall = precision = ARI = 1.0, 13,188,256 directed edges at full scale and 0 fallbacks; the 2,000-row brute-force oracle check also passes. H3 r8 total-time speedup (BallTree / H3, ratio of means): 0.773× (10k), 0.908× (50k), 1.004× (100k; per-trial 95% CI [0.994, 1.014]) and **1.150×** at full scale (12.4074 s vs 10.7867 s; paired saving 1.6206 s [1.4917, 1.7496]; index + graph per-trial speedup 1.1543× [1.1411, 1.1676]). r7 (0.842×) and r9 (0.911×) remain slower than BallTree at full scale. Full-scale `tracemalloc` peak: BallTree 225.8 MiB, H3 r8 233.8 MiB. | Canonical v1.1 `cleaned_ais.parquet` (SHA-256 `bdde2581...`, fingerprint `d8a619f7...`) | Commit `379ec16` (`git_dirty=false`); 300 m / 900 s / MinPts 5; h3 4.5.1, scikit-learn 1.9.1, numpy 2.4.6 | [w3-02-benchmark-protocol.md](w3-02-benchmark-protocol.md); [w3-02-benchmark-results.md](w3-02-benchmark-results.md); `experiments/outputs/w3_02_benchmark_results.json` | **Verified on Local Disk** (result JSON `status = "completed"`, all parity and trial-integrity checks passed) | Single host (Windows, AMD, 16 logical CPUs), single dataset and parameter set; descriptive 95% t-intervals only; chronological prefixes; `tracemalloc` excludes native memory and RSS is not measured; 500k scale deferred. |
 | **CLM-ANO-01** | Planned / Hypothesized | Multi-factor kinematic trajectory anomaly scoring will achieve at least 15 percentage points higher $F_1$ than ST-DBSCAN spatial density noise ($H_{2,A}$). | Held-out trajectory partitions (test days 2025-01-14, 2025-01-22) | Rule-based (R1) vs. density noise (B0); IF (M1) | `docs/03-research/vessel-behavior-ml.md`<br>`docs/03-research/ml-03-evaluation-protocol.md` (frozen decision rules, §8) | **Unverified Hypothesis** (Planned ML track) | Anomaly models are **not yet implemented**; the evaluation protocol and statistical decision rules are frozen in ML-03 v1.0; hypotheses remain subject to experiment. |
 | **CLM-ANO-02** | Experimentally Observed | On the canonical development day, reporting cadence is coarse: the most common intervals are 180 s (26,305 pairs) and 70 s (15,020 pairs), with a median of 70 s when the preceding ping is moving (SOG ≥ 1.5 kt). 90.0% of SOG values are < 0.5 kt; 135 of 362 vessels ever reach SOG ≥ 1.5 kt; heading is present in 63.0% of Class A and 8.8% of Class B rows. | v1.1 (`bdde2581...`) | ML-01 profile | `experiments/anomaly/ml01_profile_dataset.py` → `experiments/outputs/anomaly/ml01_profile/profile.json` | **Verified on Local Disk** | Single day (a public holiday); descriptive only. |
 | **CLM-ANO-03** | Experimentally Observed | Two feed-wide reception silences (no observation from any vessel) occur on 2025-01-01, 03:07:37–03:20:25 and 12:06:09–12:18:20 UTC, spanned by 557 of the 1,579 vessel reporting gaps > 600 s. | v1.1 | Silence > 60 s, merge ≤ 180 s (ML-02 G6/G7) | `ml01_profile_dataset.py`; `aegismar.anomaly.features.detect_outage_windows`; `tests/unit/test_anomaly.py` (real-data check) | **Verified** | Property of the receiver network on this day; cause not established. |
@@ -147,7 +148,8 @@ To avoid confusion in academic papers, thesis defenses, or documentation reviews
 ### 3. "Single Execution Timing" vs. "Benchmarking"
 - **Factual Reality**: The W2-01 exploratory run executed in 13.680 s uninstrumented wall time (38.014 s under `tracemalloc`).
 - **What this proves**: Demonstrates that running ST-DBSCAN over 143,116 records completes comfortably in tens of seconds on a standard laptop without crashing or exhausting 16 GB RAM.
-- **What this does NOT prove**: A single execution run is subject to CPU thermal throttling, OS background processes, and cache warmups. Formal comparative benchmarking (evaluating $H1$) requires multi-trial repetitions (10+ runs) with recorded variance, planned for Milestone W3-02 and Week 8.
+- **What this does NOT prove**: A single execution run is subject to CPU thermal throttling, OS background processes, and cache warmups. Formal comparative benchmarking (evaluating $H1$) requires multi-trial repetitions (10+ runs) with recorded variance.
+- **Status (2026-11-28)**: The multi-trial W3-02 benchmark has been executed (`CLM-CLU-07`, [w3-02-benchmark-results.md](w3-02-benchmark-results.md)). Its official uninstrumented BallTree full-scale total is 12.4074 s (mean of 10 trials). This replaces the single-run 13.680 s figure for comparative purposes; the W2-01 figure remains a historical record (`CLM-CLU-05`).
 
 ---
 
@@ -159,23 +161,27 @@ Because raw and processed AIS datasets and experiment output directories are exc
 # 1. Synchronize the exact locked Python environment
 uv sync --locked
 
-# 2. Verify all unit, oracle, and CLI regression tests (92 as of 2026-11-24)
-uv run pytest -v
+# 2. Verify all unit, oracle, and CLI regression tests (183 as of 2026-11-28; CI gate: coverage >= 85%)
+uv run pytest --cov=aegismar --cov-fail-under=85 -v
 
 # 3. Check code formatting, linting, and strict static types
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src tests
 
-# 4. Reproduce the canonical Parquet dataset from the regional sample
+# 4. Reproduce the canonical v1.1 Parquet dataset from the regional sample.
+#    Never pass --overwrite: data/processed/lalb_20250101/ (v1.0) and
+#    data/processed/lalb_20250101_v1_1/ (v1.1) are immutable (§2.1). Without
+#    --overwrite, ingestion refuses to replace an existing Parquet or manifest.
 uv run python -m aegismar ingest `
   --input data/raw/sample_lalb_20250101.csv `
-  --output data/processed/lalb_20250101 `
-  --overwrite
+  --output data/processed/lalb_20250101_v1_1
+uv run python -m aegismar fingerprint -i data/processed/lalb_20250101_v1_1/cleaned_ais.parquet
 
 # 5. Reproduce the exploratory BallTree ST-DBSCAN clustering run
+#    (clustering inputs of v1.0 and v1.1 are bit-identical, §2.1)
 uv run python -m aegismar cluster `
-  --input data/processed/lalb_20250101/cleaned_ais.parquet `
+  --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet `
   --output experiments/outputs/w2_01_lalb_balltree `
   --eps-spatial-m 300 `
   --eps-temporal-s 900 `
@@ -184,4 +190,9 @@ uv run python -m aegismar cluster `
 
 # 6. Verify summary JSON artifact metrics
 Get-Content experiments/outputs/w2_01_lalb_balltree/clustering_summary.json
+
+# 7. Reproduce the W3-02 benchmark (CLM-CLU-07; about 38 min on the reference host)
+uv run python experiments/clustering/w3_02_benchmark.py `
+  -i data/processed/lalb_20250101_v1_1/cleaned_ais.parquet `
+  -o experiments/outputs/w3_02_benchmark_results.json
 ```

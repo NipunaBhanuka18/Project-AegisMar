@@ -25,11 +25,23 @@ The platform operates as a collaborative, multi-engine modular monolith structur
 <a id="current-status"></a>
 ## 2. Current Status & Research Tracks
 
-- **Phase**: Track A **W3-01 / W3-01A / W3-01B (H3) completed**; Track B **ML-02 and ML-03 completed** (ML-01 data profiling completed, literature review pending). Next: W3-02 (Track A) and ML-04 (Track B).
-- **State**: Validated in-memory AIS ingestion pipeline (`zstd` Parquet + manifest), hardened MMSI/conflict/schema checks, reference Haversine `BallTree` ST-DBSCAN (`stdbscan-core-first-v1.0`), independent $O(N^2)$ brute-force oracle, exploratory LA/LB baseline, and the Uber H3 candidate neighborhood provider (Option B correctness contract, neighborhood parity with BallTree on LA/LB) — 92 automated tests, 94% coverage (2026-11-24). Track B: dataset profiling tooling, accepted feature specification (ML-02 v1.0) and frozen evaluation protocol (ML-03 v1.0); no anomaly models implemented yet.
+- **Phase**: **Week 3 complete (2026-11-28).**
+  - Track A: W3-01 / W3-01A / W3-01B (H3), **W3-02A** (dataset provenance and fingerprinting) and **W3-02** (comparative H1 benchmark) are done.
+  - Track B: **ML-01 to ML-04 merged** (ML-01 literature review pending).
+  - Next: Week 4 stay-point extraction, berth exclusion and anchorage intelligence (Track A); ML-05 (Track B).
+- **State**:
+  - Validated AIS ingestion pipeline (`zstd` Parquet + manifest, logical content fingerprints).
+  - Reference Haversine `BallTree` ST-DBSCAN (`stdbscan-core-first-v1.0`) and an independent $O(N^2)$ brute-force oracle.
+  - Uber H3 candidate neighborhood provider (Option B correctness contract).
+  - Track B trajectory feature extractor (ML-04).
+  - **183 automated tests, 96% coverage**, enforced by GitHub Actions CI (ruff, ruff format, mypy, pytest with coverage ≥ 85%).
+- **W3-02 result (single host, descriptive)**:
+  - H3 matches BallTree exactly at every scale.
+  - H3 r8 is slower below 100k, at parity at 100k, and **1.15× faster at full scale** (143,116 rows).
+  - See [W3-02 Benchmark Results](docs/03-research/w3-02-benchmark-results.md).
 - **Codebase Implementation**: Pre-alpha (`0.1.0.dev1`).
 - **Research Tracks**:
-  - **Track A (Clustering & Platform Lead: NipunaBhanuka18)**: Comparative H1 benchmarks (W3-02) and stay-point/anchorage analytics (Week 4).
+  - **Track A (Clustering & Platform Lead: NipunaBhanuka18)**: Stay-point extraction, berth exclusion and anchorage analytics (Week 4).
   - **Track B (ML Anomaly Detection Lead: Kishakya)**: Trajectory feature engineering and ML behavior anomaly detection (independent track; see [ML Research Proposal](docs/03-research/vessel-behavior-ml.md), [ML-02 Feature Specification](docs/03-research/ml-02-feature-spec.md), [ML-03 Evaluation Protocol](docs/03-research/ml-03-evaluation-protocol.md) and [Collaborator Onboarding Guide](docs/05-guides/ml-research-onboarding.md)).
   - Shared analytical storage (DuckDB), read-only FastAPI service, and geospatial map dashboard planned for Weeks 6–7.
 
@@ -48,7 +60,9 @@ Maritime domain awareness (MDA) relies heavily on global AIS transponder broadca
 ## 4. Research Objectives
 
 ### Primary Research Objective (RQ1)
-Investigate the measured runtime, query latency, and memory performance of an **H3-accelerated Spatiotemporal DBSCAN (ST-DBSCAN)** candidate-generation engine compared against a reference **Haversine BallTree** baseline. The objective requires verifying whether discrete hexagonal partitioning achieves measurable indexing and query efficiency while guaranteeing 100% eligible-neighbor recall on defined correctness tests (acknowledging that this performance and full correctness guarantee have not yet been empirically achieved and remain subject to experimental validation).
+Investigate the measured runtime, query latency, and memory performance of an **H3-accelerated Spatiotemporal DBSCAN (ST-DBSCAN)** candidate-generation engine compared against a reference **Haversine BallTree** baseline. The objective requires verifying whether discrete hexagonal partitioning achieves measurable indexing and query efficiency while guaranteeing 100% eligible-neighbor recall on defined correctness tests.
+
+The W3-02 benchmark found exact parity at all tested scales. On a single host and dataset, it measured a scale-dependent speedup for H3 r8 (1.15× at full scale, slower below 100k). Generalization beyond this host, dataset and parameter set remains untested.
 
 ### Secondary Research Objective (RQ2)
 Evaluate whether a **lightweight, trajectory-aware rule-based scoring engine** (augmented conditionally with Isolation Forest) can reliably surface kinematic anomalies (drift, loitering, speed discontinuities) with significantly lower false-positive rates than point-density outlier baselines.
@@ -153,7 +167,8 @@ Independent parallel research track with its own flexible milestone backlog (`ML
 | **W3-01** | H3 Candidate Optimization & Completeness Verification | Week 3 | **Completed** |
 | **W3-01A**| H3 Completeness Audit, Correctness Hardening & PR Prep | Week 3 | **Completed** |
 | **W3-01B**| H3 Correctness Contract Finalization | Week 3 | **Completed** |
-| **W3-02** | Comparative H1 Benchmarking (BallTree vs. H3) | Week 3 | Planned |
+| **W3-02A**| Dataset Provenance & Deterministic Fingerprinting | Week 3 | **Completed** |
+| **W3-02** | Comparative H1 Benchmarking (BallTree vs. H3) | Week 3 | **Completed** ([results](docs/03-research/w3-02-benchmark-results.md)) |
 | **W4-01** | Stay-Point Extraction & Anchorage Dwell Identification | Week 4 | Planned |
 | **W4-02** | Anchorage Basin Dwell & Utilization Analytics | Week 4 | Planned |
 | **W5-01** | DuckDB In-Process Analytics & Contract Integration | Week 5 | Planned |
@@ -168,7 +183,7 @@ Independent parallel research track with its own flexible milestone backlog (`ML
 | **ML-01** | Domain Literature, AIS Schema & Telemetry Review | Phase 1 | **In Progress** (data profiling completed; literature review pending) |
 | **ML-02** | Vessel Trajectory Kinematic Feature Specification | Phase 2 | **Completed** ([v1.0](docs/03-research/ml-02-feature-spec.md)) |
 | **ML-03** | Baseline Models & Evaluation Protocol Freezing | Phase 3 | **Completed** ([v1.0](docs/03-research/ml-03-evaluation-protocol.md)) |
-| **ML-04** | Feature Engineering Module & Baseline Experiments | Phase 4 | Planned |
+| **ML-04** | Feature Engineering Module & Baseline Experiments | Phase 4 | **Completed** (PR #6) |
 | **ML-05** | Anomaly Model Evaluation & `vessel_anomaly_v1` Export | Phase 5 | Planned |
 
 ### Week 2 Reference Clustering Baseline & Exploratory Visualization
@@ -185,7 +200,7 @@ Independent parallel research track with its own flexible milestone backlog (`ML
 **Recorded Pre-Week 3 Reference Baseline (`balltree_haversine`, commit `3ece859`):**
 - **Uninstrumented wall time (`143,116` analyzed rows):** `13.680 s` total (`0.077 s` BallTree build, `13.341 s` batched radius query + exact Haversine/temporal pruning, `0.262 s` deterministic core-first clustering).
 - **Instrumented memory check (`tracemalloc`):** `38.014 s` total wall time, `225.83 MB` peak Python heap.
-- **Follow-up:** The Uber H3 candidate provider (`H3NeighborhoodProvider`) has since been implemented and verified (W3-01 / W3-01B). Formal comparative H1 benchmarking against this BallTree baseline is milestone W3-02 (planned).
+- **Follow-up:** The Uber H3 candidate provider (`H3NeighborhoodProvider`) has since been implemented and verified (W3-01 / W3-01B). It has also been formally benchmarked against BallTree in W3-02: 10 counterbalanced trials per scale give an official BallTree full-scale total of 12.4074 s, against 10.7867 s for H3 r8. See [W3-02 Benchmark Results](docs/03-research/w3-02-benchmark-results.md).
 
 ---
 
@@ -206,30 +221,34 @@ cd "Project-AegisMar"
 # Synchronize virtual environment with locked dependencies
 uv sync --locked
 
-# Run test suite and static quality gates
-uv run pytest -v
-uv run pytest --cov=aegismar --cov-report=term-missing
+# Run test suite and static quality gates (same gates as GitHub Actions CI)
+uv run pytest --cov=aegismar --cov-report=term-missing --cov-fail-under=85 -v
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src tests
 ```
 
 ### AIS Data Ingestion & Reference Clustering CLI
+The canonical dataset is v1.1 (`data/processed/lalb_20250101_v1_1/`). Both v1.0 (`lalb_20250101/`) and v1.1 are **immutable**: never pass `--overwrite` to `ingest` for them. Without `--overwrite`, ingestion refuses to replace an existing Parquet or manifest.
+
 ```powershell
-# Ingest raw/regional AIS CSV into canonical Parquet storage (in-memory batch pipeline)
-uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101
+# Reproduce the canonical v1.1 Parquet from the regional sample (in-memory batch pipeline; 50 kt implied-speed threshold is the default)
+uv run python -m aegismar ingest --input data/raw/sample_lalb_20250101.csv --output data/processed/lalb_20250101_v1_1
 
-# Ingest with custom implied speed threshold (knots) and overwrite permission
-uv run python -m aegismar ingest -i data/raw/sample_lalb_20250101.csv -o data/processed/lalb_20250101_v1_1 -s 50.0
+# Verify file SHA-256 and logical fingerprint (read-only; expect bdde2581... / d8a619f7...)
+uv run python -m aegismar fingerprint --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet
 
-# Run reference Haversine BallTree ST-DBSCAN on cleaned AIS Parquet
-uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w2_01_lalb_balltree --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
+# Run reference Haversine BallTree ST-DBSCAN (--overwrite here only replaces git-ignored experiment outputs)
+uv run python -m aegismar cluster --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet --output experiments/outputs/w2_01_lalb_balltree --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
 
-# Run verified H3-accelerated ST-DBSCAN (Milestone W3-01)
-uv run python -m aegismar cluster --input data/processed/lalb_20250101/cleaned_ais.parquet --output experiments/outputs/w3_01_lalb_h3 --provider h3 --h3-resolution 8 --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
+# Run verified H3-accelerated ST-DBSCAN
+uv run python -m aegismar cluster --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet --output experiments/outputs/w3_01_lalb_h3 --provider h3 --h3-resolution 8 --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --overwrite
 
-# Verify bit-for-bit graph and clustering parity between BallTree and H3 (Milestone W3-01B)
-uv run python -m aegismar verify-parity --input data/processed/lalb_20250101/cleaned_ais.parquet --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --h3-resolution 8
+# Verify bit-for-bit graph and clustering parity between BallTree and H3
+uv run python -m aegismar verify-parity --input data/processed/lalb_20250101_v1_1/cleaned_ais.parquet --eps-spatial-m 300 --eps-temporal-s 900 --min-samples 5 --h3-resolution 8
+
+# Run the full W3-02 benchmark (about 38 min on the reference host; see docs/03-research/w3-02-benchmark-results.md)
+uv run python experiments/clustering/w3_02_benchmark.py -i data/processed/lalb_20250101_v1_1/cleaned_ais.parquet -o experiments/outputs/w3_02_benchmark_results.json
 ```
 
 ---
@@ -261,7 +280,7 @@ The repository maintains comprehensive, verified technical documentation:
   - [Collaborative Research & Engineering Plan](docs/01-project/collaboration-plan.md)
 - **Architecture & Technical Decisions**:
   - [System Architecture](docs/02-architecture/system-architecture.md)
-  - [Architecture Decision Register (ADRs 001–010)](docs/02-architecture/decisions/README.md)
+  - [Architecture Decision Register (ADRs 001–011)](docs/02-architecture/decisions/README.md)
 - **Research, Evidence & Evaluation**:
   - [Research Evidence Register](docs/03-research/evidence-register.md) *(Claims verification matrix)*
   - [Research Plan & Hypotheses](docs/03-research/research-plan.md)
@@ -269,6 +288,7 @@ The repository maintains comprehensive, verified technical documentation:
   - [ML-02 Vessel Trajectory Feature Specification (v1.0)](docs/03-research/ml-02-feature-spec.md)
   - [ML-03 Track B Evaluation Protocol (v1.0)](docs/03-research/ml-03-evaluation-protocol.md)
   - [Scientific Evaluation Protocol](docs/03-research/evaluation-protocol.md)
+  - [W3-02 Benchmark Protocol](docs/03-research/w3-02-benchmark-protocol.md) and [W3-02 Benchmark Results](docs/03-research/w3-02-benchmark-results.md)
   - [Dataset Management & Quality Protocol](docs/03-research/datasets.md)
 - **Development & Verification**:
   - [Milestone Schedule & Tracking](docs/04-development/milestones.md)

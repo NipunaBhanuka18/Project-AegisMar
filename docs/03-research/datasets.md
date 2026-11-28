@@ -55,8 +55,8 @@ Inspection of `ais-2025-01-01.csv.zst` and NOAA's official July 2026 Data Dictio
 
 | Field Name (2025) | Legacy Name (2018–2024) | Source Type (2025) | Nullable? | AegisMar Canonical Mapping | Schema Evolution & Sentinel Handling Notes |
 |---|---|---|---|---|---|
-| `mmsi` | `MMSI` | `int32` | No | `mmsi: int64` | Converted from Text(9) to int32. Ingestion must zero-pad to 9 digits to preserve leading zeroes. |
-| `base_date_time` | `BaseDateTime` | `datetime64[ns]` | No | `timestamp: timestamp[us, UTC]` | ISO 8601 UTC string (`YYYY-MM-DD HH:MM:SS`). Strictly monotonic per vessel in test sample. |
+| `mmsi` | `MMSI` | `int32` | No | `mmsi: string` (9 chars) | Converted from Text(9) to int32 by NOAA. Ingestion validates integer format and zero-pads to a 9-character string to preserve leading zeroes (ADR-003). |
+| `base_date_time` | `BaseDateTime` | `datetime64[ns]` | No | `timestamp_utc: timestamp[us, UTC]` | ISO 8601 UTC string (`YYYY-MM-DD HH:MM:SS`). Strictly monotonic per vessel in test sample. |
 | `longitude` | `LON` | `double` (WGS 84) | No | `longitude: float64` | Reordered before latitude in 2025 format. Domain: `[-179.99999, 179.99999]`. |
 | `latitude` | `LAT` | `double` (WGS 84) | No | `latitude: float64` | Reordered after longitude. Domain: `[-89.99999, 89.99999]`. |
 | `sog` | `SOG` | `float` (knots) | Yes | `sog: float32` | Domain: `[0.0, 99.9]`. Legacy sentinels (`102.3`) are now emitted as null values by NOAA. |
@@ -67,11 +67,17 @@ Inspection of `ais-2025-01-01.csv.zst` and NOAA's official July 2026 Data Dictio
 | `call_sign` | `CallSign` | `string` | Yes | `call_sign: string` | Radio call sign assigned by FCC or flag state. |
 | `vessel_type` | `VesselType` | `int32` | Yes | `vessel_type: int16` | ITU numeric classification (e.g., 70=Cargo, 52=Tug, 37=Pleasure, 30=Fishing). |
 | `status` | `Status` | `int32` | Yes | `nav_status: int8` | Domain `[0, 14]`. Status 15 (undefined/default) is emitted as null by NOAA in 2025. |
-| `length` | `Length` | `int32` (meters) | Yes | `length: float32` | Scaled to whole numbers in 2025 (`[1, 509]`). |
-| `width` | `Width` | `int32` (meters) | Yes | `width: float32` | Scaled to whole numbers in 2025 (`[1, 61]`). |
-| `draft` | `Draft` | `float` (meters) | Yes | `draft: float32` | Vessel draft depth in meters (`[1.0, 24.0]`). |
-| `cargo` | `Cargo` | `int32` | Yes | `cargo_type: int16` | Numeric cargo indicator. |
 | `transceiver` | `TransceiverClass` | `string` (`A`\|`B`) | Yes | `transceiver_class: string` | Shortened field name. Class A (commercial SOLAS) vs Class B (small craft). |
+
+**Canonical schema scope (aligned with [ADR-003](../02-architecture/decisions/ADR-003-canonical-schema-and-quality-flags.md) and [`src/aegismar/ingestion/schema.py`](../../src/aegismar/ingestion/schema.py)).**
+- **Mapped fields:** the 13 rows above are the source fields mapped by `NOAA_2025_MAPPINGS` / `NOAA_LEGACY_MAPPINGS`.
+- **Source fields not ingested:** the NOAA source also carries `length`, `width`, `draft` and `cargo`. These are not mapped and do not appear in the cleaned Parquet.
+- **The 19 canonical columns** are:
+  - `source_row`
+  - the 13 mapped fields
+  - the derived movement columns `prev_source_row`, `elapsed_seconds`, `distance_nm` and `implied_speed_knots`
+  - `quality_flags`
+- **Row order:** rows are sorted by `(mmsi, timestamp_utc, source_row)` (`CANONICAL_ROW_ORDER`, ADR-011).
 
 ---
 
@@ -101,6 +107,15 @@ Both candidate study regions were extracted and profiled from the complete 24-ho
 
 **Selected Study Region:** **Los Angeles / Long Beach (San Pedro Bay), California**  
 **Lifecycle Status:** **Selected, Inspected & Validated** (Extract preserved in `data/raw/sample_lalb_20250101.csv`, 143,156 records; ingested and validated into `data/processed/lalb_20250101/cleaned_ais.parquet`, 143,124 canonical rows). **Versions:** that folder holds the historical v1.0 file; the canonical cleaned dataset since 2026-11-25 is v1.1 in `data/processed/lalb_20250101_v1_1/` (file SHA-256 `bdde2581...`, fingerprint `d8a619f7...`). See [evidence-register.md §2.1](evidence-register.md).
+
+| Version | Status | Path | File SHA-256 | Logical fingerprint (`aegismar-logical-v1`) |
+|---|---|---|---|---|
+| **v1.1** | **Canonical** (Track A from W3-02; Track B) — immutable | `data/processed/lalb_20250101_v1_1/cleaned_ais.parquet` | `bdde2581302270a9e2c99a1a7aa1819a0bd1a24fbf6384458cfd8a81229eaf48` | `d8a619f7d27314ae8418eff5da8e1c5c96004d038c2fce8f5ee868ed90fec2cf` |
+| **v1.0** | Archived historical baseline (W2-01, W3-01/W3-01B) — immutable | `data/processed/lalb_20250101/cleaned_ais.parquet` | `4a7ca719dc2a3d9959cc4166edff773ca09156d8d914e54d0ab5f851ece5e88b` | `570b0fb09182720fc476b4b712c0d599bed3ed34491aad4946719fab965a1473` |
+
+- Both versions have 143,124 rows. They differ only in 12 rows of the derived movement columns.
+- After the default quality filter, both give the same 143,116-row clustering input.
+- Never regenerate either version with `--overwrite`. Confirm a local copy with `aegismar fingerprint`.
 
 ### Selection Justification
 1. **Direct Alignment with Benchmark Scales**: A single 24-hour slice yields 143,156 valid pings across 362 unique vessels, enabling immediate sampling at the 10,000, 50,000, and 100,000 benchmark scales without multi-day concatenation.

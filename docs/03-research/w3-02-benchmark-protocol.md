@@ -1,6 +1,6 @@
 # W3-02 Benchmark Protocol: BallTree Reference vs. H3 Candidate Acceleration
 
-**Status:** Locked protocol. Harness implemented; the full LA/LB run has **not** been executed yet and no performance results are reported here.  
+**Status:** Locked protocol. The full LA/LB run was executed on 2026-11-28 at `379ec16` (`status = "completed"`); results are reported separately in [w3-02-benchmark-results.md](w3-02-benchmark-results.md). This document contains no performance results.  
 **Date:** 2026-11-25  
 **Track:** A (Clustering & Platform)  
 **Milestone:** W3-02 (Comparative H1 Benchmarking)  
@@ -190,4 +190,4 @@ Unit tests in [tests/unit/test_benchmark.py](../../tests/unit/test_benchmark.py)
 - an end-to-end mini benchmark on synthetic AIS data, covering provenance, exact parity, all four phases and the parity-failure abort;
 - the runner's JSON output and overwrite protection.
 
-The full LA/LB benchmark will be executed and reported separately.
+The full LA/LB benchmark results are reported in [w3-02-benchmark-results.md](w3-02-benchmark-results.md).
